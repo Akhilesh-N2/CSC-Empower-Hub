@@ -139,23 +139,51 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         }
     };
 
-    // 2. DELETE Scheme
+    // 2. DELETE Scheme (AND its file!)
     const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this scheme?")) {
-            try {
-                const { error } = await supabase
-                    .from('schemes')
-                    .delete()
-                    .eq('id', id);
+        if (!window.confirm("Are you sure you want to delete this scheme? This will also delete the attached PDF.")) {
+            return;
+        }
 
-                if (error) throw error;
+        try {
+            // STEP A: Fetch the scheme first to get the file URL
+            const { data: schemeData, error: fetchError } = await supabase
+                .from('schemes')
+                .select('downloadUrl')
+                .eq('id', id)
+                .single();
 
-                // Refresh the list
-                refreshSchemes();
+            if (fetchError) throw fetchError;
 
-            } catch (error) {
-                alert("Error deleting scheme: " + error.message);
+            // STEP B: If a file exists, delete it from Storage
+            if (schemeData?.downloadUrl) {
+                // The URL looks like: .../scheme-files/12345-myfile.pdf
+                // We split by '/' and take the last part to get the filename
+                const fileName = schemeData.downloadUrl.split('/').pop();
+
+                const { error: storageError } = await supabase.storage
+                    .from('scheme-files')
+                    .remove([fileName]);
+
+                if (storageError) {
+                    console.warn("Warning: Could not delete file from storage.", storageError);
+                    // We continue anyway so the user isn't stuck with a card they can't delete
+                }
             }
+
+            // STEP C: Delete the Row from Database
+            const { error: deleteError } = await supabase
+                .from('schemes')
+                .delete()
+                .eq('id', id);
+
+            if (deleteError) throw deleteError;
+
+            // Success!
+            refreshSchemes();
+
+        } catch (error) {
+            alert("Error deleting scheme: " + error.message);
         }
     };
 
