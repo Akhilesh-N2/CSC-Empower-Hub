@@ -1,13 +1,12 @@
 import './App.css'
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-
+import { supabase } from './supabaseClient'; // <--- IMPORT SUPABASE HERE
 
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
-import Login from './pages/Login'; // <--- Import Login
-import Navbar from './components/Navbar'; // <--- Import Navbar
-
+import Login from './pages/Login';
+import Navbar from './components/Navbar';
 
 function App() {
 
@@ -16,8 +15,7 @@ function App() {
     return localStorage.getItem('isAdminLoggedIn') === 'true';
   });
 
-  // CAROUSEL SECTION
-  // 1. Initial Data for Carousel
+  // --- CAROUSEL SECTION (Kept as Local Storage for now) ---
   const defaultSlides = [
     {
       id: 1,
@@ -33,68 +31,56 @@ function App() {
     }
   ];
 
-  // 2. State for Carousel (with Local Storage)
   const [carouselSlides, setCarouselSlides] = useState(() => {
     const savedSlides = localStorage.getItem("carouselData");
     return savedSlides ? JSON.parse(savedSlides) : defaultSlides;
   });
 
-  // 3. Save to Local Storage whenever slides change
   useEffect(() => {
     localStorage.setItem("carouselData", JSON.stringify(carouselSlides));
   }, [carouselSlides]);
+  // --- END CAROUSEL ---
 
-  // END OF CAROUSEL
 
-  // CARDS SECTION
-  // 1. INITIAL DATA (Used if nothing is in Local Storage yet)
-  const defaultSchemes = [
-    {
-      id: 1,
-      title: "Pradhan Mantri Awas Yojana (Gramin)",
-      category: "Housing",
-      description: "Aiming to provide pucca houses with basic amenities.",
-      image: "https://pmayg.nic.in/netiay/images/Slide1.jpg",
-      visitUrl: "https://pmayg.nic.in/",
-      downloadUrl: "https://pmayg.nic.in/netiay/document/Guideline_English.pdf",
-      active: true
-    },
-    // ... add your other initial data here if you want
-  ];
+  // --- SCHEMES SECTION (UPDATED TO SUPABASE) ---
+  
+  // 1. Start with an empty list
+  const [schemes, setSchemes] = useState([]); 
 
-  // 2. STATE WITH LOCAL STORAGE
-  // This looks in browser memory first. If empty, it uses 'defaultSchemes'
-  const [schemes, setSchemes] = useState(() => {
-    const savedSchemes = localStorage.getItem("schemesData");
-    return savedSchemes ? JSON.parse(savedSchemes) : defaultSchemes;
-  });
-
-  // 3. SAVE TO LOCAL STORAGE
-  // Anytime 'schemes' changes (add/edit/delete), save it automatically
+  // 2. Fetch from Database when App loads
   useEffect(() => {
-    localStorage.setItem("schemesData", JSON.stringify(schemes));
-  }, [schemes]);
-  // END OF CARDS
+    fetchSchemes();
+  }, []);
 
-  // This is a wrapper. If not logged in, it redirects to /login
+  const fetchSchemes = async () => {
+    const { data, error } = await supabase
+      .from('schemes')
+      .select('*');
+    
+    if (error) {
+      console.log('Error fetching schemes:', error);
+    } else {
+      setSchemes(data); // <--- This updates the screen with REAL Cloud data
+    }
+  };
+  // --- END SCHEMES ---
+
+
+  // PROTECTED ROUTE WRAPPER
   const ProtectedRoute = ({ children, secretLoginUrl }) => {
     if (!isLoggedIn) {
-      // Redirect to the SECRET url, not just /login
       return <Navigate to={secretLoginUrl} replace />;
     }
     return children;
   };
 
-
-  // 1. --- NEW: CATEGORIES STATE ---
+  // CATEGORIES (Kept Local for now)
   const defaultCategories = ["Housing", "Employment", "Technology", "Health", "Agriculture"];
-
   const [categories, setCategories] = useState(() => {
     const saved = localStorage.getItem("categoriesData");
     return saved ? JSON.parse(saved) : defaultCategories;
   });
 
-  // Save to local storage whenever categories change
   useEffect(() => {
     localStorage.setItem("categoriesData", JSON.stringify(categories));
   }, [categories]);
@@ -104,30 +90,26 @@ function App() {
     <Router>
       <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
       <Routes>
-
         <Route path="/" element={<LandingPage schemes={schemes} carouselSlides={carouselSlides} />} />
-
-        {/* LOGIN ROUTE */}
+        
         <Route path="/csc-secret-access" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
 
-        {/* 2. PROTECTED ADMIN ROUTE */}
         <Route
           path="/admin"
           element={
-            // Update the redirect inside ProtectedRoute to point to your new secret URL
             <ProtectedRoute secretLoginUrl="/csc-secret-access">
               <Admin
                 schemes={schemes}
-                setSchemes={setSchemes}
+                setSchemes={setSchemes} // Admin will need to update this list after adding
                 carouselSlides={carouselSlides}
                 setCarouselSlides={setCarouselSlides}
                 categories={categories}
                 setCategories={setCategories}
+                refreshSchemes={fetchSchemes} // <--- Pass this function so Admin can refresh the list
               />
             </ProtectedRoute>
           }
         />
-
       </Routes>
     </Router>
   )
