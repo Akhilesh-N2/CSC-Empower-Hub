@@ -463,6 +463,11 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     value={currentSlide.image} onChange={handleSlideInput}
                                     className="p-2 border rounded-lg w-full"
                                 />
+                                <input
+                                    type="url" name="link" placeholder="Learn More Link (Optional)"
+                                    value={currentSlide.link} onChange={handleSlideInput}
+                                    className="p-2 border rounded-lg w-full"
+                                />
                                 <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-fit">
                                     Add Slide
                                 </button>
