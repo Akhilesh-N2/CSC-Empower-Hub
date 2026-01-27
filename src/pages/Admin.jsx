@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
-function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes }) {
+function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes, refreshSlides }) {
     const [uploading, setUploading] = useState(false);
     const [activeTab, setActiveTab] = useState('cards'); // 'cards' or 'carousel'
 
     // STATE FOR CATEGORY
     const [newCategoryInput, setNewCategoryInput] = useState("");
-    
+
     const handleAddCategory = () => {
         if (newCategoryInput.trim() !== "") {
             if (!categories.includes(newCategoryInput)) {
@@ -16,7 +16,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             } else {
                 alert("Category already exists!");
             }
-            setNewCategoryInput(""); 
+            setNewCategoryInput("");
         }
     };
 
@@ -168,7 +168,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 .eq('id', id);
 
             if (error) throw error;
-            
+
             // Refresh the list
             refreshSchemes();
 
@@ -194,14 +194,42 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         setCurrentSlide({ ...currentSlide, [name]: value });
     };
 
-    const handleSlideSubmit = (e) => {
+    const handleSlideSubmit = async (e) => {
         e.preventDefault();
-        setCarouselSlides([...carouselSlides, { ...currentSlide, id: Date.now() }]);
-        setCurrentSlide({ id: null, title: '', description: '', image: '' });
+
+        const newSlide = {
+            title: currentSlide.title,
+            description: currentSlide.description,
+            image: currentSlide.image,
+            link: currentSlide.link
+        };
+
+        const { error } = await supabase
+            .from('slides')
+            .insert([newSlide]);
+
+        if (error) {
+            alert("Error adding slide: " + error.message);
+        } else {
+            alert("Slide added to Cloud!");
+            refreshSlides(); // Refresh the app
+            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '' }); // Clear form
+        }
     };
 
-    const deleteSlide = (id) => {
-        setCarouselSlides(carouselSlides.filter(slide => slide.id !== id));
+    const deleteSlide = async (id) => {
+        if (window.confirm("Delete this slide?")) {
+            const { error } = await supabase
+                .from('slides')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                alert("Error deleting: " + error.message);
+            } else {
+                refreshSlides(); // Refresh the app
+            }
+        }
     };
 
     return (

@@ -15,30 +15,24 @@ function App() {
     return localStorage.getItem('isAdminLoggedIn') === 'true';
   });
 
-  // --- CAROUSEL SECTION (Kept as Local Storage for now) ---
-  const defaultSlides = [
-    {
-      id: 1,
-      image: "https://ascentgroupindia.com/wp-content/uploads/2021/08/25-Government-Schemes-that-are-Transforming-the-Lives-of-Rural-India.jpeg",
-      title: "Digital Growth",
-      description: "Empowering rural India through technology."
-    },
-    {
-      id: 2,
-      image: "https://img.khetivyapar.com/images/news/1713762716-these-government-schemes-for-farmers-in-madhya-pradesh-madhya-pradesh-scheme-2024.jpg",
-      title: "Tech Support",
-      description: "24/7 Assistance for all government services."
-    }
-  ];
-
-  const [carouselSlides, setCarouselSlides] = useState(() => {
-    const savedSlides = localStorage.getItem("carouselData");
-    return savedSlides ? JSON.parse(savedSlides) : defaultSlides;
-  });
+  // --- CAROUSEL SECTION (NOW CONNECTED TO SUPABASE) ---
+  const [carouselSlides, setCarouselSlides] = useState([]);
 
   useEffect(() => {
-    localStorage.setItem("carouselData", JSON.stringify(carouselSlides));
-  }, [carouselSlides]);
+    fetchSlides();
+  }, []);
+
+  const fetchSlides = async () => {
+    const { data, error } = await supabase
+      .from('slides')
+      .select('*');
+
+    if (error) {
+      console.log('Error fetching slides:', error);
+    } else {
+      setCarouselSlides(data);
+    }
+  };
   // --- END CAROUSEL ---
 
 
@@ -106,6 +100,7 @@ function App() {
                 categories={categories}
                 setCategories={setCategories}
                 refreshSchemes={fetchSchemes} // <--- Pass this function so Admin can refresh the list
+                refreshSlides={fetchSlides}
               />
             </ProtectedRoute>
           }
