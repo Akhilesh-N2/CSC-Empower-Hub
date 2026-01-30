@@ -1,13 +1,13 @@
 import './App.css'
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './supabaseClient'; // <--- IMPORT SUPABASE HERE
+import { supabase } from './supabaseClient'; 
 
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Navbar from './components/Navbar';
-import FormsPage from './pages/FormsPage'; // <--- ADD THIS
+import FormsPage from './pages/FormsPage'; 
 
 function App() {
 
@@ -16,49 +16,46 @@ function App() {
     return localStorage.getItem('isAdminLoggedIn') === 'true';
   });
 
-  // --- CAROUSEL SECTION (NOW CONNECTED TO SUPABASE) ---
+  // --- CAROUSEL SECTION ---
   const [carouselSlides, setCarouselSlides] = useState([]);
 
-  useEffect(() => {
-    fetchSlides();
-  }, []);
-
   const fetchSlides = async () => {
-    const { data, error } = await supabase
-      .from('slides')
-      .select('*');
-
-    if (error) {
-      console.log('Error fetching slides:', error);
-    } else {
-      setCarouselSlides(data);
-    }
+    const { data, error } = await supabase.from('slides').select('*');
+    if (error) console.log('Error fetching slides:', error);
+    else setCarouselSlides(data);
   };
-  // --- END CAROUSEL ---
 
-
-  // --- SCHEMES SECTION (UPDATED TO SUPABASE) ---
-
-  // 1. Start with an empty list
+  // --- SCHEMES SECTION ---
   const [schemes, setSchemes] = useState([]);
 
-  // 2. Fetch from Database when App loads
-  useEffect(() => {
-    fetchSchemes();
-  }, []);
-
   const fetchSchemes = async () => {
-    const { data, error } = await supabase
-      .from('schemes')
-      .select('*');
+    const { data, error } = await supabase.from('schemes').select('*');
+    if (error) console.log('Error fetching schemes:', error);
+    else setSchemes(data);
+  };
 
+  // --- CATEGORIES SECTION (NEW: CONNECTED TO SUPABASE) ---
+  const [categories, setCategories] = useState([]);
+
+  const fetchCategories = async () => {
+    // 1. Fetch from Supabase 'categories' table
+    const { data, error } = await supabase.from('categories').select('*');
+    
     if (error) {
-      console.log('Error fetching schemes:', error);
+      console.log('Error fetching categories:', error);
     } else {
-      setSchemes(data); // <--- This updates the screen with REAL Cloud data
+      // 2. Extract just the names (e.g., "Health", "Housing")
+      const categoryNames = data.map(item => item.name);
+      setCategories(categoryNames);
     }
   };
-  // --- END SCHEMES ---
+
+  // --- INITIAL LOAD ---
+  useEffect(() => {
+    fetchSchemes();
+    fetchSlides();
+    fetchCategories(); // <--- Load categories from cloud on startup
+  }, []);
 
 
   // PROTECTED ROUTE WRAPPER
@@ -68,18 +65,6 @@ function App() {
     }
     return children;
   };
-
-  // CATEGORIES (Kept Local for now)
-  const defaultCategories = ["Housing", "Employment", "Technology", "Health", "Agriculture"];
-  const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem("categoriesData");
-    return saved ? JSON.parse(saved) : defaultCategories;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("categoriesData", JSON.stringify(categories));
-  }, [categories]);
-
 
   return (
     <Router>
@@ -114,13 +99,16 @@ function App() {
             <ProtectedRoute secretLoginUrl="/csc-secret-access">
               <Admin
                 schemes={schemes}
-                setSchemes={setSchemes} // Admin will need to update this list after adding
+                setSchemes={setSchemes}
                 carouselSlides={carouselSlides}
                 setCarouselSlides={setCarouselSlides}
                 categories={categories}
                 setCategories={setCategories}
-                refreshSchemes={fetchSchemes} // <--- Pass this function so Admin can refresh the list
+                
+                // PASS REFRESH FUNCTIONS
+                refreshSchemes={fetchSchemes} 
                 refreshSlides={fetchSlides}
+                refreshCategories={fetchCategories} // <--- New prop for Admin
               />
             </ProtectedRoute>
           }
@@ -130,4 +118,4 @@ function App() {
   )
 }
 
-export default App
+export default App;

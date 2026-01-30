@@ -4,36 +4,62 @@ import { supabase } from '../supabaseClient';
 // A placeholder image to use if the user doesn't upload one
 const DEFAULT_IMAGE = "https://placehold.co/600x400/e2e8f0/1e293b?text=No+Image+Available";
 
-function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes, refreshSlides }) {
+// Note: added 'refreshCategories' to the props list
+function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes, refreshSlides, refreshCategories }) {
     const [pdfUploading, setPdfUploading] = useState(false);
     const [imageUploading, setImageUploading] = useState(false);
     const [activeTab, setActiveTab] = useState('cards'); // 'cards' or 'carousel'
 
-    // STATE FOR CATEGORY
+    // --- STATE FOR CATEGORY (UPDATED FOR CLOUD) ---
     const [newCategoryInput, setNewCategoryInput] = useState("");
 
-    const handleAddCategory = () => {
+    const handleAddCategory = async () => {
         if (newCategoryInput.trim() !== "") {
+            // Check if it already exists in the list passed from App.jsx
             if (!categories.includes(newCategoryInput)) {
-                setCategories([...categories, newCategoryInput]);
-                alert(`Category "${newCategoryInput}" added!`);
+                try {
+                    // 1. Send to Supabase
+                    const { error } = await supabase
+                        .from('categories')
+                        .insert([{ name: newCategoryInput }]);
+
+                    if (error) throw error;
+
+                    // 2. Success
+                    alert(`Category "${newCategoryInput}" added to Cloud!`);
+                    refreshCategories(); // Update App.jsx list
+                    setNewCategoryInput("");
+                } catch (error) {
+                    alert("Error adding category: " + error.message);
+                }
             } else {
                 alert("Category already exists!");
             }
-            setNewCategoryInput("");
         }
     };
 
-    const handleDeleteCategory = () => {
+    const handleDeleteCategory = async () => {
         const categoryToDelete = currentScheme.category;
         if (!categoryToDelete || categoryToDelete === "") {
             alert("Please select a category from the dropdown first to delete it.");
             return;
         }
-        if (window.confirm(`Are you sure you want to delete the category "${categoryToDelete}"?`)) {
-            const updatedCategories = categories.filter(cat => cat !== categoryToDelete);
-            setCategories(updatedCategories);
-            setCurrentScheme({ ...currentScheme, category: "" });
+        if (window.confirm(`Are you sure you want to delete the category "${categoryToDelete}" permanently?`)) {
+            try {
+                // 1. Delete from Supabase
+                const { error } = await supabase
+                    .from('categories')
+                    .delete()
+                    .eq('name', categoryToDelete);
+
+                if (error) throw error;
+
+                // 2. Success
+                refreshCategories(); // Update App.jsx list
+                setCurrentScheme({ ...currentScheme, category: "" });
+            } catch (error) {
+                alert("Error deleting category: " + error.message);
+            }
         }
     };
 
@@ -211,16 +237,15 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     };
 
     return (
-        // 1. RESPONSIVE CONTAINER: Flex col on mobile, row on desktop
+        // 1. RESPONSIVE CONTAINER
         <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
 
-            {/* 2. RESPONSIVE NAV: Full width top bar on mobile, sidebar on desktop */}
+            {/* 2. RESPONSIVE NAV */}
             <div className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0">
                 <div className="p-4 md:p-6 text-xl md:text-2xl font-bold border-b border-slate-700 flex justify-between items-center">
                     <span>Admin Panel</span>
                 </div>
                 
-                {/* Horizontal scroll on mobile, Vertical on desktop */}
                 <nav className="flex flex-row md:flex-col p-2 md:p-4 gap-2 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('cards')}
@@ -240,7 +265,6 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 p-4 md:p-8 overflow-y-auto">
 
-                {/* --- TAB 1: CARDS MANAGEMENT --- */}
                 {activeTab === 'cards' && (
                     <div className="max-w-5xl mx-auto">
                         <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Content Management</h2>
@@ -250,7 +274,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             <h3 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
                             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
 
-                                {/* DISPLAY TYPE - Touch Friendly */}
+                                {/* DISPLAY TYPE */}
                                 <div className="col-span-1 md:col-span-2 bg-blue-50 p-4 rounded-lg border border-blue-100">
                                     <label className="block text-sm font-bold text-blue-800 mb-2">Display Type</label>
                                     <div className="flex flex-col sm:flex-row gap-3">
@@ -287,7 +311,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     <input type="text" name="title" required value={currentScheme.title} onChange={handleInputChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
 
-                                {/* Category */}
+                                {/* Category (UPDATED TO SUPPORT CLOUD ADD/DELETE) */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                                     <div className="flex gap-2 mb-2">
