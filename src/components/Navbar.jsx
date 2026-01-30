@@ -15,12 +15,26 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
 
-          {/* LOGO / BRAND */}
-          <div className="flex items-center">
-            <Link to="/" className="text-2xl font-bold text-blue-600">
-              CSC-EMPOWER-HUB
-            </Link>
-          </div>
+          {/* --- BRANDING SECTION --- */}
+          <Link to="/" className="flex items-center gap-3 group">
+
+            {/* Logo Icon */}
+            {/* <div className="bg-blue-600 md:hidden w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center font-bold text-white shadow-md group-hover:bg-blue-500 transition-colors">
+              C
+            </div> */}
+
+            <div className="font-bold tracking-tight">
+              {/* MOBILE VIEW: Shows 'CSC Hub' */}
+              <span className="block md:hidden text-lg">
+                CSC-E-HUB
+              </span>
+
+              {/* DESKTOP VIEW: Shows 'CSC-Empower-Hub' */}
+              <span className="hidden md:block text-xl">
+                CSC-Empower-Hub
+              </span>
+            </div>
+          </Link>
 
           {/* LINKS */}
           <div className="flex items-center space-x-4">
