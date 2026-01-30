@@ -7,6 +7,7 @@ import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Navbar from './components/Navbar';
+import FormsPage from './pages/FormsPage'; // <--- ADD THIS
 
 function App() {
 
@@ -37,9 +38,9 @@ function App() {
 
 
   // --- SCHEMES SECTION (UPDATED TO SUPABASE) ---
-  
+
   // 1. Start with an empty list
-  const [schemes, setSchemes] = useState([]); 
+  const [schemes, setSchemes] = useState([]);
 
   // 2. Fetch from Database when App loads
   useEffect(() => {
@@ -50,7 +51,7 @@ function App() {
     const { data, error } = await supabase
       .from('schemes')
       .select('*');
-    
+
     if (error) {
       console.log('Error fetching schemes:', error);
     } else {
@@ -84,8 +85,27 @@ function App() {
     <Router>
       <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
       <Routes>
-        <Route path="/" element={<LandingPage schemes={schemes} carouselSlides={carouselSlides} />} />
-        
+
+        <Route
+          path="/"
+          element={
+            <LandingPage
+              schemes={schemes.filter(item => item.type === 'scheme' || !item.type)}
+              carouselSlides={carouselSlides}
+            />
+          }
+        />
+
+        <Route
+          path="/forms"
+          element={
+            <FormsPage
+              schemes={schemes.filter(item => item.type === 'form')}
+              categories={categories}
+            />
+          }
+        />
+
         <Route path="/csc-secret-access" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
 
         <Route

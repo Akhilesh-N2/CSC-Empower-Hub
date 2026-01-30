@@ -43,6 +43,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         id: null,
         title: '',
         category: '',
+        type: 'scheme', // <--- NEW DEFAULT: 'scheme' or 'form'
         description: '',
         image: '',
         visitUrl: '',
@@ -94,7 +95,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         }
     };
 
-    // 2. IMAGE UPLOAD HANDLER (NEW)
+    // 2. IMAGE UPLOAD HANDLER
     const handleImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -107,7 +108,6 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
         setImageUploading(true);
         try {
-            // We reuse the same bucket 'scheme-files' but prefix with 'img-'
             const fileName = `${Date.now()}-img-${file.name.replace(/\s/g, '_')}`;
             
             const { error } = await supabase.storage
@@ -121,7 +121,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 .getPublicUrl(fileName);
 
             const url = publicUrlData.publicUrl;
-            setCurrentScheme(prev => ({ ...prev, image: url })); // Update the image field
+            setCurrentScheme(prev => ({ ...prev, image: url }));
             alert("Image Uploaded Successfully!");
 
         } catch (error) {
@@ -138,9 +138,11 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // VALIDATION CHECK: Ensure PDF is uploaded
-        if (!currentScheme.downloadUrl) {
-            alert("Please upload a PDF file. It is mandatory.");
+        // VALIDATION: 
+        // If Type is FORM -> PDF is MANDATORY.
+        // If Type is SCHEME -> PDF is Optional.
+        if (currentScheme.type === 'form' && !currentScheme.downloadUrl) {
+            alert("You selected 'Downloadable Form', so uploading a PDF is MANDATORY.");
             return;
         }
 
@@ -148,8 +150,8 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         const schemeData = {
             title: currentScheme.title,
             category: currentScheme.category,
+            type: currentScheme.type, // <--- SAVING THE TYPE
             description: currentScheme.description,
-            // USE UPLOADED IMAGE OR DEFAULT
             image: currentScheme.image || DEFAULT_IMAGE, 
             visitUrl: currentScheme.visitUrl,
             downloadUrl: currentScheme.downloadUrl,
@@ -165,7 +167,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                     .eq('id', currentScheme.id);
 
                 if (error) throw error;
-                alert("Scheme updated successfully!");
+                alert("Item updated successfully!");
                 setIsEditing(false);
 
             } else {
@@ -175,28 +177,28 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                     .insert([schemeData]);
 
                 if (error) throw error;
-                alert("New scheme added to database!");
+                alert("New item added to database!");
             }
 
             // REFRESH THE LIST FROM CLOUD
             refreshSchemes();
 
             // RESET FORM
-            setCurrentScheme({ id: null, title: '', category: '', description: '', image: '', visitUrl: '', downloadUrl: '', active: true });
+            setCurrentScheme({ id: null, title: '', category: '', type: 'scheme', description: '', image: '', visitUrl: '', downloadUrl: '', active: true });
 
         } catch (error) {
-            alert("Error saving scheme: " + error.message);
+            alert("Error saving: " + error.message);
         }
     };
 
     // 2. DELETE Scheme
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this scheme? This will also delete the attached PDF.")) {
+        if (!window.confirm("Are you sure you want to delete this item? This will also delete any attached files.")) {
             return;
         }
 
         try {
-            // STEP A: Fetch the scheme first to get file URLs
+            // STEP A: Fetch first to get file URLs
             const { data: schemeData, error: fetchError } = await supabase
                 .from('schemes')
                 .select('downloadUrl, image')
@@ -205,8 +207,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
             if (fetchError) throw fetchError;
 
-            // STEP B: If files exist in YOUR storage bucket, delete them
-            // We check if the URL contains your specific Supabase project link to avoid deleting external links (like default placeholders)
+            // STEP B: Delete files if they exist in OUR bucket
             const filesToDelete = [];
 
             if (schemeData?.downloadUrl && schemeData.downloadUrl.includes('supabase.co')) {
@@ -238,7 +239,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             refreshSchemes();
 
         } catch (error) {
-            alert("Error deleting scheme: " + error.message);
+            alert("Error deleting: " + error.message);
         }
     };
 
@@ -313,7 +314,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                         onClick={() => setActiveTab('cards')}
                         className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'cards' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
                     >
-                        📑 Manage Cards
+                        📑 Manage Content
                     </button>
                     <button
                         onClick={() => setActiveTab('carousel')}
@@ -330,12 +331,39 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 {/* --- TAB 1: CARDS MANAGEMENT --- */}
                 {activeTab === 'cards' && (
                     <div className="max-w-5xl mx-auto">
-                        <h2 className="text-3xl font-bold text-gray-800 mb-8">Scheme Management</h2>
+                        <h2 className="text-3xl font-bold text-gray-800 mb-8">Content Management</h2>
 
                         {/* FORM SECTION */}
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-10">
-                            <h3 className="text-xl font-semibold mb-4 text-gray-700">{isEditing ? 'Edit Scheme' : 'Add New Scheme'}</h3>
+                            <h3 className="text-xl font-semibold mb-4 text-gray-700">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
                             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                                {/* --- NEW: DISPLAY TYPE SELECTOR --- */}
+                                <div className="col-span-2 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <label className="block text-sm font-bold text-blue-800 mb-2">Display Type</label>
+                                    <div className="flex flex-col md:flex-row gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-blue-100 rounded transition-colors">
+                                            <input 
+                                                type="radio" name="type" value="scheme" 
+                                                checked={currentScheme.type === 'scheme'} 
+                                                onChange={handleInputChange} 
+                                                className="w-4 h-4 text-blue-600"
+                                            />
+                                            <span className="font-medium text-gray-800">Scheme Card</span>
+                                            <span className="text-xs text-gray-500">(For Home Page)</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-blue-100 rounded transition-colors">
+                                            <input 
+                                                type="radio" name="type" value="form" 
+                                                checked={currentScheme.type === 'form'} 
+                                                onChange={handleInputChange} 
+                                                className="w-4 h-4 text-blue-600"
+                                            />
+                                            <span className="font-medium text-gray-800">Downloadable Form</span>
+                                            <span className="text-xs text-gray-500">(For Forms Library)</span>
+                                        </label>
+                                    </div>
+                                </div>
 
                                 {/* Title (MANDATORY) */}
                                 <div className="col-span-2 md:col-span-1">
@@ -393,26 +421,28 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     ></textarea>
                                 </div>
 
-                                {/* IMAGE UPLOAD (NEW) */}
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Scheme Image (Optional)</label>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-1">
-                                            <input
-                                                type="file" accept="image/*"
-                                                onChange={handleImageUpload}
-                                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                            />
-                                            {imageUploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading Image...</span>}
-                                        </div>
-                                        {/* Image Preview */}
-                                        {currentScheme.image && (
-                                            <div className="w-16 h-16 rounded border overflow-hidden bg-gray-50 flex-shrink-0">
-                                                <img src={currentScheme.image} alt="Preview" className="w-full h-full object-cover" />
+                                {/* IMAGE UPLOAD (Hidden if type is FORM, as forms lists typically don't show thumbnails) */}
+                                {currentScheme.type === 'scheme' && (
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Scheme Image (Optional)</label>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex-1">
+                                                <input
+                                                    type="file" accept="image/*"
+                                                    onChange={handleImageUpload}
+                                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                                                />
+                                                {imageUploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading Image...</span>}
                                             </div>
-                                        )}
+                                            {/* Image Preview */}
+                                            {currentScheme.image && (
+                                                <div className="w-16 h-16 rounded border overflow-hidden bg-gray-50 flex-shrink-0">
+                                                    <img src={currentScheme.image} alt="Preview" className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Links */}
                                 <div>
@@ -424,9 +454,12 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     />
                                 </div>
 
-                                {/* PDF Upload (MANDATORY) */}
+                                {/* PDF Upload (MANDATORY if Type is FORM) */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload PDF / Form <span className="text-red-500">*</span></label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Upload PDF / Form 
+                                        {currentScheme.type === 'form' ? <span className="text-red-500"> * (Required)</span> : <span className="text-gray-400"> (Optional)</span>}
+                                    </label>
                                     <div className="flex flex-col gap-2">
                                         <input
                                             type="file" accept="application/pdf"
@@ -439,9 +472,11 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                                 <strong>✓ File Attached:</strong> <br /> {currentScheme.downloadUrl}
                                             </div>
                                         ) : (
-                                            <div className="text-xs text-red-500">
-                                                * PDF is required to submit
-                                            </div>
+                                            currentScheme.type === 'form' && (
+                                                <div className="text-xs text-red-500">
+                                                    * PDF is required for Forms
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 </div>
@@ -454,19 +489,19 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                         className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                                     />
                                     <label htmlFor="activeToggle" className="text-gray-700 font-medium cursor-pointer select-none">
-                                        Make this card Active immediately?
+                                        Make this active immediately?
                                     </label>
                                 </div>
 
                                 {/* Buttons */}
                                 <div className="col-span-2 flex gap-4 mt-2">
                                     <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                                        {isEditing ? 'Update Scheme' : 'Add Scheme'}
+                                        {isEditing ? 'Update Item' : 'Add Item'}
                                     </button>
                                     {isEditing && (
                                         <button
                                             type="button"
-                                            onClick={() => { setIsEditing(false); setCurrentScheme({ id: null, title: '', category: '', description: '', image: '', visitUrl: '', downloadUrl: '', active: true }); }}
+                                            onClick={() => { setIsEditing(false); setCurrentScheme({ id: null, title: '', category: '', type: 'scheme', description: '', image: '', visitUrl: '', downloadUrl: '', active: true }); }}
                                             className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium"
                                         >
                                             Cancel
@@ -481,6 +516,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-bold">
                                     <tr>
+                                        <th className="p-4 border-b">Type</th>
                                         <th className="p-4 border-b">Status</th>
                                         <th className="p-4 border-b">Title</th>
                                         <th className="p-4 border-b">Category</th>
@@ -490,6 +526,12 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                 <tbody className="divide-y divide-gray-100">
                                     {schemes.map((scheme) => (
                                         <tr key={scheme.id} className="hover:bg-gray-50">
+                                            <td className="p-4">
+                                                {/* TYPE BADGE */}
+                                                <span className={`px-2 py-1 rounded text-xs font-bold ${scheme.type === 'form' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {scheme.type ? scheme.type.toUpperCase() : 'SCHEME'}
+                                                </span>
+                                            </td>
                                             <td className="p-4">
                                                 <button
                                                     onClick={() => toggleActive(scheme.id, scheme.active)}
@@ -518,7 +560,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     ))}
                                     {schemes.length === 0 && (
                                         <tr>
-                                            <td colSpan="4" className="p-8 text-center text-gray-500">No schemes added yet.</td>
+                                            <td colSpan="5" className="p-8 text-center text-gray-500">No content added yet.</td>
                                         </tr>
                                     )}
                                 </tbody>
