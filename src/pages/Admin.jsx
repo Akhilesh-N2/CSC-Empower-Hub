@@ -43,7 +43,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         id: null,
         title: '',
         category: '',
-        type: 'scheme', // <--- NEW DEFAULT: 'scheme' or 'form'
+        type: 'scheme', 
         description: '',
         image: '',
         visitUrl: '',
@@ -73,20 +73,11 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         setPdfUploading(true);
         try {
             const fileName = `${Date.now()}-pdf-${file.name.replace(/\s/g, '_')}`;
-            const { error } = await supabase.storage
-                .from('scheme-files')
-                .upload(fileName, file);
-
+            const { error } = await supabase.storage.from('scheme-files').upload(fileName, file);
             if (error) throw error;
-
-            const { data: publicUrlData } = supabase.storage
-                .from('scheme-files')
-                .getPublicUrl(fileName);
-
-            const url = publicUrlData.publicUrl;
-            setCurrentScheme(prev => ({ ...prev, downloadUrl: url }));
+            const { data: publicUrlData } = supabase.storage.from('scheme-files').getPublicUrl(fileName);
+            setCurrentScheme(prev => ({ ...prev, downloadUrl: publicUrlData.publicUrl }));
             alert("PDF Uploaded Successfully!");
-
         } catch (error) {
             console.error("Error uploading PDF:", error.message);
             alert("Failed to upload PDF: " + error.message);
@@ -99,8 +90,6 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     const handleImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
-        // Check if it's actually an image
         if (!file.type.startsWith('image/')) {
             alert("Please upload a valid image file (JPG, PNG, etc).");
             return;
@@ -109,21 +98,11 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         setImageUploading(true);
         try {
             const fileName = `${Date.now()}-img-${file.name.replace(/\s/g, '_')}`;
-            
-            const { error } = await supabase.storage
-                .from('scheme-files')
-                .upload(fileName, file);
-
+            const { error } = await supabase.storage.from('scheme-files').upload(fileName, file);
             if (error) throw error;
-
-            const { data: publicUrlData } = supabase.storage
-                .from('scheme-files')
-                .getPublicUrl(fileName);
-
-            const url = publicUrlData.publicUrl;
-            setCurrentScheme(prev => ({ ...prev, image: url }));
+            const { data: publicUrlData } = supabase.storage.from('scheme-files').getPublicUrl(fileName);
+            setCurrentScheme(prev => ({ ...prev, image: publicUrlData.publicUrl }));
             alert("Image Uploaded Successfully!");
-
         } catch (error) {
             console.error("Error uploading Image:", error.message);
             alert("Failed to upload Image: " + error.message);
@@ -133,24 +112,17 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     };
 
     // --- DATABASE ACTIONS ---
-
-    // 1. ADD or UPDATE Scheme
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        // VALIDATION: 
-        // If Type is FORM -> PDF is MANDATORY.
-        // If Type is SCHEME -> PDF is Optional.
         if (currentScheme.type === 'form' && !currentScheme.downloadUrl) {
             alert("You selected 'Downloadable Form', so uploading a PDF is MANDATORY.");
             return;
         }
 
-        // Create the data object to send
         const schemeData = {
             title: currentScheme.title,
             category: currentScheme.category,
-            type: currentScheme.type, // <--- SAVING THE TYPE
+            type: currentScheme.type,
             description: currentScheme.description,
             image: currentScheme.image || DEFAULT_IMAGE, 
             visitUrl: currentScheme.visitUrl,
@@ -160,97 +132,51 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
         try {
             if (isEditing) {
-                // UPDATE existing scheme
-                const { error } = await supabase
-                    .from('schemes')
-                    .update(schemeData)
-                    .eq('id', currentScheme.id);
-
+                const { error } = await supabase.from('schemes').update(schemeData).eq('id', currentScheme.id);
                 if (error) throw error;
                 alert("Item updated successfully!");
                 setIsEditing(false);
-
             } else {
-                // INSERT new scheme
-                const { error } = await supabase
-                    .from('schemes')
-                    .insert([schemeData]);
-
+                const { error } = await supabase.from('schemes').insert([schemeData]);
                 if (error) throw error;
                 alert("New item added to database!");
             }
-
-            // REFRESH THE LIST FROM CLOUD
             refreshSchemes();
-
-            // RESET FORM
             setCurrentScheme({ id: null, title: '', category: '', type: 'scheme', description: '', image: '', visitUrl: '', downloadUrl: '', active: true });
-
         } catch (error) {
             alert("Error saving: " + error.message);
         }
     };
 
-    // 2. DELETE Scheme
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this item? This will also delete any attached files.")) {
-            return;
-        }
-
+        if (!window.confirm("Are you sure you want to delete this item? This will also delete any attached files.")) return;
         try {
-            // STEP A: Fetch first to get file URLs
-            const { data: schemeData, error: fetchError } = await supabase
-                .from('schemes')
-                .select('downloadUrl, image')
-                .eq('id', id)
-                .single();
-
+            const { data: schemeData, error: fetchError } = await supabase.from('schemes').select('downloadUrl, image').eq('id', id).single();
             if (fetchError) throw fetchError;
 
-            // STEP B: Delete files if they exist in OUR bucket
             const filesToDelete = [];
-
             if (schemeData?.downloadUrl && schemeData.downloadUrl.includes('supabase.co')) {
-                const pdfName = schemeData.downloadUrl.split('/').pop();
-                filesToDelete.push(pdfName);
+                filesToDelete.push(schemeData.downloadUrl.split('/').pop());
             }
-
             if (schemeData?.image && schemeData.image.includes('supabase.co')) {
-                const imageName = schemeData.image.split('/').pop();
-                filesToDelete.push(imageName);
+                filesToDelete.push(schemeData.image.split('/').pop());
             }
 
             if (filesToDelete.length > 0) {
-                const { error: storageError } = await supabase.storage
-                    .from('scheme-files')
-                    .remove(filesToDelete);
-                
-                if (storageError) console.warn("Warning: Could not delete files from storage.", storageError);
+                await supabase.storage.from('scheme-files').remove(filesToDelete);
             }
 
-            // STEP C: Delete the Row from Database
-            const { error: deleteError } = await supabase
-                .from('schemes')
-                .delete()
-                .eq('id', id);
-
+            const { error: deleteError } = await supabase.from('schemes').delete().eq('id', id);
             if (deleteError) throw deleteError;
-
             refreshSchemes();
-
         } catch (error) {
             alert("Error deleting: " + error.message);
         }
     };
 
-    // 3. TOGGLE ACTIVE
     const toggleActive = async (id, currentStatus) => {
         try {
-            const { error } = await supabase
-                .from('schemes')
-                .update({ active: !currentStatus })
-                .eq('id', id);
-
+            const { error } = await supabase.from('schemes').update({ active: !currentStatus }).eq('id', id);
             if (error) throw error;
             refreshSchemes();
         } catch (error) {
@@ -263,62 +189,48 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         setIsEditing(true);
     };
 
-
     // --- CAROUSEL FUNCTIONS ---
-    const [currentSlide, setCurrentSlide] = useState({
-        id: null, title: '', description: '', image: '', link: ''
-    });
-
-    const handleSlideInput = (e) => {
-        const { name, value } = e.target;
-        setCurrentSlide({ ...currentSlide, [name]: value });
-    };
-
+    const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '' });
+    const handleSlideInput = (e) => setCurrentSlide({ ...currentSlide, [e.target.name]: e.target.value });
     const handleSlideSubmit = async (e) => {
         e.preventDefault();
-        const newSlide = {
-            title: currentSlide.title,
-            description: currentSlide.description,
-            image: currentSlide.image,
-            link: currentSlide.link
-        };
-        const { error } = await supabase.from('slides').insert([newSlide]);
-        if (error) {
-            alert("Error adding slide: " + error.message);
-        } else {
+        const { error } = await supabase.from('slides').insert([currentSlide]);
+        if (error) alert("Error adding slide: " + error.message);
+        else {
             alert("Slide added to Cloud!");
             refreshSlides();
             setCurrentSlide({ id: null, title: '', description: '', image: '', link: '' });
         }
     };
-
     const deleteSlide = async (id) => {
         if (window.confirm("Delete this slide?")) {
             const { error } = await supabase.from('slides').delete().eq('id', id);
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
-                refreshSlides();
-            }
+            if (error) alert("Error deleting: " + error.message);
+            else refreshSlides();
         }
     };
 
     return (
-        <div className="flex h-[calc(100vh-5rem)] bg-gray-100">
+        // 1. RESPONSIVE CONTAINER: Flex col on mobile, row on desktop
+        <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
 
-            {/* SIDEBAR */}
-            <div className="w-64 bg-slate-900 text-white flex flex-col">
-                <div className="p-6 text-2xl font-bold border-b border-slate-700">Admin Panel</div>
-                <nav className="flex-1 p-4 space-y-2">
+            {/* 2. RESPONSIVE NAV: Full width top bar on mobile, sidebar on desktop */}
+            <div className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0">
+                <div className="p-4 md:p-6 text-xl md:text-2xl font-bold border-b border-slate-700 flex justify-between items-center">
+                    <span>Admin Panel</span>
+                </div>
+                
+                {/* Horizontal scroll on mobile, Vertical on desktop */}
+                <nav className="flex flex-row md:flex-col p-2 md:p-4 gap-2 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('cards')}
-                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'cards' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
+                        className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'cards' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
                     >
                         📑 Manage Content
                     </button>
                     <button
                         onClick={() => setActiveTab('carousel')}
-                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'carousel' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
+                        className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'carousel' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
                     >
                         🖼️ Manage Carousel
                     </button>
@@ -326,245 +238,158 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             </div>
 
             {/* MAIN CONTENT AREA */}
-            <div className="flex-1 overflow-auto p-8">
+            <div className="flex-1 p-4 md:p-8 overflow-y-auto">
 
                 {/* --- TAB 1: CARDS MANAGEMENT --- */}
                 {activeTab === 'cards' && (
                     <div className="max-w-5xl mx-auto">
-                        <h2 className="text-3xl font-bold text-gray-800 mb-8">Content Management</h2>
+                        <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Content Management</h2>
 
                         {/* FORM SECTION */}
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-10">
-                            <h3 className="text-xl font-semibold mb-4 text-gray-700">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
-                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+                            <h3 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
 
-                                {/* --- NEW: DISPLAY TYPE SELECTOR --- */}
-                                <div className="col-span-2 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                {/* DISPLAY TYPE - Touch Friendly */}
+                                <div className="col-span-1 md:col-span-2 bg-blue-50 p-4 rounded-lg border border-blue-100">
                                     <label className="block text-sm font-bold text-blue-800 mb-2">Display Type</label>
-                                    <div className="flex flex-col md:flex-row gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-blue-100 rounded transition-colors">
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <label className="flex items-center gap-3 p-3 bg-white rounded border cursor-pointer hover:border-blue-400">
                                             <input 
                                                 type="radio" name="type" value="scheme" 
                                                 checked={currentScheme.type === 'scheme'} 
                                                 onChange={handleInputChange} 
-                                                className="w-4 h-4 text-blue-600"
+                                                className="w-5 h-5 text-blue-600"
                                             />
-                                            <span className="font-medium text-gray-800">Scheme Card</span>
-                                            <span className="text-xs text-gray-500">(For Home Page)</span>
+                                            <div>
+                                                <span className="block font-medium text-gray-800">Scheme Card</span>
+                                                <span className="block text-xs text-gray-500">(Home Page)</span>
+                                            </div>
                                         </label>
-                                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-blue-100 rounded transition-colors">
+                                        <label className="flex items-center gap-3 p-3 bg-white rounded border cursor-pointer hover:border-blue-400">
                                             <input 
                                                 type="radio" name="type" value="form" 
                                                 checked={currentScheme.type === 'form'} 
                                                 onChange={handleInputChange} 
-                                                className="w-4 h-4 text-blue-600"
+                                                className="w-5 h-5 text-blue-600"
                                             />
-                                            <span className="font-medium text-gray-800">Downloadable Form</span>
-                                            <span className="text-xs text-gray-500">(For Forms Library)</span>
+                                            <div>
+                                                <span className="block font-medium text-gray-800">Downloadable Form</span>
+                                                <span className="block text-xs text-gray-500">(Forms Library)</span>
+                                            </div>
                                         </label>
                                     </div>
                                 </div>
 
-                                {/* Title (MANDATORY) */}
-                                <div className="col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
-                                    <input
-                                        type="text" name="title" required
-                                        value={currentScheme.title} onChange={handleInputChange}
-                                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                {/* Title */}
+                                <div className="col-span-1 md:col-span-1">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                                    <input type="text" name="title" required value={currentScheme.title} onChange={handleInputChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
 
-                                {/* Category Section (MANDATORY) */}
+                                {/* Category */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                                     <div className="flex gap-2 mb-2">
-                                        <select
-                                            name="category" required
-                                            value={currentScheme.category} onChange={handleInputChange}
-                                            className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                        >
+                                        <select name="category" required value={currentScheme.category} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg bg-white">
                                             <option value="">Select Category</option>
-                                            {categories.map((cat, index) => (
-                                                <option key={index} value={cat}>{cat}</option>
-                                            ))}
+                                            {categories.map((cat, index) => <option key={index} value={cat}>{cat}</option>)}
                                         </select>
-                                        <button
-                                            type="button" onClick={handleDeleteCategory}
-                                            className="bg-red-100 text-red-600 px-3 rounded-lg border border-red-200 hover:bg-red-200"
-                                        >
-                                            🗑️
-                                        </button>
+                                        <button type="button" onClick={handleDeleteCategory} className="bg-red-100 text-red-600 px-3 rounded-lg border border-red-200">🗑️</button>
                                     </div>
                                     <div className="flex gap-2">
-                                        <input
-                                            type="text" placeholder="New Category Name"
-                                            value={newCategoryInput} onChange={(e) => setNewCategoryInput(e.target.value)}
-                                            className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
-                                        />
-                                        <button
-                                            type="button" onClick={handleAddCategory}
-                                            className="bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap"
-                                        >
-                                            + Add
-                                        </button>
+                                        <input type="text" placeholder="New Category" value={newCategoryInput} onChange={(e) => setNewCategoryInput(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-lg text-sm" />
+                                        <button type="button" onClick={handleAddCategory} className="bg-green-600 text-white px-3 py-1 rounded-lg text-sm whitespace-nowrap">+ Add</button>
                                     </div>
                                 </div>
 
                                 {/* Description */}
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                                    <textarea
-                                        name="description" rows="3"
-                                        value={currentScheme.description} onChange={handleInputChange}
-                                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    ></textarea>
+                                <div className="col-span-1 md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                    <textarea name="description" rows="3" value={currentScheme.description} onChange={handleInputChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
                                 </div>
 
-                                {/* IMAGE UPLOAD (Hidden if type is FORM, as forms lists typically don't show thumbnails) */}
+                                {/* Image Upload */}
                                 {currentScheme.type === 'scheme' && (
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Scheme Image (Optional)</label>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <input
-                                                    type="file" accept="image/*"
-                                                    onChange={handleImageUpload}
-                                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                                />
-                                                {imageUploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading Image...</span>}
+                                    <div className="col-span-1 md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Scheme Image</label>
+                                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                                            <div className="w-full">
+                                                <input type="file" accept="image/*" onChange={handleImageUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                                                {imageUploading && <span className="text-sm text-blue-600 animate-pulse">⏳ Uploading...</span>}
                                             </div>
-                                            {/* Image Preview */}
-                                            {currentScheme.image && (
-                                                <div className="w-16 h-16 rounded border overflow-hidden bg-gray-50 flex-shrink-0">
-                                                    <img src={currentScheme.image} alt="Preview" className="w-full h-full object-cover" />
-                                                </div>
-                                            )}
+                                            {currentScheme.image && <img src={currentScheme.image} alt="Preview" className="w-16 h-16 rounded border object-cover" />}
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Links */}
+                                {/* Links & PDF */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Visit Link (Optional)</label>
-                                    <input
-                                        type="url" name="visitUrl"
-                                        value={currentScheme.visitUrl} onChange={handleInputChange}
-                                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Visit Link</label>
+                                    <input type="url" name="visitUrl" value={currentScheme.visitUrl} onChange={handleInputChange} className="w-full p-2 border rounded-lg outline-none" />
                                 </div>
 
-                                {/* PDF Upload (MANDATORY if Type is FORM) */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Upload PDF / Form 
-                                        {currentScheme.type === 'form' ? <span className="text-red-500"> * (Required)</span> : <span className="text-gray-400"> (Optional)</span>}
-                                    </label>
-                                    <div className="flex flex-col gap-2">
-                                        <input
-                                            type="file" accept="application/pdf"
-                                            onChange={handlePdfUpload}
-                                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                        />
-                                        {pdfUploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading PDF...</span>}
-                                        {currentScheme.downloadUrl ? (
-                                            <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200 break-all">
-                                                <strong>✓ File Attached:</strong> <br /> {currentScheme.downloadUrl}
-                                            </div>
-                                        ) : (
-                                            currentScheme.type === 'form' && (
-                                                <div className="text-xs text-red-500">
-                                                    * PDF is required for Forms
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload PDF {currentScheme.type === 'form' && <span className="text-red-500">*</span>}</label>
+                                    <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                                    {pdfUploading && <span className="text-sm text-blue-600 animate-pulse">⏳ Uploading...</span>}
+                                    {currentScheme.downloadUrl && <div className="text-xs text-green-700 mt-1 break-all">✓ Attached</div>}
                                 </div>
 
                                 {/* Active Toggle */}
-                                <div className="col-span-2 flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
-                                    <input
-                                        type="checkbox" name="active" id="activeToggle"
-                                        checked={currentScheme.active} onChange={handleInputChange}
-                                        className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                                    />
-                                    <label htmlFor="activeToggle" className="text-gray-700 font-medium cursor-pointer select-none">
-                                        Make this active immediately?
-                                    </label>
+                                <div className="col-span-1 md:col-span-2 flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                                    <input type="checkbox" name="active" checked={currentScheme.active} onChange={handleInputChange} className="w-5 h-5 text-blue-600 rounded" />
+                                    <label className="text-gray-700 font-medium">Make this active immediately?</label>
                                 </div>
 
                                 {/* Buttons */}
-                                <div className="col-span-2 flex gap-4 mt-2">
-                                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                                        {isEditing ? 'Update Item' : 'Add Item'}
-                                    </button>
-                                    {isEditing && (
-                                        <button
-                                            type="button"
-                                            onClick={() => { setIsEditing(false); setCurrentScheme({ id: null, title: '', category: '', type: 'scheme', description: '', image: '', visitUrl: '', downloadUrl: '', active: true }); }}
-                                            className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium"
-                                        >
-                                            Cancel
-                                        </button>
-                                    )}
+                                <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row gap-3 pt-2">
+                                    <button type="submit" className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">{isEditing ? 'Update Item' : 'Add Item'}</button>
+                                    {isEditing && <button type="button" onClick={() => { setIsEditing(false); setCurrentScheme({ id: null, title: '', category: '', type: 'scheme', description: '', image: '', visitUrl: '', downloadUrl: '', active: true }); }} className="w-full sm:w-auto px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium">Cancel</button>}
                                 </div>
                             </form>
                         </div>
 
-                        {/* LIST SECTION */}
+                        {/* LIST SECTION - SCROLLABLE ON MOBILE */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-bold">
-                                    <tr>
-                                        <th className="p-4 border-b">Type</th>
-                                        <th className="p-4 border-b">Status</th>
-                                        <th className="p-4 border-b">Title</th>
-                                        <th className="p-4 border-b">Category</th>
-                                        <th className="p-4 border-b text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {schemes.map((scheme) => (
-                                        <tr key={scheme.id} className="hover:bg-gray-50">
-                                            <td className="p-4">
-                                                {/* TYPE BADGE */}
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${scheme.type === 'form' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {scheme.type ? scheme.type.toUpperCase() : 'SCHEME'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                <button
-                                                    onClick={() => toggleActive(scheme.id, scheme.active)}
-                                                    className={`px-3 py-1 rounded-full text-xs font-bold ${scheme.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-                                                >
-                                                    {scheme.active ? 'ACTIVE' : 'INACTIVE'}
-                                                </button>
-                                            </td>
-                                            <td className="p-4 font-medium text-gray-900">{scheme.title}</td>
-                                            <td className="p-4 text-gray-600">{scheme.category}</td>
-                                            <td className="p-4 flex justify-center gap-3">
-                                                <button
-                                                    onClick={() => handleEdit(scheme)}
-                                                    className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                                                >
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(scheme.id)}
-                                                    className="text-red-600 hover:text-red-800 font-medium text-sm"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {schemes.length === 0 && (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse min-w-[600px]">
+                                    <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-bold">
                                         <tr>
-                                            <td colSpan="5" className="p-8 text-center text-gray-500">No content added yet.</td>
+                                            <th className="p-4 border-b">Type</th>
+                                            <th className="p-4 border-b">Status</th>
+                                            <th className="p-4 border-b">Title</th>
+                                            <th className="p-4 border-b">Category</th>
+                                            <th className="p-4 border-b text-center">Actions</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {schemes.map((scheme) => (
+                                            <tr key={scheme.id} className="hover:bg-gray-50">
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${scheme.type === 'form' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {scheme.type ? scheme.type.toUpperCase() : 'SCHEME'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <button onClick={() => toggleActive(scheme.id, scheme.active)} className={`px-3 py-1 rounded-full text-xs font-bold ${scheme.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {scheme.active ? 'ACTIVE' : 'INACTIVE'}
+                                                    </button>
+                                                </td>
+                                                <td className="p-4 font-medium text-gray-900">{scheme.title}</td>
+                                                <td className="p-4 text-gray-600">{scheme.category}</td>
+                                                <td className="p-4 flex justify-center gap-3">
+                                                    <button onClick={() => handleEdit(scheme)} className="text-blue-600 hover:text-blue-800 font-medium text-sm">Edit</button>
+                                                    <button onClick={() => handleDelete(scheme.id)} className="text-red-600 hover:text-red-800 font-medium text-sm">Delete</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {schemes.length === 0 && (
+                                            <tr><td colSpan="5" className="p-8 text-center text-gray-500">No content added yet.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -572,33 +397,15 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 {/* --- TAB 2: CAROUSEL MANAGEMENT (Local for now) --- */}
                 {activeTab === 'carousel' && (
                     <div className="max-w-4xl mx-auto">
-                        <h2 className="text-3xl font-bold text-gray-800 mb-8">Carousel Manager</h2>
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-10">
-                            <h3 className="text-xl font-semibold mb-4 text-gray-700">Add New Slide</h3>
+                        <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Carousel Manager</h2>
+                        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+                            <h3 className="text-lg font-semibold mb-4 text-gray-700">Add New Slide</h3>
                             <form onSubmit={handleSlideSubmit} className="grid grid-cols-1 gap-4">
-                                <input
-                                    type="text" name="title" placeholder="Slide Title" required
-                                    value={currentSlide.title} onChange={handleSlideInput}
-                                    className="p-2 border rounded-lg w-full"
-                                />
-                                <input
-                                    type="text" name="description" placeholder="Short Description" required
-                                    value={currentSlide.description} onChange={handleSlideInput}
-                                    className="p-2 border rounded-lg w-full"
-                                />
-                                <input
-                                    type="url" name="image" placeholder="Image URL" required
-                                    value={currentSlide.image} onChange={handleSlideInput}
-                                    className="p-2 border rounded-lg w-full"
-                                />
-                                <input
-                                    type="url" name="link" placeholder="Learn More Link (Optional)"
-                                    value={currentSlide.link} onChange={handleSlideInput}
-                                    className="p-2 border rounded-lg w-full"
-                                />
-                                <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-fit">
-                                    Add Slide
-                                </button>
+                                <input type="text" name="title" placeholder="Slide Title" required value={currentSlide.title} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
+                                <input type="text" name="description" placeholder="Short Description" required value={currentSlide.description} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
+                                <input type="url" name="image" placeholder="Image URL" required value={currentSlide.image} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
+                                <input type="url" name="link" placeholder="Learn More Link (Optional)" value={currentSlide.link} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
+                                <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-full sm:w-fit">Add Slide</button>
                             </form>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -609,12 +416,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                         <h4 className="font-bold text-lg">{slide.title}</h4>
                                         <p className="text-sm">{slide.description}</p>
                                     </div>
-                                    <button
-                                        onClick={() => deleteSlide(slide.id)}
-                                        className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700"
-                                    >
-                                        🗑️
-                                    </button>
+                                    <button onClick={() => deleteSlide(slide.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700">🗑️</button>
                                 </div>
                             ))}
                         </div>
