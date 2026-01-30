@@ -19,15 +19,15 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
           <Link to="/" className="flex items-center gap-3 group">
 
             {/* Logo Icon */}
-            {/* <div className="bg-blue-600 md:hidden w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center font-bold text-white shadow-md group-hover:bg-blue-500 transition-colors">
-              C
-            </div> */}
+            <div className="bg-blue-600 p-5 md:hidden w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center font-bold text-white shadow-md group-hover:bg-blue-500 transition-colors">
+              CSC
+            </div>
 
             <div className="font-bold tracking-tight">
               {/* MOBILE VIEW: Shows 'CSC Hub' */}
-              <span className="block md:hidden text-lg">
+              {/* <span className="block md:hidden text-lg">
                 CSC-E-HUB
-              </span>
+              </span> */}
 
               {/* DESKTOP VIEW: Shows 'CSC-Empower-Hub' */}
               <span className="hidden md:block text-xl">
