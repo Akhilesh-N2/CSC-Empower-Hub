@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
+// A placeholder image to use if the user doesn't upload one
+const DEFAULT_IMAGE = "https://placehold.co/600x400/e2e8f0/1e293b?text=No+Image+Available";
+
 function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes, refreshSlides }) {
-    const [uploading, setUploading] = useState(false);
+    const [pdfUploading, setPdfUploading] = useState(false);
+    const [imageUploading, setImageUploading] = useState(false);
     const [activeTab, setActiveTab] = useState('cards'); // 'cards' or 'carousel'
 
     // STATE FOR CATEGORY
@@ -55,7 +59,8 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         });
     };
 
-    const handleFileUpload = async (e) => {
+    // 1. PDF UPLOAD HANDLER
+    const handlePdfUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -64,9 +69,9 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             return;
         }
 
-        setUploading(true);
+        setPdfUploading(true);
         try {
-            const fileName = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+            const fileName = `${Date.now()}-pdf-${file.name.replace(/\s/g, '_')}`;
             const { error } = await supabase.storage
                 .from('scheme-files')
                 .upload(fileName, file);
@@ -82,25 +87,70 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             alert("PDF Uploaded Successfully!");
 
         } catch (error) {
-            console.error("Error uploading file:", error.message);
+            console.error("Error uploading PDF:", error.message);
             alert("Failed to upload PDF: " + error.message);
         } finally {
-            setUploading(false);
+            setPdfUploading(false);
         }
     };
 
-    // --- DATABASE ACTIONS (NEW) ---
+    // 2. IMAGE UPLOAD HANDLER (NEW)
+    const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Check if it's actually an image
+        if (!file.type.startsWith('image/')) {
+            alert("Please upload a valid image file (JPG, PNG, etc).");
+            return;
+        }
+
+        setImageUploading(true);
+        try {
+            // We reuse the same bucket 'scheme-files' but prefix with 'img-'
+            const fileName = `${Date.now()}-img-${file.name.replace(/\s/g, '_')}`;
+            
+            const { error } = await supabase.storage
+                .from('scheme-files')
+                .upload(fileName, file);
+
+            if (error) throw error;
+
+            const { data: publicUrlData } = supabase.storage
+                .from('scheme-files')
+                .getPublicUrl(fileName);
+
+            const url = publicUrlData.publicUrl;
+            setCurrentScheme(prev => ({ ...prev, image: url })); // Update the image field
+            alert("Image Uploaded Successfully!");
+
+        } catch (error) {
+            console.error("Error uploading Image:", error.message);
+            alert("Failed to upload Image: " + error.message);
+        } finally {
+            setImageUploading(false);
+        }
+    };
+
+    // --- DATABASE ACTIONS ---
 
     // 1. ADD or UPDATE Scheme
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // VALIDATION CHECK: Ensure PDF is uploaded
+        if (!currentScheme.downloadUrl) {
+            alert("Please upload a PDF file. It is mandatory.");
+            return;
+        }
 
         // Create the data object to send
         const schemeData = {
             title: currentScheme.title,
             category: currentScheme.category,
             description: currentScheme.description,
-            image: currentScheme.image,
+            // USE UPLOADED IMAGE OR DEFAULT
+            image: currentScheme.image || DEFAULT_IMAGE, 
             visitUrl: currentScheme.visitUrl,
             downloadUrl: currentScheme.downloadUrl,
             active: currentScheme.active
@@ -112,7 +162,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 const { error } = await supabase
                     .from('schemes')
                     .update(schemeData)
-                    .eq('id', currentScheme.id); // Find by ID
+                    .eq('id', currentScheme.id);
 
                 if (error) throw error;
                 alert("Scheme updated successfully!");
@@ -139,36 +189,42 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         }
     };
 
-    // 2. DELETE Scheme (AND its file!)
+    // 2. DELETE Scheme
     const handleDelete = async (id) => {
         if (!window.confirm("Are you sure you want to delete this scheme? This will also delete the attached PDF.")) {
             return;
         }
 
         try {
-            // STEP A: Fetch the scheme first to get the file URL
+            // STEP A: Fetch the scheme first to get file URLs
             const { data: schemeData, error: fetchError } = await supabase
                 .from('schemes')
-                .select('downloadUrl')
+                .select('downloadUrl, image')
                 .eq('id', id)
                 .single();
 
             if (fetchError) throw fetchError;
 
-            // STEP B: If a file exists, delete it from Storage
-            if (schemeData?.downloadUrl) {
-                // The URL looks like: .../scheme-files/12345-myfile.pdf
-                // We split by '/' and take the last part to get the filename
-                const fileName = schemeData.downloadUrl.split('/').pop();
+            // STEP B: If files exist in YOUR storage bucket, delete them
+            // We check if the URL contains your specific Supabase project link to avoid deleting external links (like default placeholders)
+            const filesToDelete = [];
 
+            if (schemeData?.downloadUrl && schemeData.downloadUrl.includes('supabase.co')) {
+                const pdfName = schemeData.downloadUrl.split('/').pop();
+                filesToDelete.push(pdfName);
+            }
+
+            if (schemeData?.image && schemeData.image.includes('supabase.co')) {
+                const imageName = schemeData.image.split('/').pop();
+                filesToDelete.push(imageName);
+            }
+
+            if (filesToDelete.length > 0) {
                 const { error: storageError } = await supabase.storage
                     .from('scheme-files')
-                    .remove([fileName]);
-
-                if (storageError) {
-                    console.warn("Warning: Could not delete file from storage.", storageError);
-                    // We continue anyway so the user isn't stuck with a card they can't delete
-                }
+                    .remove(filesToDelete);
+                
+                if (storageError) console.warn("Warning: Could not delete files from storage.", storageError);
             }
 
             // STEP C: Delete the Row from Database
@@ -179,7 +235,6 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
             if (deleteError) throw deleteError;
 
-            // Success!
             refreshSchemes();
 
         } catch (error) {
@@ -192,27 +247,23 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         try {
             const { error } = await supabase
                 .from('schemes')
-                .update({ active: !currentStatus }) // Flip the status
+                .update({ active: !currentStatus })
                 .eq('id', id);
 
             if (error) throw error;
-
-            // Refresh the list
             refreshSchemes();
-
         } catch (error) {
             console.error("Error updating status:", error.message);
         }
     };
 
-    // Edit Button Click (Just fills the form, doesn't touch DB yet)
     const handleEdit = (scheme) => {
         setCurrentScheme(scheme);
         setIsEditing(true);
     };
 
 
-    // --- CAROUSEL FUNCTIONS (Still Local for now) ---
+    // --- CAROUSEL FUNCTIONS ---
     const [currentSlide, setCurrentSlide] = useState({
         id: null, title: '', description: '', image: '', link: ''
     });
@@ -224,38 +275,29 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
     const handleSlideSubmit = async (e) => {
         e.preventDefault();
-
         const newSlide = {
             title: currentSlide.title,
             description: currentSlide.description,
             image: currentSlide.image,
             link: currentSlide.link
         };
-
-        const { error } = await supabase
-            .from('slides')
-            .insert([newSlide]);
-
+        const { error } = await supabase.from('slides').insert([newSlide]);
         if (error) {
             alert("Error adding slide: " + error.message);
         } else {
             alert("Slide added to Cloud!");
-            refreshSlides(); // Refresh the app
-            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '' }); // Clear form
+            refreshSlides();
+            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '' });
         }
     };
 
     const deleteSlide = async (id) => {
         if (window.confirm("Delete this slide?")) {
-            const { error } = await supabase
-                .from('slides')
-                .delete()
-                .eq('id', id);
-
+            const { error } = await supabase.from('slides').delete().eq('id', id);
             if (error) {
                 alert("Error deleting: " + error.message);
             } else {
-                refreshSlides(); // Refresh the app
+                refreshSlides();
             }
         }
     };
@@ -295,9 +337,9 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             <h3 className="text-xl font-semibold mb-4 text-gray-700">{isEditing ? 'Edit Scheme' : 'Add New Scheme'}</h3>
                             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                                {/* Title */}
+                                {/* Title (MANDATORY) */}
                                 <div className="col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
                                     <input
                                         type="text" name="title" required
                                         value={currentScheme.title} onChange={handleInputChange}
@@ -305,9 +347,9 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     />
                                 </div>
 
-                                {/* Category Section */}
+                                {/* Category Section (MANDATORY) */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
                                     <div className="flex gap-2 mb-2">
                                         <select
                                             name="category" required
@@ -343,46 +385,62 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
                                 {/* Description */}
                                 <div className="col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
                                     <textarea
-                                        name="description" required rows="3"
+                                        name="description" rows="3"
                                         value={currentScheme.description} onChange={handleInputChange}
                                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     ></textarea>
                                 </div>
 
-                                {/* Image URL */}
+                                {/* IMAGE UPLOAD (NEW) */}
                                 <div className="col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-                                    <input
-                                        type="url" name="image" required placeholder="https://..."
-                                        value={currentScheme.image} onChange={handleInputChange}
-                                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Scheme Image (Optional)</label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex-1">
+                                            <input
+                                                type="file" accept="image/*"
+                                                onChange={handleImageUpload}
+                                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                                            />
+                                            {imageUploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading Image...</span>}
+                                        </div>
+                                        {/* Image Preview */}
+                                        {currentScheme.image && (
+                                            <div className="w-16 h-16 rounded border overflow-hidden bg-gray-50 flex-shrink-0">
+                                                <img src={currentScheme.image} alt="Preview" className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Links */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Visit Link</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Visit Link (Optional)</label>
                                     <input
-                                        type="url" name="visitUrl" required
+                                        type="url" name="visitUrl"
                                         value={currentScheme.visitUrl} onChange={handleInputChange}
                                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
                                 </div>
 
+                                {/* PDF Upload (MANDATORY) */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload PDF / Form</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload PDF / Form <span className="text-red-500">*</span></label>
                                     <div className="flex flex-col gap-2">
                                         <input
                                             type="file" accept="application/pdf"
-                                            onChange={handleFileUpload}
+                                            onChange={handlePdfUpload}
                                             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
                                         />
-                                        {uploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading...</span>}
-                                        {currentScheme.downloadUrl && (
+                                        {pdfUploading && <span className="text-sm text-blue-600 font-medium animate-pulse">⏳ Uploading PDF...</span>}
+                                        {currentScheme.downloadUrl ? (
                                             <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200 break-all">
                                                 <strong>✓ File Attached:</strong> <br /> {currentScheme.downloadUrl}
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-red-500">
+                                                * PDF is required to submit
                                             </div>
                                         )}
                                     </div>

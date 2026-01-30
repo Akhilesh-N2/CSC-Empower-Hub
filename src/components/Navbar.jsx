@@ -18,7 +18,7 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
           {/* LOGO / BRAND */}
           <div className="flex items-center">
             <Link to="/" className="text-2xl font-bold text-blue-600">
-              CSC Portal
+              CSC Empower Hub
             </Link>
           </div>
 
