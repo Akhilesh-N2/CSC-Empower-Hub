@@ -8,6 +8,7 @@ const DEFAULT_IMAGE = "https://placehold.co/600x400/e2e8f0/1e293b?text=No+Image+
 function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes, refreshSlides, refreshCategories }) {
     const [pdfUploading, setPdfUploading] = useState(false);
     const [imageUploading, setImageUploading] = useState(false);
+    const [slideImageUploading, setSlideImageUploading] = useState(false); // for image uploading
     const [activeTab, setActiveTab] = useState('cards'); // 'cards' or 'carousel'
 
     // --- STATE FOR CATEGORY (UPDATED FOR CLOUD) ---
@@ -69,7 +70,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         id: null,
         title: '',
         category: '',
-        type: 'scheme', 
+        type: 'scheme',
         description: '',
         image: '',
         visitUrl: '',
@@ -150,7 +151,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             category: currentScheme.category,
             type: currentScheme.type,
             description: currentScheme.description,
-            image: currentScheme.image || DEFAULT_IMAGE, 
+            image: currentScheme.image || DEFAULT_IMAGE,
             visitUrl: currentScheme.visitUrl,
             downloadUrl: currentScheme.downloadUrl,
             active: currentScheme.active
@@ -216,18 +217,56 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     };
 
     // --- CAROUSEL FUNCTIONS ---
-    const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '' });
+    const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '', duration: 5000 });
     const handleSlideInput = (e) => setCurrentSlide({ ...currentSlide, [e.target.name]: e.target.value });
+    
+
+
+    const handleSlideImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !file.type.startsWith('image/')) { alert("Upload Image only."); return; }
+
+        // Carousel image upload
+        setSlideImageUploading(true);
+        try {
+            // Reusing the same 'scheme-files' bucket for simplicity
+            const fileName = `slide-${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+            const { error } = await supabase.storage.from('scheme-files').upload(fileName, file);
+            if (error) throw error;
+
+            const { data } = supabase.storage.from('scheme-files').getPublicUrl(fileName);
+            setCurrentSlide(prev => ({ ...prev, image: data.publicUrl }));
+            alert("Slide Image Uploaded!");
+        } catch (error) { alert(error.message); } finally { setSlideImageUploading(false); }
+    };
+
+
     const handleSlideSubmit = async (e) => {
         e.preventDefault();
-        const { error } = await supabase.from('slides').insert([currentSlide]);
-        if (error) alert("Error adding slide: " + error.message);
-        else {
-            alert("Slide added to Cloud!");
+
+        // FOOLPROOF FIX: explicitly build the object we want to send.
+        // We do NOT include 'id' here at all.
+        const slideData = {
+            title: currentSlide.title || "Untitled", // Handle empty titles
+            description: currentSlide.description,
+            image: currentSlide.image,
+            link: currentSlide.link,
+            duration: parseInt(currentSlide.duration) || 5000 // Ensure it's a number
+        };
+
+        const { error } = await supabase.from('slides').insert([slideData]);
+        
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            alert("Slide Added!"); 
             refreshSlides();
-            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '' });
+            // Reset form
+            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000 });
         }
     };
+
+
     const deleteSlide = async (id) => {
         if (window.confirm("Delete this slide?")) {
             const { error } = await supabase.from('slides').delete().eq('id', id);
@@ -245,7 +284,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 <div className="p-4 md:p-6 text-xl md:text-2xl font-bold border-b border-slate-700 flex justify-between items-center">
                     <span>Admin Panel</span>
                 </div>
-                
+
                 <nav className="flex flex-row md:flex-col p-2 md:p-4 gap-2 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('cards')}
@@ -279,22 +318,22 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     <label className="block text-sm font-bold text-blue-800 mb-2">Display Type</label>
                                     <div className="flex flex-col sm:flex-row gap-3">
                                         <label className="flex items-center gap-3 p-3 bg-white rounded border cursor-pointer hover:border-blue-400">
-                                            <input 
-                                                type="radio" name="type" value="scheme" 
-                                                checked={currentScheme.type === 'scheme'} 
-                                                onChange={handleInputChange} 
+                                            <input
+                                                type="radio" name="type" value="scheme"
+                                                checked={currentScheme.type === 'scheme'}
+                                                onChange={handleInputChange}
                                                 className="w-5 h-5 text-blue-600"
                                             />
                                             <div>
-                                                <span className="block font-medium text-gray-800">Scheme Card</span>
+                                                <span className="block font-medium text-gray-800">Uselful Links</span>
                                                 <span className="block text-xs text-gray-500">(Home Page)</span>
                                             </div>
                                         </label>
                                         <label className="flex items-center gap-3 p-3 bg-white rounded border cursor-pointer hover:border-blue-400">
-                                            <input 
-                                                type="radio" name="type" value="form" 
-                                                checked={currentScheme.type === 'form'} 
-                                                onChange={handleInputChange} 
+                                            <input
+                                                type="radio" name="type" value="form"
+                                                checked={currentScheme.type === 'form'}
+                                                onChange={handleInputChange}
                                                 className="w-5 h-5 text-blue-600"
                                             />
                                             <div>
@@ -418,17 +457,57 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                     </div>
                 )}
 
-                {/* --- TAB 2: CAROUSEL MANAGEMENT (Local for now) --- */}
+                {/* --- TAB 2: CAROUSEL MANAGEMENT --- */}
                 {activeTab === 'carousel' && (
                     <div className="max-w-4xl mx-auto">
                         <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Carousel Manager</h2>
                         <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
                             <h3 className="text-lg font-semibold mb-4 text-gray-700">Add New Slide</h3>
                             <form onSubmit={handleSlideSubmit} className="grid grid-cols-1 gap-4">
+                               
+                                {/* Title */}
                                 <input type="text" name="title" placeholder="Slide Title" required value={currentSlide.title} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
-                                <input type="text" name="description" placeholder="Short Description" required value={currentSlide.description} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
-                                <input type="url" name="image" placeholder="Image URL" required value={currentSlide.image} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
-                                <input type="url" name="link" placeholder="Learn More Link (Optional)" value={currentSlide.link} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
+                                {/* Desc */}
+                                <input type="text" name="description" placeholder="Short Description (Optional)" value={currentSlide.description} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
+                                
+                                {/* Image */}
+                                <div className="border border-dashed border-gray-300 p-4 rounded-lg bg-gray-50">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Slide Image (Optional)</label>
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={handleSlideImageUpload} 
+                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200" 
+                                    />
+                                    {slideImageUploading && <p className="text-sm text-blue-600 mt-2 animate-pulse">Uploading...</p>}
+                                    {currentSlide.image && (
+                                        <div className="mt-2">
+                                            <p className="text-xs text-green-600 mb-1">✓ Image Attached</p>
+                                            <img src={currentSlide.image} alt="Preview" className="h-20 rounded border" />
+                                        </div>
+                                    )}
+                                </div>
+
+
+                                {/* Duration settings */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input name="link" placeholder="Link (Optional)" value={currentSlide.link} onChange={handleSlideInput} className="p-2 border rounded w-full" />
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            name="duration"
+                                            placeholder="5000"
+                                            value={currentSlide.duration}
+                                            onChange={handleSlideInput}
+                                            className="p-2 border rounded w-full"
+                                            min="1000"
+                                            step="500"
+                                        />
+                                        <span className="text-sm text-gray-500">ms</span>
+                                    </div>
+                                </div>
+
+
                                 <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-full sm:w-fit">Add Slide</button>
                             </form>
                         </div>

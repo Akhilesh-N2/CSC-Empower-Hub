@@ -60,7 +60,7 @@ function LandingPage({ schemes, carouselSlides }) {
                 {/* SCHEMES GRID SECTION */}
                 <div className="mt-12">
                     <h1 className="text-2xl md:text-3xl font-bold text-center mb-10 text-gray-800">
-                        Government Schemes
+                        Useful Links
                         {selectedCategory !== 'All' && <span className="text-blue-600"> ({selectedCategory})</span>}
                     </h1>
 

@@ -51,13 +51,20 @@ function Carousel({ slides }) {
         }
     };
 
-    // Autoplay
+    // --- DYNAMIC AUTOPLAY LOGIC ---
     useEffect(() => {
-        const slideInterval = setInterval(() => {
+        // 1. Get duration for THIS specific slide (default to 5000ms if missing)
+        const currentDuration = slides[currentIndex].duration || 5000;
+
+        // 2. Use setTimeout instead of setInterval
+        // This allows the timer to change length every time the slide changes
+        const timer = setTimeout(() => {
             nextSlide();
-        }, 5000);
-        return () => clearInterval(slideInterval);
-    }, [currentIndex]);
+        }, currentDuration);
+
+        // 3. Clear the timer when the slide changes or component unmounts
+        return () => clearTimeout(timer);
+    }, [currentIndex, slides]); // Re-run this effect whenever index changes
 
     return (
 
