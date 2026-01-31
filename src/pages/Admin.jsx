@@ -4,6 +4,11 @@ import { supabase } from '../supabaseClient';
 // A placeholder image to use if the user doesn't upload one
 const DEFAULT_IMAGE = "https://placehold.co/600x400/e2e8f0/1e293b?text=No+Image+Available";
 
+const isVideo = (url) => {
+    if (!url) return false;
+    return url.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/i) !== null;
+};
+
 // Note: added 'refreshCategories' to the props list
 function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categories, setCategories, refreshSchemes, refreshSlides, refreshCategories }) {
     const [pdfUploading, setPdfUploading] = useState(false);
@@ -219,24 +224,29 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     // --- CAROUSEL FUNCTIONS ---
     const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '', duration: 5000 });
     const handleSlideInput = (e) => setCurrentSlide({ ...currentSlide, [e.target.name]: e.target.value });
-    
+
 
 
     const handleSlideImageUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file || !file.type.startsWith('image/')) { alert("Upload Image only."); return; }
+        if (!file) return;
 
-        // Carousel image upload
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+            alert("Please upload an Image or Video file.");
+            return;
+        }
+
         setSlideImageUploading(true);
         try {
-            // Reusing the same 'scheme-files' bucket for simplicity
             const fileName = `slide-${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-            const { error } = await supabase.storage.from('scheme-files').upload(fileName, file);
+
+            // Upload to 'carousel-bucket'
+            const { error } = await supabase.storage.from('carousel-bucket').upload(fileName, file);
             if (error) throw error;
 
-            const { data } = supabase.storage.from('scheme-files').getPublicUrl(fileName);
+            const { data } = supabase.storage.from('carousel-bucket').getPublicUrl(fileName);
             setCurrentSlide(prev => ({ ...prev, image: data.publicUrl }));
-            alert("Slide Image Uploaded!");
+            alert("Media Uploaded!");
         } catch (error) { alert(error.message); } finally { setSlideImageUploading(false); }
     };
 
@@ -255,11 +265,11 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         };
 
         const { error } = await supabase.from('slides').insert([slideData]);
-        
+
         if (error) {
             alert("Error: " + error.message);
         } else {
-            alert("Slide Added!"); 
+            alert("Slide Added!");
             refreshSlides();
             // Reset form
             setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000 });
@@ -269,9 +279,16 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
     const deleteSlide = async (id) => {
         if (window.confirm("Delete this slide?")) {
+            // First get the image URL to delete from storage
+            const { data: slideData } = await supabase.from('slides').select('image').eq('id', id).single();
+
+            if (slideData?.image && slideData.image.includes('carousel-bucket')) {
+                const fileName = slideData.image.split('/').pop();
+                await supabase.storage.from('carousel-bucket').remove([fileName]);
+            }
+
             const { error } = await supabase.from('slides').delete().eq('id', id);
-            if (error) alert("Error deleting: " + error.message);
-            else refreshSlides();
+            if (error) alert(error.message); else refreshSlides();
         }
     };
 
@@ -464,26 +481,30 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                         <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
                             <h3 className="text-lg font-semibold mb-4 text-gray-700">Add New Slide</h3>
                             <form onSubmit={handleSlideSubmit} className="grid grid-cols-1 gap-4">
-                               
+
                                 {/* Title */}
                                 <input type="text" name="title" placeholder="Slide Title" required value={currentSlide.title} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
                                 {/* Desc */}
                                 <input type="text" name="description" placeholder="Short Description (Optional)" value={currentSlide.description} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
-                                
+
                                 {/* Image */}
                                 <div className="border border-dashed border-gray-300 p-4 rounded-lg bg-gray-50">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Slide Image (Optional)</label>
-                                    <input 
-                                        type="file" 
-                                        accept="image/*" 
-                                        onChange={handleSlideImageUpload} 
-                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200" 
+                                    <input
+                                        type="file"
+                                        accept="image/*, video/*"
+                                        onChange={handleSlideImageUpload}
+                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
                                     />
                                     {slideImageUploading && <p className="text-sm text-blue-600 mt-2 animate-pulse">Uploading...</p>}
                                     {currentSlide.image && (
                                         <div className="mt-2">
                                             <p className="text-xs text-green-600 mb-1">✓ Image Attached</p>
-                                            <img src={currentSlide.image} alt="Preview" className="h-20 rounded border" />
+                                            {isVideo(currentSlide.image) ? (
+                                                <video src={currentSlide.image} className="h-20 rounded border" muted autoPlay loop />
+                                            ) : (
+                                                <img src={currentSlide.image} alt="Preview" className="h-20 rounded border" />
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -511,18 +532,39 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                 <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-full sm:w-fit">Add Slide</button>
                             </form>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {carouselSlides.map((slide) => (
-                                <div key={slide.id} className="relative group overflow-hidden rounded-xl shadow-md bg-white">
-                                    <img src={slide.image} alt={slide.title} className="w-full h-48 object-cover" />
-                                    <div className="absolute inset-0 bg-black/60 flex flex-col justify-end p-4 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <h4 className="font-bold text-lg">{slide.title}</h4>
-                                        <p className="text-sm">{slide.description}</p>
+
+                        {/* LIST: Modified to show video thumbnails */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {carouselSlides.map(s => (
+                                <div key={s.id} className="relative group rounded-xl overflow-hidden shadow h-48 bg-black">
+
+                                    {/* CHECK: Video or Image? */}
+                                    {isVideo(s.image) ? (
+                                        <video
+                                            src={s.image}
+                                            className="w-full h-full object-cover opacity-90"
+                                            muted
+                                            autoPlay
+                                            loop
+                                            playsInline
+                                        />
+                                    ) : (
+                                        <img
+                                            src={s.image}
+                                            className="w-full h-full object-cover"
+                                            alt="Slide"
+                                        />
+                                    )}
+
+                                    <div className="absolute bottom-0 left-0 bg-black/60 text-white w-full p-2 flex justify-between">
+                                        <p className="font-bold truncate w-2/3">{s.title || "Untitled"}</p>
+                                        <p className="text-xs opacity-80">{s.duration || 5000}ms</p>
                                     </div>
-                                    <button onClick={() => deleteSlide(slide.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700">🗑️</button>
+                                    <button onClick={() => deleteSlide(s.id)} className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded">🗑️</button>
                                 </div>
                             ))}
                         </div>
+
                     </div>
                 )}
 

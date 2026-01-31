@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function Carousel({ slides }) {
     if (!slides || slides.length === 0) return null;
@@ -8,7 +8,14 @@ function Carousel({ slides }) {
     // --- TOUCH STATE FOR SWIPING ---
     const [touchStart, setTouchStart] = useState(null);
     const [touchEnd, setTouchEnd] = useState(null);
+    const videoRefs = useRef([]);
     const minSwipeDistance = 50; // Required distance (px) to register a swipe
+
+
+    const isVideo = (url) => {
+        if (!url) return false;
+        return url.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/i) !== null;
+    };
 
     const prevSlide = () => {
         const isFirstSlide = currentIndex === 0;
@@ -52,19 +59,38 @@ function Carousel({ slides }) {
     };
 
     // --- DYNAMIC AUTOPLAY LOGIC ---
+    // --- SMART AUTOPLAY LOGIC ---
     useEffect(() => {
-        // 1. Get duration for THIS specific slide (default to 5000ms if missing)
-        const currentDuration = slides[currentIndex].duration || 5000;
+        const currentSlide = slides[currentIndex];
+        const isCurrentVideo = isVideo(currentSlide.image);
 
-        // 2. Use setTimeout instead of setInterval
-        // This allows the timer to change length every time the slide changes
-        const timer = setTimeout(() => {
-            nextSlide();
-        }, currentDuration);
+        // 1. Handle Video Playback Control
+        // Loop through all videos and pause them, only play the current one
+        videoRefs.current.forEach((video, index) => {
+            if (video) {
+                if (index === currentIndex) {
+                    video.currentTime = 0; // Restart video from beginning
+                    video.play().catch(e => console.log("Autoplay blocked:", e));
+                } else {
+                    video.pause();
+                }
+            }
+        });
 
-        // 3. Clear the timer when the slide changes or component unmounts
-        return () => clearTimeout(timer);
-    }, [currentIndex, slides]); // Re-run this effect whenever index changes
+        // 2. Timer Logic
+        // If it is a VIDEO, we DO NOT set a timer. We wait for 'onEnded'.
+        // If it is an IMAGE, we use the duration timer.
+        if (!isCurrentVideo) {
+            const currentDuration = currentSlide.duration || 5000;
+            const timer = setTimeout(() => {
+                nextSlide();
+            }, currentDuration);
+
+            return () => clearTimeout(timer);
+        }
+        // If video, no timer cleanup needed (the onEnded event handles the transition)
+
+    }, [currentIndex, slides]);
 
     return (
 
@@ -86,14 +112,25 @@ function Carousel({ slides }) {
                             }`}
                     >
                         {/* 1. IMAGE LAYER */}
-                        <div className="absolute inset-0 w-full h-full">
-                            <img
-                                src={slide.image}
-                                alt={slide.title}
-                                className="w-full h-full object-cover object-center pointer-events-none"
-                            />
-                            {/* Optional: Very subtle dark overlay for better text contrast */}
-                            <div className="absolute inset-0 bg-black/10"></div>
+                        <div className="absolute inset-0 w-full h-full bg-black">
+                            {isVideo(slide.image) ? (
+                                <video
+                                    ref={el => videoRefs.current[index] = el} // Store ref
+                                    src={slide.image}
+                                    muted
+                                    playsInline
+                                    onEnded={nextSlide} 
+                                    className="w-full h-full object-cover object-center pointer-events-none"
+                                />
+                            ) : (
+                                <img
+                                    src={slide.image}
+                                    alt={slide.title}
+                                    className="w-full h-full object-cover object-center pointer-events-none"
+                                />
+                            )}
+                            {/* Overlay */}
+                            <div className="absolute inset-0 bg-black/30"></div>
                         </div>
 
                         {/* 2. TEXT LAYER (Updated: Floating Box Style) */}
