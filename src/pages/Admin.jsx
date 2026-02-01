@@ -222,7 +222,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     };
 
     // --- CAROUSEL FUNCTIONS ---
-    const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '', duration: 5000 });
+    const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '', duration: 5000, object_fit: 'cover' });
     const handleSlideInput = (e) => setCurrentSlide({ ...currentSlide, [e.target.name]: e.target.value });
 
 
@@ -261,7 +261,8 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             description: currentSlide.description,
             image: currentSlide.image,
             link: currentSlide.link,
-            duration: parseInt(currentSlide.duration) || 5000 // Ensure it's a number
+            duration: parseInt(currentSlide.duration) || 5000, // Ensure it's a number
+            object_fit: currentSlide.object_fit || 'cover'
         };
 
         const { error } = await supabase.from('slides').insert([slideData]);
@@ -272,7 +273,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
             alert("Slide Added!");
             refreshSlides();
             // Reset form
-            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000 });
+            setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000, object_fit: 'cover' });
         }
     };
 
@@ -526,6 +527,16 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                         />
                                         <span className="text-sm text-gray-500">ms</span>
                                     </div>
+                                    {/* ccarousel sizing */}
+                                    <select
+                                        name="object_fit"
+                                        value={currentSlide.object_fit}
+                                        onChange={handleSlideInput}
+                                        className="p-2 border rounded w-full bg-white"
+                                    >
+                                        <option value="cover">Fill Area (Crop)</option>
+                                        <option value="contain">Show Full (No Crop)</option>
+                                    </select>
                                 </div>
 
 
@@ -542,7 +553,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     {isVideo(s.image) ? (
                                         <video
                                             src={s.image}
-                                            className="w-full h-full object-cover opacity-90"
+                                            className={`w-full h-full ${s.object_fit === 'contain' ? 'object-contain' : 'object-cover'} opacity-90`}
                                             muted
                                             autoPlay
                                             loop
@@ -551,14 +562,17 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     ) : (
                                         <img
                                             src={s.image}
-                                            className="w-full h-full object-cover"
+                                            className={`w-full h-full ${s.object_fit === 'contain' ? 'object-contain' : 'object-cover'}`}
                                             alt="Slide"
                                         />
                                     )}
 
                                     <div className="absolute bottom-0 left-0 bg-black/60 text-white w-full p-2 flex justify-between">
                                         <p className="font-bold truncate w-2/3">{s.title || "Untitled"}</p>
-                                        <p className="text-xs opacity-80">{s.duration || 5000}ms</p>
+                                        <div className="text-right">
+                                            <p className="text-xs opacity-80">{s.duration || 5000}ms</p>
+                                            <p className="text-[10px] uppercase opacity-60">{s.object_fit || 'cover'}</p>
+                                        </div>
                                     </div>
                                     <button onClick={() => deleteSlide(s.id)} className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded">🗑️</button>
                                 </div>

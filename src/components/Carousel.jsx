@@ -112,7 +112,7 @@ function Carousel({ slides }) {
                             }`}
                     >
                         {/* 1. IMAGE LAYER */}
-                        <div className="absolute inset-0 w-full h-full bg-black">
+                        <div className="absolute inset-0 w-full h-full bg-white">
                             {isVideo(slide.image) ? (
                                 <video
                                     ref={el => videoRefs.current[index] = el} // Store ref
@@ -120,17 +120,17 @@ function Carousel({ slides }) {
                                     muted
                                     playsInline
                                     onEnded={nextSlide} 
-                                    className="w-full h-full object-cover object-center pointer-events-none"
+                                    className={`w-full h-full ${slide.object_fit === 'contain' ? 'object-contain' : 'object-cover'} object-center pointer-events-none`}
                                 />
                             ) : (
                                 <img
                                     src={slide.image}
                                     alt={slide.title}
-                                    className="w-full h-full object-cover object-center pointer-events-none"
+                                    className={`w-full h-full ${slide.object_fit === 'contain' ? 'object-contain' : 'object-cover'} object-center pointer-events-none`}
                                 />
                             )}
                             {/* Overlay */}
-                            <div className="absolute inset-0 bg-black/30"></div>
+                            <div className="absolute inset-0 bg-black/10"></div>
                         </div>
 
                         {/* 2. TEXT LAYER (Updated: Floating Box Style) */}
