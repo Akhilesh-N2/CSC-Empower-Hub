@@ -24,7 +24,7 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
             </div>
 
             <div className="font-bold tracking-tight">
-              {/* MOBILE VIEW: Shows 'CSC Hub' */}
+              {/* MOBILE VIEW: Shows 'CSC-E-Hub' */}
               {/* <span className="block md:hidden text-lg">
                 CSC-E-HUB
               </span> */}
