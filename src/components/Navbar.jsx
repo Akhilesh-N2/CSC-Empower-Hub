@@ -1,5 +1,8 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import GoogleTranslate from './GoogleTranslate';
+import SmartText from './SmartText';
+
 
 function Navbar({ isLoggedIn, setIsLoggedIn }) {
   const navigate = useNavigate();
@@ -11,9 +14,9 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
   };
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav className="bg-blue-600 border-b border-gray-200 sticky top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between h-16 ">
 
           {/* --- BRANDING SECTION --- */}
           <Link to="/" className="flex items-center gap-3 group">
@@ -29,21 +32,33 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
                 CSC-E-HUB
               </span> */}
 
+
               {/* DESKTOP VIEW: Shows 'CSC-Empower-Hub' */}
-              <span className="hidden md:block text-xl">
-                CSC-Empower-Hub
+              <span className="hidden md:block text-xl p-2 notranslate">
+                <span className='text-amber-500'>CSC-</span>
+                <span className='text-white'>Empower</span>
+                <span className='text-green-500'>-Hub</span>
+
               </span>
+              <div className="z-50">
+                <GoogleTranslate />
+              </div>
             </div>
           </Link>
 
           {/* LINKS */}
-          <div className="flex items-center space-x-4">
-            <Link to="/" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">
-              Home
+          <div className="flex items-center space-x-12">
+            <Link to="/" className="text-white text-lg hover:text-gray-900 font-medium transition-colors">
+              <SmartText ml="ഹോം">
+                Home
+              </SmartText>
             </Link>
-            <Link to="/forms" className="hover:text-blue-200 transition-colors">
+            <Link to="/forms" className="text-white text-lg hover:text-gray-900 transition-colors">
               Forms
             </Link>
+            <div className=" md:block">
+              <GoogleTranslate />
+            </div>
 
             {isLoggedIn && (
               <>

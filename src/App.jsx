@@ -56,6 +56,7 @@ function App() {
     fetchSlides();
     fetchCategories(); // <--- Load categories from cloud on startup
   }, []);
+  
 
 
   // PROTECTED ROUTE WRAPPER

@@ -97,14 +97,14 @@ function Carousel({ slides }) {
 
 
         <div
-            className='max-w-[1500px] h-[500px] md:h-[800px] w-full m-auto py-4 px-4 relative group'
+            className=' h-[500px] md:h-[550px] w-full m-auto  relative group'
             // --- ATTACH TOUCH HANDLERS HERE ---
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
         >
 
-            <div className='w-full h-full rounded-2xl relative overflow-hidden bg-slate-900 '>
+            <div className='w-full h-full relative overflow-hidden bg-slate-900 '>
                 {slides.map((slide, index) => (
                     <div
                         key={index}
@@ -119,7 +119,7 @@ function Carousel({ slides }) {
                                     src={slide.image}
                                     muted
                                     playsInline
-                                    onEnded={nextSlide} 
+                                    onEnded={nextSlide}
                                     className={`w-full h-full ${slide.object_fit === 'contain' ? 'object-contain' : 'object-cover'} object-center pointer-events-none`}
                                 />
                             ) : (
@@ -133,14 +133,17 @@ function Carousel({ slides }) {
                             <div className="absolute inset-0 bg-black/10"></div>
                         </div>
 
-                        {/* 2. TEXT LAYER (Updated: Floating Box Style) */}
-                        <div className="absolute bottom-8 left-4 md:bottom-16 md:left-16 max-w-[90%] md:max-w-2xl z-20">
-                            <div className="bg-black/30 backdrop-blur-sm p-6 rounded-xl border-l-4 border-blue-500 shadow-lg text-white">
-                                <h2 className="text-2xl md:text-4xl font-bold mb-2 leading-tight drop-shadow-lg">
+                        {/* 2. TEXT LAYER (Centered) */}
+                        <div className="absolute inset-0 flex flex-col justify-end items-center pb-16 md:pb-15 z-20 pointer-events-none">
+
+                            {/* The Box itself (Enable pointer events here so buttons work) */}
+                            <div className="max-w-[90%] md:max-w-2xl bg-black/40 backdrop-blur-sm p-8 rounded-xl border border-white/20 shadow-2xl text-center pointer-events-auto transition-transform duration-500 hover:scale-105">
+
+                                <h2 className="text-3xl md:text-4xl font-extrabold mb-4 text-white drop-shadow-lg tracking-wide">
                                     {slide.title}
                                 </h2>
 
-                                <p className="text-gray-200 text-sm md:text-lg mb-4 leading-relaxed drop-shadow-md line-clamp-3 md:line-clamp-none">
+                                <p className="text-gray-100 text-base md:text-xl mb-6 leading-relaxed drop-shadow-md">
                                     {slide.description}
                                 </p>
 
@@ -149,9 +152,9 @@ function Carousel({ slides }) {
                                         href={slide.link}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-sm md:text-base font-bold text-blue-300 hover:text-white transition-colors inline-flex items-center gap-1"
+                                        className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full shadow-lg transition-all transform hover:-translate-y-1"
                                     >
-                                        Learn More <span>→</span>
+                                        Learn More
                                     </a>
                                 )}
                             </div>
@@ -160,13 +163,33 @@ function Carousel({ slides }) {
                 ))}
             </div>
 
-            {/* Arrows */}
-            <div className='hidden group-hover:block absolute top-[50%] -translate-x-0 translate-y-[-50%] left-6 z-20 text-4xl rounded-full p-2 text-white cursor-pointer bg-black/20 hover:bg-black/50 transition-all'>
-                <button onClick={prevSlide}>❮</button>
-            </div>
-            <div className='hidden group-hover:block absolute top-[50%] -translate-x-0 translate-y-[-50%] right-6 z-20 text-4xl rounded-full p-2 text-white cursor-pointer bg-black/20 hover:bg-black/50 transition-all'>
-                <button onClick={nextSlide}>❯</button>
-            </div>
+            {/* Left Arrow */}
+            <button
+                onClick={prevSlide}
+                className='hidden group-hover:flex absolute top-1/2 left-4 -translate-y-1/2 z-30 
+               items-center justify-center w-16 h-12 rounded-full 
+               bg-white/20 text-black backdrop-blur-sm  
+               transition-all duration-300 hover:scale-105 hover:text-blue-600 border'
+                aria-label="Previous Slide"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+            </button>
+
+            {/* Right Arrow */}
+            <button
+                onClick={nextSlide}
+                className='hidden group-hover:flex absolute top-1/2 right-4 -translate-y-1/2 z-30 
+               items-center justify-center w-16 h-12 rounded-full 
+                text-black backdrop-blur-sm border
+               transition-all duration-300 hover:scale-105 hover:text-blue-600'
+                aria-label="Next Slide"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+            </button>
 
             {/* Dots */}
             <div className='flex justify-center py-2 absolute bottom-8 left-0 right-0 z-20'>
@@ -174,9 +197,9 @@ function Carousel({ slides }) {
                     <div
                         key={slideIndex}
                         onClick={() => goToSlide(slideIndex)}
-                        className={`text-2xl cursor-pointer mx-1  ${currentIndex === slideIndex ? 'text-blue-500' : 'text-white/70'}`}
+                        className={`text-4xl cursor-pointer mx-1  ${currentIndex === slideIndex ? 'text-black' : 'text-white/70'}`}
                     >
-                        ●
+                        ___
                     </div>
                 ))}
             </div>

@@ -1,74 +1,101 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import Search from '../components/Search'
 import SchemeCard from '../components/SchemeCard'
 import Carousel from '../components/Carousel'
+import SmartText from '../components/SmartText'
 
-function LandingPage({ schemes, carouselSlides }) {
-    // 1. ADD STATE: To track search text and selected category
+
+function LandingPage({ schemes = [], carouselSlides = [] }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("All");
 
-    // 2. GET UNIQUE CATEGORIES
-    const categories = ["All", ...new Set(schemes.map(item => item.category))];
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 8;
 
-    // 3. FILTER LOGIC
-    const filteredSchemes = schemes.filter((scheme) => {
-        // Step A: Check if it matches the category (or if "All" is selected)
-        const categoryMatch = selectedCategory === "All" || scheme.category === selectedCategory;
+    // derive categories and filtered results with useMemo for performance
+    const categories = useMemo(() => ["All", ...Array.from(new Set(schemes.map(item => item?.category).filter(Boolean)))], [schemes]);
 
-        // Step B: Check if it matches the search text (Case insensitive)
-        const searchMatch = scheme.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            scheme.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const filteredSchemes = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return schemes.filter((scheme) => {
+            if (!scheme || scheme.active !== true) return false;
+            const categoryMatch = selectedCategory === "All" || scheme.category === selectedCategory;
+            if (!q) return categoryMatch;
+            const title = (scheme.title || "").toLowerCase();
+            const desc = (scheme.description || "").toLowerCase();
+            return categoryMatch && (title.includes(q) || desc.includes(q));
+        });
+    }, [schemes, selectedCategory, searchQuery]);
 
-        return (scheme.active === true) && categoryMatch && searchMatch;
-    });
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentSchemes = filteredSchemes.slice(indexOfFirstItem, indexOfLastItem);
 
-    // Handle the search from the child component
-    const handleSearch = (query) => {
-        setSearchQuery(query);
-    };
+    const totalPages = Math.ceil(filteredSchemes.length / itemsPerPage);
+
+    const handleSearch = (query) => setSearchQuery(query);
+
+    // Reset to Page 1 whenever the User Filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, selectedCategory]);
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            
-            {/* CAROUSEL SECTION */}
-            <Carousel slides={carouselSlides} />
+            {/* HERO / CAROUSEL */}
+            <div className="bg-gradient-to-r from-sky-50 via-white to-white pb-6">
+                <Carousel slides={carouselSlides} />
+            </div>
 
-            {/* MAIN CONTENT AREA */}
-            <div className="p-4 md:p-10">
-                <h1 className="text-3xl font-bold text-center mb-8 text-slate-800">Find Content</h1>
+            {/* MAIN CONTENT */}
+            <div className="max-w-[92rem] mx-auto px-4 py-8 md:py-12  border border-gray-200 rounded-xl bg-white">
+                {/* Search + Category row */}
+                <div className="flex flex-col md:items-center gap-4 md:gap-6">
+                    <div className="w-full">
+                        <Search onSearch={handleSearch} initialValue={searchQuery} />
+                    </div>
 
-                {/* SEARCH COMPONENT */}
-                <Search onSearch={handleSearch} />
-
-                {/* CATEGORY FILTER BUTTONS */}
-                <div className="flex flex-wrap justify-center gap-3 mt-8">
-                    {categories.map((cat) => (
+                    <div className="flex items-center gap-3">
+                        <label className="sr-only">Category</label>
+                        <div className="flex flex-wrap gap-2">
+                            {categories.map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`px-4 py-3 cursor-pointer rounded-full text-sm font-medium transition-colors duration-200 border ${selectedCategory === cat ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
                         <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={`px-4 py-2 rounded-full text-sm md:text-base font-medium transition-all duration-300 border ${selectedCategory === cat
-                                    ? "bg-blue-600 text-white border-blue-600 shadow-lg scale-105" // Active Style
-                                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"   // Inactive Style
-                                }`}
+                            onClick={() => { setSearchQuery(""); setSelectedCategory("All"); }}
+                            className="ml-2 text-sm text-slate-500 hover:text-slate-700 cursor-pointer transition-colors"
+                            aria-label="Clear filters"
                         >
-                            {cat}
+                            Clear
                         </button>
-                    ))}
+                    </div>
                 </div>
 
-                {/* SCHEMES GRID SECTION */}
-                <div className="mt-12">
-                    <h1 className="text-2xl md:text-3xl font-bold text-center mb-10 text-gray-800">
-                        Useful Links
-                        {selectedCategory !== 'All' && <span className="text-blue-600"> ({selectedCategory})</span>}
+                {/* Results header */}
+
+                <div className='mt-8 flex flex-col gap-2'>
+
+                    <h1 className='text-xl md:text-4xl font-bold text-slate-800 text-center'>
+                        <SmartText ml="പ്രധാന ലിങ്കുകൾ">
+                            Useful Links
+                        </SmartText>
                     </h1>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto justify-items-center">
-                        {filteredSchemes.length > 0 ? (
-                            filteredSchemes.map((scheme) => (
+                </div>
+
+                {/* Grid */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                    {currentSchemes.length > 0 ? (
+                        currentSchemes.map(scheme => (
+                            <div key={scheme.id} className="w-full">
                                 <SchemeCard
-                                    key={scheme.id}
                                     image={scheme.image}
                                     title={scheme.title}
                                     category={scheme.category}
@@ -76,21 +103,61 @@ function LandingPage({ schemes, carouselSlides }) {
                                     visitUrl={scheme.visitUrl}
                                     downloadUrl={scheme.downloadUrl}
                                 />
-                            ))
-                        ) : (
-                            // Show this if no results match
-                            <div className="col-span-full text-center text-gray-500 mt-10">
-                                <p className="text-xl">No schemes found matching "{searchQuery}"</p>
-                                <button 
-                                    onClick={() => {setSearchQuery(""); setSelectedCategory("All");}}
-                                    className="mt-4 text-blue-600 underline"
-                                >
-                                    Clear Filters
-                                </button>
                             </div>
-                        )}
-                    </div>
+                        ))
+                    ) : (
+                        <div className="col-span-full text-center text-slate-600 py-12 border border-dashed border-gray-100 rounded">
+                            <p className="text-lg">No items match your search.</p>
+                            <p className="mt-2 text-sm">Try different keywords or pick a different category.</p>
+                            <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
+                                {categories.slice(1, 6).map(cat => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setSelectedCategory(cat)}
+                                        className="px-3 py-1 rounded-full bg-gray-100 text-sm text-gray-700 hover:bg-gray-200"
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Pagination */}
+                {/* Only show buttons if we have more than 1 page of content */}
+                {filteredSchemes.length > itemsPerPage && (
+                    <div className="flex justify-center gap-4 mt-8 notranslate">
+
+                        {/* PREV BUTTON */}
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="px-4 py-2 w-24 border rounded  bg-gray-100 text-black shadow-md hover:bg-gray-500 hover:text-white scale-100 hover:scale-102 transition-transform"
+                        >
+                            Previous
+                        </button>
+
+                        <div className='mt-2 text-sm text-slate-600 '>
+                            {`${indexOfFirstItem + 1} to ${indexOfFirstItem + currentSchemes.length} of ${filteredSchemes.length} results`}
+                        </div>
+
+                        {/* NEXT BUTTON */}
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                            className="px-4  w-24 border border rounded  bg-gray-100 text-black shadow-md hover:bg-gray-500 hover:text-white scale-100 hover:scale-102 transition-transform"
+                        >
+                            Next
+                        </button>
+
+
+
+                    </div>
+
+                )}
+
+
             </div>
         </div>
     )
