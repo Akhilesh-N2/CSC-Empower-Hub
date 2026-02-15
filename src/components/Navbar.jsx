@@ -81,7 +81,7 @@ const Navbar = () => {
 
             {role === 'seeker' && (
               <>
-                <Link to="/jobs" className="hover:text-blue-300 transition">Find Jobs</Link>
+                <Link to="/job-search" className="hover:text-blue-300 transition">Find Jobs</Link>
                 <Link to="/profile" className="hover:text-blue-300 transition">My Profile</Link>
               </>
             )}
@@ -136,7 +136,7 @@ const Navbar = () => {
 
           {role === 'seeker' && (
             <>
-              <Link to="/jobs" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Find Jobs</Link>
+              <Link to="/job-search" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Find Jobs</Link>
               <Link to="/profile" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>My Profile</Link>
             </>
           )}
