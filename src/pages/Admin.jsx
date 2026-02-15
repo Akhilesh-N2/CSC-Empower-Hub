@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { Link } from 'react-router-dom';
 
 // A placeholder image to use if the user doesn't upload one
 const DEFAULT_IMAGE = "https://placehold.co/600x400/e2e8f0/1e293b?text=No+Image+Available";
@@ -14,7 +15,60 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     const [pdfUploading, setPdfUploading] = useState(false);
     const [imageUploading, setImageUploading] = useState(false);
     const [slideImageUploading, setSlideImageUploading] = useState(false); // for image uploading
-    const [activeTab, setActiveTab] = useState('cards'); // 'cards' or 'carousel'
+    const [activeTab, setActiveTab] = useState('cards'); // 'cards' | 'carousel' | 'jobs'
+
+    // --- STATE FOR JOBS ---
+    const [jobs, setJobs] = useState([]);
+    const [jobsLoading, setJobsLoading] = useState(true);
+
+    // --- FETCH JOBS ---
+    const fetchJobs = async () => {
+        setJobsLoading(true);
+        const { data, error } = await supabase
+            .from('jobs')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) console.error('Error fetching jobs:', error);
+        else setJobs(data || []);
+        setJobsLoading(false);
+    };
+
+    // Fetch jobs on component mount
+    useEffect(() => {
+        fetchJobs();
+    }, []);
+
+    // --- JOB ACTIONS ---
+    const toggleJobStatus = async (id, currentStatus) => {
+        // 1. Optimistic UI Update
+        setJobs(jobs.map(job =>
+            job.id === id ? { ...job, is_active: !currentStatus } : job
+        ));
+
+        // 2. Update Supabase
+        const { error } = await supabase
+            .from('jobs')
+            .update({ is_active: !currentStatus })
+            .eq('id', id);
+
+        if (error) {
+            alert("Failed to update status");
+            fetchJobs(); // Revert on error
+        }
+    };
+
+    const deleteJob = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this job permanently?")) return;
+
+        const { error } = await supabase.from('jobs').delete().eq('id', id);
+
+        if (error) {
+            alert("Error deleting job: " + error.message);
+        } else {
+            setJobs(jobs.filter(job => job.id !== id));
+        }
+    };
 
     // --- STATE FOR CATEGORY (UPDATED FOR CLOUD) ---
     const [newCategoryInput, setNewCategoryInput] = useState("");
@@ -225,8 +279,6 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
     const [currentSlide, setCurrentSlide] = useState({ id: null, title: '', description: '', image: '', link: '', duration: 5000, object_fit: 'cover' });
     const handleSlideInput = (e) => setCurrentSlide({ ...currentSlide, [e.target.name]: e.target.value });
 
-
-
     const handleSlideImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -250,18 +302,14 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         } catch (error) { alert(error.message); } finally { setSlideImageUploading(false); }
     };
 
-
     const handleSlideSubmit = async (e) => {
         e.preventDefault();
-
-        // FOOLPROOF FIX: explicitly build the object we want to send.
-        // We do NOT include 'id' here at all.
         const slideData = {
-            title: currentSlide.title || "Untitled", // Handle empty titles
+            title: currentSlide.title || "Untitled",
             description: currentSlide.description,
             image: currentSlide.image,
             link: currentSlide.link,
-            duration: parseInt(currentSlide.duration) || 5000, // Ensure it's a number
+            duration: parseInt(currentSlide.duration) || 5000,
             object_fit: currentSlide.object_fit || 'cover'
         };
 
@@ -272,26 +320,46 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
         } else {
             alert("Slide Added!");
             refreshSlides();
-            // Reset form
             setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000, object_fit: 'cover' });
         }
     };
 
-
     const deleteSlide = async (id) => {
         if (window.confirm("Delete this slide?")) {
-            // First get the image URL to delete from storage
             const { data: slideData } = await supabase.from('slides').select('image').eq('id', id).single();
-
             if (slideData?.image && slideData.image.includes('carousel-bucket')) {
                 const fileName = slideData.image.split('/').pop();
                 await supabase.storage.from('carousel-bucket').remove([fileName]);
             }
-
             const { error } = await supabase.from('slides').delete().eq('id', id);
             if (error) alert(error.message); else refreshSlides();
         }
     };
+
+
+    // --- STATE FOR USERS ---
+    const [users, setUsers] = useState([]);
+    const fetchUsers = async () => {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false }); // Newest first
+        if (!error) setUsers(data);
+    };
+
+    // Toggle Approval
+    const toggleUserApproval = async (id, currentStatus) => {
+        // Optimistic UI Update
+        setUsers(users.map(u => u.id === id ? { ...u, is_approved: !currentStatus } : u));
+
+        // DB Update
+        await supabase.from('profiles').update({ is_approved: !currentStatus }).eq('id', id);
+    };
+
+    // Load users when tab opens
+    useEffect(() => {
+        if (activeTab === 'users') fetchUsers();
+    }, [activeTab]);
 
     return (
         // 1. RESPONSIVE CONTAINER
@@ -316,12 +384,24 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                     >
                         🖼️ Manage Carousel
                     </button>
+                    <button
+                        onClick={() => setActiveTab('jobs')}
+                        className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'jobs' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
+                    >
+                        💼 Manage Jobs
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === 'users' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-slate-800'}`}
+                    >
+                        👥 Manage Users</button>
                 </nav>
             </div>
 
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 p-4 md:p-8 overflow-y-auto">
 
+                {/* --- TAB 1: CONTENT CARDS --- */}
                 {activeTab === 'cards' && (
                     <div className="max-w-5xl mx-auto">
                         <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Content Management</h2>
@@ -343,7 +423,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                                 className="w-5 h-5 text-blue-600"
                                             />
                                             <div>
-                                                <span className="block font-medium text-gray-800">Uselful Links</span>
+                                                <span className="block font-medium text-gray-800">Useful Links</span>
                                                 <span className="block text-xs text-gray-500">(Home Page)</span>
                                             </div>
                                         </label>
@@ -368,7 +448,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                     <input type="text" name="title" required value={currentScheme.title} onChange={handleInputChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
 
-                                {/* Category (UPDATED TO SUPPORT CLOUD ADD/DELETE) */}
+                                {/* Category */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                                     <div className="flex gap-2 mb-2">
@@ -431,7 +511,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             </form>
                         </div>
 
-                        {/* LIST SECTION - SCROLLABLE ON MOBILE */}
+                        {/* LIST SECTION */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse min-w-[600px]">
@@ -544,12 +624,10 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             </form>
                         </div>
 
-                        {/* LIST: Modified to show video thumbnails */}
+                        {/* LIST */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {carouselSlides.map(s => (
                                 <div key={s.id} className="relative group rounded-xl overflow-hidden shadow h-48 bg-black">
-
-                                    {/* CHECK: Video or Image? */}
                                     {isVideo(s.image) ? (
                                         <video
                                             src={s.image}
@@ -579,6 +657,133 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             ))}
                         </div>
 
+                    </div>
+                )}
+
+                {/* --- TAB 3: JOB MANAGEMENT (NEW) --- */}
+                {activeTab === 'jobs' && (
+                    <div className="max-w-6xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Job Management</h2>
+                            {/* Link to the Post Job page you created earlier */}
+                            <Link to="/post-job" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                                + Post New Job
+                            </Link>
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            {jobsLoading ? (
+                                <div className="p-10 text-center text-gray-500">Loading jobs...</div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse min-w-[700px]">
+                                        <thead className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider border-b">
+                                            <tr>
+                                                <th className="p-4 font-semibold">Job Role</th>
+                                                <th className="p-4 font-semibold">Company</th>
+                                                <th className="p-4 font-semibold">Posted</th>
+                                                <th className="p-4 font-semibold">Status</th>
+                                                <th className="p-4 font-semibold text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {jobs.map((job) => (
+                                                <tr key={job.id} className="hover:bg-gray-50 transition">
+                                                    <td className="p-4">
+                                                        <div className="font-bold text-gray-800">{job.title}</div>
+                                                    </td>
+                                                    <td className="p-4 text-gray-600">
+                                                        {job.company}
+                                                    </td>
+                                                    <td className="p-4 text-gray-500 text-sm">
+                                                        {new Date(job.created_at).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <button
+                                                            onClick={() => toggleJobStatus(job.id, job.is_active)}
+                                                            className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${job.is_active
+                                                                ? "bg-green-100 text-green-700 border-green-200"
+                                                                : "bg-gray-100 text-gray-500 border-gray-200"
+                                                                }`}
+                                                        >
+                                                            {job.is_active ? "Active" : "Disabled"}
+                                                        </button>
+                                                    </td>
+                                                    <td className="p-4 text-right space-x-2">
+                                                        <button
+                                                            onClick={() => toggleJobStatus(job.id, job.is_active)}
+                                                            className="p-2 text-gray-400 hover:text-blue-600 transition"
+                                                            title={job.is_active ? "Hide Job" : "Show Job"}
+                                                        >
+                                                            {job.is_active ? '👁️' : '🚫'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deleteJob(job.id)}
+                                                            className="p-2 text-gray-400 hover:text-red-600 transition"
+                                                            title="Delete Job"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {jobs.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="5" className="p-10 text-center text-gray-400">
+                                                        No jobs found.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'users' && (
+                    <div className="max-w-6xl mx-auto">
+                        <h2 className="text-2xl font-bold mb-6">User Approvals</h2>
+                        <div className="bg-white rounded-xl shadow border overflow-hidden">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 border-b">
+                                    <tr>
+                                        <th className="p-4">Email</th>
+                                        <th className="p-4">Role</th>
+                                        <th className="p-4">Status</th>
+                                        <th className="p-4">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.map(user => (
+                                        <tr key={user.id} className="border-b hover:bg-gray-50">
+                                            <td className="p-4 font-medium">{user.email}</td>
+                                            <td className="p-4 capitalize">
+                                                <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'provider' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {user.role}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                {user.is_approved ? (
+                                                    <span className="text-green-600 font-bold text-sm">✓ Active</span>
+                                                ) : (
+                                                    <span className="text-orange-500 font-bold text-sm">⏳ Pending</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4">
+                                                <button
+                                                    onClick={() => toggleUserApproval(user.id, user.is_approved)}
+                                                    className={`px-4 py-2 rounded text-sm font-bold text-white transition ${user.is_approved ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}`}
+                                                >
+                                                    {user.is_approved ? 'Block' : 'Approve'}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 

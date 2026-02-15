@@ -1,84 +1,162 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../supabaseClient';
+import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react'; 
 import GoogleTranslate from './GoogleTranslate';
 import SmartText from './SmartText';
 
-
-function Navbar({ isLoggedIn, setIsLoggedIn }) {
+const Navbar = () => {
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    localStorage.removeItem('isAdminLoggedIn');
-    navigate('/'); // Go back to home after logout
+  // --- AUTH LOGIC (Keep this new logic) ---
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        fetchRole(session.user.id);
+      }
+    };
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user ?? null);
+      if (session) {
+        fetchRole(session.user.id);
+      } else {
+        setRole(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchRole = async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+    if (data) setRole(data.role);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setRole(null);
+    setUser(null);
+    navigate('/login');
   };
 
   return (
-    <nav className="bg-blue-600 border-b border-gray-200 sticky top-0 z-50 shadow-md">
+    <nav className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 ">
-
-          {/* --- BRANDING SECTION --- */}
-          <Link to="/" className="flex items-center gap-3 group">
-
-            {/* Logo Icon */}
-            <div className="bg-blue-600 p-5 md:hidden w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center font-bold text-white shadow-md group-hover:bg-blue-500 transition-colors">
-              CSC
-            </div>
-
-            <div className="font-bold tracking-tight">
-              {/* MOBILE VIEW: Shows 'CSC-E-Hub' */}
-              {/* <span className="block md:hidden text-lg">
-                CSC-E-HUB
-              </span> */}
-
-
-              {/* DESKTOP VIEW: Shows 'CSC-Empower-Hub' */}
-              <span className="hidden md:block text-xl p-2 notranslate">
-                <span className='text-amber-500'>CSC-</span>
-                <span className='text-white'>Empower</span>
-                <span className='text-green-500'>-Hub</span>
-
-              </span>
-              <div className="z-50">
-                <GoogleTranslate />
-              </div>
+        <div className="flex justify-between h-16 items-center">
+          
+          {/* --- LEFT SIDE: LOGO & MOBILE TRANSLATE --- */}
+          <Link to="/" className="text-2xl font-bold text-blue-400 flex items-center gap-2 notranslate">
+            CSC<span className="text-white">Empower</span>
+            
+            {/* Mobile Translate (Visible only on small screens) */}
+            <div className="z-50 md:hidden ml-2">
+               <GoogleTranslate />
             </div>
           </Link>
 
-          {/* LINKS */}
-          <div className="flex items-center space-x-12">
-            <Link to="/" className="text-white text-lg hover:text-gray-900 font-medium transition-colors">
-              <SmartText ml="ഹോം">
-                Home
-              </SmartText>
+          {/* --- RIGHT SIDE: DESKTOP MENU --- */}
+          <div className="hidden md:flex items-center space-x-6">
+            <Link to="/" className="hover:text-blue-300 transition">
+              <SmartText ml="ഹോം">Home</SmartText>
             </Link>
-            <Link to="/forms" className="text-white text-lg hover:text-gray-900 transition-colors">
-              Forms
-            </Link>
-            <div className=" md:block">
+            <Link to="/forms" className="hover:text-blue-300 transition">Forms</Link>
+
+            {/* ROLE LINKS */}
+            {role === 'admin' && (
+              <Link to="/admin" className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition">
+                <LayoutDashboard size={18} /> Admin Panel
+              </Link>
+            )}
+
+            {role === 'seeker' && (
+              <>
+                <Link to="/jobs" className="hover:text-blue-300 transition">Find Jobs</Link>
+                <Link to="/profile" className="hover:text-blue-300 transition">My Profile</Link>
+              </>
+            )}
+
+            {role === 'provider' && (
+              <>
+                <Link to="/find-talent" className="hover:text-blue-300 transition">Find Candidates</Link>
+                <Link to="/post-job" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-bold transition">
+                  + Post Job
+                </Link>
+              </>
+            )}
+
+            {/* Desktop Translate (Visible only on large screens) */}
+            <div className="hidden md:block">
               <GoogleTranslate />
             </div>
 
-            {isLoggedIn && (
-              <>
-                <Link to="/admin" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">
-                  Dashboard
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-medium hover:bg-red-100 transition-colors"
-                >
-                  Logout
-                </button>
-              </>
+            {/* LOGIN / LOGOUT BUTTONS */}
+            {user ? (
+              <button 
+                onClick={handleLogout} 
+                className="flex items-center gap-2 text-gray-300 hover:text-white transition"
+              >
+                <LogOut size={18} /> Logout
+              </button>
+            ) : (
+              <Link to="/login" className="flex items-center gap-2 bg-white text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-gray-100 transition">
+                <User size={18} /> Login
+              </Link>
             )}
           </div>
 
+          {/* --- MOBILE HAMBURGER BUTTON --- */}
+          <div className="md:hidden flex items-center">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-300 hover:text-white ml-4">
+              {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* --- MOBILE DROPDOWN MENU --- */}
+      {isMenuOpen && (
+        <div className="md:hidden bg-slate-800 p-4 space-y-4 border-t border-slate-700">
+          <Link to="/" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Home</Link>
+          <Link to="/forms" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Forms</Link>
+          
+          {role === 'admin' && (
+            <Link to="/admin" className="block text-red-400 font-bold" onClick={() => setIsMenuOpen(false)}>Admin Panel</Link>
+          )}
+
+          {role === 'seeker' && (
+            <>
+              <Link to="/jobs" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Find Jobs</Link>
+              <Link to="/profile" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>My Profile</Link>
+            </>
+          )}
+
+          {role === 'provider' && (
+            <>
+              <Link to="/find-talent" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Find Candidates</Link>
+              <Link to="/post-job" className="block text-blue-400 font-bold" onClick={() => setIsMenuOpen(false)}>+ Post Job</Link>
+            </>
+          )}
+
+          {user ? (
+            <button onClick={() => { handleLogout(); setIsMenuOpen(false); }} className="block w-full text-left text-gray-400 hover:text-white">Logout</button>
+          ) : (
+            <Link to="/login" className="block w-full text-left font-bold text-white" onClick={() => setIsMenuOpen(false)}>Login</Link>
+          )}
+        </div>
+      )}
     </nav>
   );
-}
+};
 
 export default Navbar;

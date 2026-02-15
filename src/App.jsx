@@ -1,24 +1,33 @@
 import './App.css'
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './supabaseClient'; 
+import { supabase } from './supabaseClient';
 
+// --- PAGES ---
 import LandingPage from './pages/LandingPage';
 import Admin from './pages/Admin';
+import SLogin from './pages/SLogin';
+import FormsPage from './pages/FormsPage';
+import JobSearch from './pages/JobSearch';
+import PostJob from './pages/PostJob';
 import Login from './pages/Login';
+import EditProfile from './pages/EditProfile';
+import FindCandidates from './pages/FindCandidates';
+import ViewProfile from './pages/ViewProfile';
+
+// --- COMPONENTS ---
 import Navbar from './components/Navbar';
-import FormsPage from './pages/FormsPage'; 
+import ProtectedRoute from './components/ProtectedRoute'; // <--- 1. IMPORT THE NEW GUARD
 
 function App() {
 
-  // AUTH SECTION
+  // AUTH SECTION (For Admin Panel)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem('isAdminLoggedIn') === 'true';
   });
 
   // --- CAROUSEL SECTION ---
   const [carouselSlides, setCarouselSlides] = useState([]);
-
   const fetchSlides = async () => {
     const { data, error } = await supabase.from('slides').select('*');
     if (error) console.log('Error fetching slides:', error);
@@ -27,24 +36,19 @@ function App() {
 
   // --- SCHEMES SECTION ---
   const [schemes, setSchemes] = useState([]);
-
   const fetchSchemes = async () => {
     const { data, error } = await supabase.from('schemes').select('*');
     if (error) console.log('Error fetching schemes:', error);
     else setSchemes(data);
   };
 
-  // --- CATEGORIES SECTION (NEW: CONNECTED TO SUPABASE) ---
+  // --- CATEGORIES SECTION ---
   const [categories, setCategories] = useState([]);
-
   const fetchCategories = async () => {
-    // 1. Fetch from Supabase 'categories' table
     const { data, error } = await supabase.from('categories').select('*');
-    
     if (error) {
       console.log('Error fetching categories:', error);
     } else {
-      // 2. Extract just the names (e.g., "Health", "Housing")
       const categoryNames = data.map(item => item.name);
       setCategories(categoryNames);
     }
@@ -54,24 +58,48 @@ function App() {
   useEffect(() => {
     fetchSchemes();
     fetchSlides();
-    fetchCategories(); // <--- Load categories from cloud on startup
+    fetchCategories();
   }, []);
-  
 
+  // --- 2. RENAMED OLD WRAPPER TO "AdminPrivateRoute" ---
+  // (This prevents naming conflict with the new ProtectedRoute)
+  const AdminPrivateRoute = ({ children }) => {
+  const [isAdmin, setIsAdmin] = useState(null);
 
-  // PROTECTED ROUTE WRAPPER
-  const ProtectedRoute = ({ children, secretLoginUrl }) => {
-    if (!isLoggedIn) {
-      return <Navigate to={secretLoginUrl} replace />;
-    }
-    return children;
-  };
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        setIsAdmin(false);
+        return;
+      }
+
+      // Check if this user is an admin
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      setIsAdmin(profile?.role === 'admin');
+    };
+
+    checkAdmin();
+  }, []);
+
+  if (isAdmin === null) return <div>Loading...</div>; // Show spinner while checking
+  if (isAdmin === false) return <Navigate to="/login" replace />; // Kick them out
+
+  return children;
+};
 
   return (
     <Router>
       <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
       <Routes>
 
+        {/* PUBLIC ROUTES */}
         <Route
           path="/"
           element={
@@ -92,12 +120,14 @@ function App() {
           }
         />
 
-        <Route path="/csc-secret-access" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
+        <Route path="/csc-secret-access" element={<SLogin setIsLoggedIn={setIsLoggedIn} />} />
+        <Route path="/login" element={<Login />} />
 
+        {/* --- ADMIN ROUTE (Uses Local AdminPrivateRoute) --- */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute secretLoginUrl="/csc-secret-access">
+            <AdminPrivateRoute>
               <Admin
                 schemes={schemes}
                 setSchemes={setSchemes}
@@ -105,15 +135,63 @@ function App() {
                 setCarouselSlides={setCarouselSlides}
                 categories={categories}
                 setCategories={setCategories}
-                
-                // PASS REFRESH FUNCTIONS
-                refreshSchemes={fetchSchemes} 
+                refreshSchemes={fetchSchemes}
                 refreshSlides={fetchSlides}
-                refreshCategories={fetchCategories} // <--- New prop for Admin
+                refreshCategories={fetchCategories}
               />
+            </AdminPrivateRoute>
+          }
+        />
+
+        {/* --- 3. JOB ROUTES (Uses New Supabase ProtectedRoute) --- */}
+
+        {/* Only "Seekers" can see this */}
+        <Route
+          path="/job-search"
+          element={
+            <ProtectedRoute allowedRole="seeker">
+              <JobSearch />
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRole="seeker">
+              <ViewProfile /> {/* <--- New Component */}
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile/edit"
+          element={
+            <ProtectedRoute allowedRole="seeker">
+              <EditProfile /> {/* <--- Existing Component */}
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Only "Providers" can see this */}
+        <Route
+          path="/post-job"
+          element={
+            <ProtectedRoute allowedRole="provider">
+              <PostJob />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/find-talent"
+          element={
+            <ProtectedRoute allowedRole="provider">
+              <FindCandidates />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
     </Router>
   )

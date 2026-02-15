@@ -5,7 +5,7 @@ function GoogleTranslate() {
     // 1. Define the Settings (From the snippet you provided)
     window.gtranslateSettings = {
       default_language: "en",
-      languages: ["en", "ml", "hi", "ta"], // Added 'ta' (Tamil) just in case
+      languages: ["en", "ml"], // Added 'ta' (Tamil) just in case  , "hi", "ta"
       wrapper_selector: ".gtranslate_wrapper",
       alt_flags: { "en": "usa"} // Optional: Custom flags
     };
