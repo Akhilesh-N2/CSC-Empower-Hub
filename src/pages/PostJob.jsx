@@ -1,185 +1,225 @@
-import React, { useState } from 'react';
-import { supabase } from '../supabaseClient'; // Make sure you have this file!
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
 function PostJob() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  
-  const [formData, setFormData] = useState({
+  const [profile, setProfile] = useState(null); // Store provider profile data
+
+  // Form State
+  const [jobData, setJobData] = useState({
     title: '',
-    company: '',
-    location: '',
+    company: '',       // If empty, use profile.company_name
+    location: '',      // If empty, use profile.location
     salary: '',
-    type: 'Full Time',
     description: '',
-    contact_email: '',
-    tags: '' // We will split this by comma later
+    type: 'Full-time',
+    contact_phone: '', // If empty, use profile.contact_phone
+    contact_email: ''  // If empty, use auth email
   });
 
+  // 1. Fetch Provider Profile on Load
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Get generic profile (for email)
+        const { data: genericProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', user.id)
+          .single();
+
+        // Get provider details (for company name, location, phone)
+        const { data: providerProfile } = await supabase
+          .from('provider_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        setProfile({
+          email: genericProfile?.email,
+          ...providerProfile
+        });
+      }
+    };
+    fetchProfile();
+  }, []);
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setJobData({ ...jobData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // 1. Convert "React, Remote" string into ["React", "Remote"] array
-    const tagsArray = formData.tags.split(',').map(tag => tag.trim());
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-    // 2. Insert into Supabase
-    const { error } = await supabase
-      .from('jobs')
-      .insert([
-        {
-          title: formData.title,
-          company: formData.company,
-          location: formData.location,
-          salary: formData.salary,
-          type: formData.type,
-          description: formData.description,
-          contact_email: formData.contact_email,
-          tags: tagsArray
-        }
-      ]);
+      if (!user) throw new Error("You must be logged in to post a job.");
 
-    setLoading(false);
+      // --- SMART DEFAULTS LOGIC ---
+      // If the field is empty, fallback to the profile data.
+      const finalJobData = {
+        title: jobData.title,
+        salary: jobData.salary,
+        description: jobData.description,
+        type: jobData.type,
+        provider_id: user.id,
+        
+        // Smart Fields: Use input OR fallback to profile
+        company: jobData.company || profile?.company_name || "Unknown Company",
+        location: jobData.location || profile?.location || "Remote",
+        contact_phone: jobData.contact_phone || profile?.contact_phone || "",
+        contact_email: jobData.contact_email || profile?.email || user.email
+      };
 
-    if (error) {
-      alert('Error posting job: ' + error.message);
-    } else {
-      alert('Job Posted Successfully!');
-      navigate('/job-search'); // Redirect back to Job Search page
+      const { error } = await supabase
+        .from('jobs')
+        .insert([finalJobData]);
+
+      if (error) throw error;
+
+      alert("Job posted successfully!");
+      navigate('/find-talent'); // Redirect to dashboard or listing
+
+    } catch (error) {
+      alert("Error posting job: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-10 px-4">
-      
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-2xl w-full space-y-8 bg-white p-10 rounded-xl shadow-lg border border-gray-100">
         
-        {/* Header */}
-        <div className="bg-blue-600 px-8 py-6">
-          <h2 className="text-2xl font-bold text-white">Post a New Job</h2>
-          <p className="text-blue-100">Fill in the details to find the perfect candidate.</p>
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 text-center">Post a New Job</h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Leave fields blank to use your default profile information.
+          </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          
-          {/* Row 1: Title & Company */}
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+            
+            {/* Job Title (Required) */}
+            <div className="col-span-1 md:col-span-2">
+              <label className="block text-sm font-bold text-gray-700 mb-1">Job Title *</label>
               <input 
-                required
-                name="title"
-                type="text" 
-                placeholder="e.g. Senior React Developer"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                name="title" 
+                required 
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="e.g. Senior Electrician"
                 onChange={handleChange}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-              <input 
-                required
-                name="company"
-                type="text" 
-                placeholder="e.g. TechCorp Solutions"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                onChange={handleChange}
-              />
-            </div>
-          </div>
 
-          {/* Row 2: Location & Salary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Company Name (Optional) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Company Name <span className="text-gray-400 font-normal text-xs">(Optional)</span>
+              </label>
               <input 
-                required
-                name="location"
-                type="text" 
-                placeholder="e.g. Kochi, Kerala (or Remote)"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                name="company" 
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder={profile?.company_name ? `Default: ${profile.company_name}` : "Enter Company Name"}
                 onChange={handleChange}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Salary Range</label>
-              <input 
-                name="salary"
-                type="text" 
-                placeholder="e.g. ₹25k - ₹40k / month"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                onChange={handleChange}
-              />
-            </div>
-          </div>
 
-          {/* Row 3: Job Type & Tags */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Location (Optional) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Job Type</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Location <span className="text-gray-400 font-normal text-xs">(Optional)</span>
+              </label>
+              <input 
+                name="location" 
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder={profile?.location ? `Default: ${profile.location}` : "e.g. Kochi"}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Salary */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">Salary / Pay</label>
+              <input 
+                name="salary" 
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="e.g. 15000 - 20000"
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Job Type */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">Job Type</label>
               <select 
-                name="type"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white"
+                name="type" 
+                className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                 onChange={handleChange}
+                value={jobData.type}
               >
-                <option>Full Time</option>
-                <option>Part Time</option>
-                <option>Internship</option>
-                <option>Freelance</option>
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+                <option value="Contract">Contract</option>
+                <option value="Freelance">Freelance</option>
               </select>
             </div>
+
+            {/* Contact Phone (Optional) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tags (Comma separated)</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Contact Phone <span className="text-gray-400 font-normal text-xs">(Optional)</span>
+              </label>
               <input 
-                name="tags"
-                type="text" 
-                placeholder="e.g. React, Design, Urgent"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                name="contact_phone" 
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder={profile?.contact_phone ? `Default: ${profile.contact_phone}` : "+91..."}
                 onChange={handleChange}
               />
             </div>
+
+            {/* Contact Email (Optional) */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                Contact Email <span className="text-gray-400 font-normal text-xs">(Optional)</span>
+              </label>
+              <input 
+                name="contact_email" 
+                type="email"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder={profile?.email ? `Default: ${profile.email}` : "you@example.com"}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Description */}
+            <div className="col-span-1 md:col-span-2">
+              <label className="block text-sm font-bold text-gray-700 mb-1">Job Description *</label>
+              <textarea 
+                name="description" 
+                rows="4"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Describe the role and responsibilities..."
+                onChange={handleChange}
+              ></textarea>
+            </div>
+
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Job Description</label>
-            <textarea 
-              name="description"
-              rows="4"
-              placeholder="Describe the role and requirements..."
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-              onChange={handleChange}
-            ></textarea>
-          </div>
-
-           {/* Contact Email */}
-           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email (For Applications)</label>
-            <input 
-              name="contact_email"
-              type="email" 
-              placeholder="hr@company.com"
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-              onChange={handleChange}
-            />
-          </div>
-
-          {/* Submit Button */}
           <button 
             type="submit" 
             disabled={loading}
-            className={`w-full py-3 rounded-lg text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all
+            className={`w-full py-3 rounded-lg text-white font-bold text-lg shadow-md transition-all 
               ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:-translate-y-1'}`}
           >
             {loading ? 'Posting...' : 'Post Job Now'}
           </button>
-
         </form>
       </div>
     </div>

@@ -14,6 +14,11 @@ import Login from './pages/Login';
 import EditProfile from './pages/EditProfile';
 import FindCandidates from './pages/FindCandidates';
 import ViewProfile from './pages/ViewProfile';
+import Signup from './pages/Signup';
+import ProviderProfile from './pages/ProviderProfile';
+import MyPostedJobs from './pages/MyPostedJobs';
+import EditJob from './pages/EditJob';
+import Posters from './pages/Posters';
 
 // --- COMPONENTS ---
 import Navbar from './components/Navbar';
@@ -64,35 +69,35 @@ function App() {
   // --- 2. RENAMED OLD WRAPPER TO "AdminPrivateRoute" ---
   // (This prevents naming conflict with the new ProtectedRoute)
   const AdminPrivateRoute = ({ children }) => {
-  const [isAdmin, setIsAdmin] = useState(null);
+    const [isAdmin, setIsAdmin] = useState(null);
 
-  useEffect(() => {
-    const checkAdmin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        setIsAdmin(false);
-        return;
-      }
+    useEffect(() => {
+      const checkAdmin = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // Check if this user is an admin
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
+        if (!session) {
+          setIsAdmin(false);
+          return;
+        }
 
-      setIsAdmin(profile?.role === 'admin');
-    };
+        // Check if this user is an admin
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
 
-    checkAdmin();
-  }, []);
+        setIsAdmin(profile?.role === 'admin');
+      };
 
-  if (isAdmin === null) return <div>Loading...</div>; // Show spinner while checking
-  if (isAdmin === false) return <Navigate to="/login" replace />; // Kick them out
+      checkAdmin();
+    }, []);
 
-  return children;
-};
+    if (isAdmin === null) return <div>Loading...</div>; // Show spinner while checking
+    if (isAdmin === false) return <Navigate to="/login" replace />; // Kick them out
+
+    return children;
+  };
 
   return (
     <Router>
@@ -122,6 +127,7 @@ function App() {
 
         <Route path="/csc-secret-access" element={<SLogin setIsLoggedIn={setIsLoggedIn} />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
         {/* --- ADMIN ROUTE (Uses Local AdminPrivateRoute) --- */}
         <Route
@@ -142,6 +148,8 @@ function App() {
             </AdminPrivateRoute>
           }
         />
+
+        <Route path="/posters" element={<Posters />} />
 
         {/* --- 3. JOB ROUTES (Uses New Supabase ProtectedRoute) --- */}
 
@@ -182,6 +190,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/my-jobs" element={<MyPostedJobs />} />
+        <Route path="/edit-job/:id" element={<EditJob />} />
+        <Route path="/provider-profile" element={<ProviderProfile />} />
 
         <Route
           path="/find-talent"

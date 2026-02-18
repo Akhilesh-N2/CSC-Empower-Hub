@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react'; 
+import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react';
 import GoogleTranslate from './GoogleTranslate';
 import SmartText from './SmartText';
 
@@ -54,14 +54,14 @@ const Navbar = () => {
     <nav className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
-          
+
           {/* --- LEFT SIDE: LOGO & MOBILE TRANSLATE --- */}
           <Link to="/" className="text-2xl font-bold text-blue-400 flex items-center gap-2 notranslate">
             CSC<span className="text-white">Empower</span>
-            
+
             {/* Mobile Translate (Visible only on small screens) */}
             <div className="z-50 md:hidden ml-2">
-               <GoogleTranslate />
+              <GoogleTranslate />
             </div>
           </Link>
 
@@ -71,6 +71,7 @@ const Navbar = () => {
               <SmartText ml="ഹോം">Home</SmartText>
             </Link>
             <Link to="/forms" className="hover:text-blue-300 transition">Forms</Link>
+            <Link to="/posters" className="hover:text-blue-300 transition">Posters</Link>
 
             {/* ROLE LINKS */}
             {role === 'admin' && (
@@ -89,6 +90,9 @@ const Navbar = () => {
             {role === 'provider' && (
               <>
                 <Link to="/find-talent" className="hover:text-blue-300 transition">Find Candidates</Link>
+                <Link to="/my-jobs" className="hover:text-blue-300 transition">My Jobs</Link> {/* <--- NEW LINK */}
+                <Link to="/provider-profile" className="hover:text-blue-300 transition">Company Profile</Link>
+
                 <Link to="/post-job" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-bold transition">
                   + Post Job
                 </Link>
@@ -102,8 +106,8 @@ const Navbar = () => {
 
             {/* LOGIN / LOGOUT BUTTONS */}
             {user ? (
-              <button 
-                onClick={handleLogout} 
+              <button
+                onClick={handleLogout}
                 className="flex items-center gap-2 text-gray-300 hover:text-white transition"
               >
                 <LogOut size={18} /> Logout
@@ -129,7 +133,7 @@ const Navbar = () => {
         <div className="md:hidden bg-slate-800 p-4 space-y-4 border-t border-slate-700">
           <Link to="/" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Home</Link>
           <Link to="/forms" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Forms</Link>
-          
+
           {role === 'admin' && (
             <Link to="/admin" className="block text-red-400 font-bold" onClick={() => setIsMenuOpen(false)}>Admin Panel</Link>
           )}
