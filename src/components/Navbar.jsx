@@ -133,6 +133,8 @@ const Navbar = () => {
         <div className="md:hidden bg-slate-800 p-4 space-y-4 border-t border-slate-700">
           <Link to="/" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Home</Link>
           <Link to="/forms" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Forms</Link>
+          <Link to="/posters" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Posters</Link>
+
 
           {role === 'admin' && (
             <Link to="/admin" className="block text-red-400 font-bold" onClick={() => setIsMenuOpen(false)}>Admin Panel</Link>
