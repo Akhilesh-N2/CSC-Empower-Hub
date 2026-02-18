@@ -698,7 +698,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                         {/* LIST SECTION */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="overflow-x-auto w-full">
-                                <table className="w-full text-left border-collapse min-w-[600px]">
+                                <table className="w-full text-left border-collapse min-w-[700px]">
                                     <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-bold"><tr><th className="p-4">Type</th><th className="p-4">Title</th><th className="p-4">Category</th><th className="p-4">Actions</th></tr></thead>
                                     <tbody>
                                         {/* USE currentItems FOR PAGINATION */}
@@ -895,68 +895,70 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                             </div>
 
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                <table className="w-full text-left border-collapse min-w-[700px]">
-                                    <thead className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider border-b">
-                                        <tr>
-                                            <th className="p-4 font-semibold">Job Role</th>
-                                            <th className="p-4 font-semibold">Company</th>
-                                            <th className="p-4 font-semibold">Posted</th>
-                                            <th className="p-4 font-semibold">Status</th>
-                                            <th className="p-4 font-semibold text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {currentJobs.map((job) => (
-                                            <tr key={job.id} className="hover:bg-gray-50 transition">
-                                                <td className="p-4">
-                                                    <div className="font-bold text-gray-800">{job.title}</div>
-                                                </td>
-                                                <td className="p-4 text-gray-600">
-                                                    {job.company}
-                                                </td>
-                                                <td className="p-4 text-gray-500 text-sm">
-                                                    {new Date(job.created_at).toLocaleDateString()}
-                                                </td>
-                                                <td className="p-4">
-                                                    <button
-                                                        onClick={() => toggleJobStatus(job.id, job.is_active)}
-                                                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${job.is_active
-                                                            ? "bg-green-100 text-green-700 border-green-200"
-                                                            : "bg-gray-100 text-gray-500 border-gray-200"
-                                                            }`}
-                                                    >
-                                                        {job.is_active ? "Active" : "Disabled"}
-                                                    </button>
-                                                </td>
-                                                <td className="p-4 text-right space-x-2">
-                                                    <button
-                                                        onClick={() => toggleJobStatus(job.id, job.is_active)}
-                                                        className="p-2 text-gray-400 hover:text-blue-600 transition"
-                                                        title={job.is_active ? "Hide Job" : "Show Job"}
-                                                    >
-                                                        {job.is_active ? '👁️' : '🚫'}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => deleteJob(job.id)}
-                                                        className="p-2 text-gray-400 hover:text-red-600 transition"
-                                                        title="Delete Job"
-                                                    >
-                                                        🗑️
-                                                    </button>
-                                                </td>
+                                <div className="w-full overflow-x-auto">
+                                    <table className="w-full text-left border-collapse min-w-[700px]">
+                                        <thead className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider border-b">
+                                            <tr>
+                                                <th className="p-4 font-semibold">Job Role</th>
+                                                <th className="p-4 font-semibold">Company</th>
+                                                <th className="p-4 font-semibold">Posted</th>
+                                                <th className="p-4 font-semibold">Status</th>
+                                                <th className="p-4 font-semibold text-right">Actions</th>
                                             </tr>
-                                        ))}
-                                        {filteredJobs.length > itemsPerPage && (
-                                            <div className="flex justify-between items-center p-4">
-                                                <div className="flex gap-3 items-center">
-                                                    <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronLeft size={16} /></button>
-                                                    <span className="text-xs text-gray-500">Page {currentPage} of {totalJobPages}</span>
-                                                    <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalJobPages} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronRight size={16} /></button>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {currentJobs.map((job) => (
+                                                <tr key={job.id} className="hover:bg-gray-50 transition">
+                                                    <td className="p-4">
+                                                        <div className="font-bold text-gray-800">{job.title}</div>
+                                                    </td>
+                                                    <td className="p-4 text-gray-600">
+                                                        {job.company}
+                                                    </td>
+                                                    <td className="p-4 text-gray-500 text-sm">
+                                                        {new Date(job.created_at).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <button
+                                                            onClick={() => toggleJobStatus(job.id, job.is_active)}
+                                                            className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${job.is_active
+                                                                ? "bg-green-100 text-green-700 border-green-200"
+                                                                : "bg-gray-100 text-gray-500 border-gray-200"
+                                                                }`}
+                                                        >
+                                                            {job.is_active ? "Active" : "Disabled"}
+                                                        </button>
+                                                    </td>
+                                                    <td className="p-4 text-right space-x-2">
+                                                        <button
+                                                            onClick={() => toggleJobStatus(job.id, job.is_active)}
+                                                            className="p-2 text-gray-400 hover:text-blue-600 transition"
+                                                            title={job.is_active ? "Hide Job" : "Show Job"}
+                                                        >
+                                                            {job.is_active ? '👁️' : '🚫'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deleteJob(job.id)}
+                                                            className="p-2 text-gray-400 hover:text-red-600 transition"
+                                                            title="Delete Job"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {filteredJobs.length > itemsPerPage && (
+                                                <div className="flex justify-between items-center p-4">
+                                                    <div className="flex gap-3 items-center">
+                                                        <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronLeft size={16} /></button>
+                                                        <span className="text-xs text-gray-500">Page {currentPage} of {totalJobPages}</span>
+                                                        <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalJobPages} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronRight size={16} /></button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </tbody>
-                                </table>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
@@ -980,62 +982,64 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                         </div>
 
                         <div className="bg-white rounded-xl shadow border overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 border-b">
-                                    <tr>
-                                        <th className="p-4">Email</th>
-                                        <th className="p-4">Role</th>
-                                        <th className="p-4">Status</th>
-                                        <th className="p-4 text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {currentUsers.map(user => (
-                                        <tr key={user.id} className="border-b hover:bg-gray-50">
-                                            <td className="p-4 font-medium">{user.email}</td>
-                                            <td className="p-4 capitalize">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'provider' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {user.role}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                {user.is_approved ? (
-                                                    <span className="text-green-600 font-bold text-sm">✓ Active</span>
-                                                ) : (
-                                                    <span className="text-orange-500 font-bold text-sm">⏳ Pending</span>
-                                                )}
-                                            </td>
-                                            <td className="p-4 flex justify-center gap-3">
-                                                {/* APPROVE BUTTON */}
-                                                <button
-                                                    onClick={() => toggleUserApproval(user.id, user.is_approved)}
-                                                    className={`px-4 py-2 rounded text-sm font-bold text-white transition ${user.is_approved ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'}`}
-                                                >
-                                                    {user.is_approved ? 'Block' : 'Approve'}
-                                                </button>
-
-                                                {/* NEW DELETE BUTTON */}
-                                                <button
-                                                    onClick={() => handleDeleteUser(user.id, user.email)}
-                                                    className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition"
-                                                    title="Delete User"
-                                                >
-                                                    🗑️ Delete
-                                                </button>
-                                            </td>
+                            <div className="w-full overflow-x-auto">
+                                <table className="w-full text-left border-collapse min-w-[700px]">
+                                    <thead className="bg-gray-50 border-b">
+                                        <tr>
+                                            <th className="p-4">Email</th>
+                                            <th className="p-4">Role</th>
+                                            <th className="p-4">Status</th>
+                                            <th className="p-4 text-center">Actions</th>
                                         </tr>
-                                    ))}
-                                    {filteredUsers.length > itemsPerPage && (
-                                        <div className="flex justify-between items-center p-4 ">
-                                            <div className="flex gap-3 items-center">
-                                                <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronLeft size={16} /></button>
-                                                <span className="text-xs text-gray-500">Page {currentPage} of {totalUserPages}</span>
-                                                <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalUserPages} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronRight size={16} /></button>
+                                    </thead>
+                                    <tbody>
+                                        {currentUsers.map(user => (
+                                            <tr key={user.id} className="border-b hover:bg-gray-50">
+                                                <td className="p-4 font-medium">{user.email}</td>
+                                                <td className="p-4 capitalize">
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'provider' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {user.role}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    {user.is_approved ? (
+                                                        <span className="text-green-600 font-bold text-sm">✓ Active</span>
+                                                    ) : (
+                                                        <span className="text-orange-500 font-bold text-sm">⏳ Pending</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 flex justify-center gap-3">
+                                                    {/* APPROVE BUTTON */}
+                                                    <button
+                                                        onClick={() => toggleUserApproval(user.id, user.is_approved)}
+                                                        className={`px-4 py-2 rounded text-sm font-bold text-white transition ${user.is_approved ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'}`}
+                                                    >
+                                                        {user.is_approved ? 'Block' : 'Approve'}
+                                                    </button>
+
+                                                    {/* NEW DELETE BUTTON */}
+                                                    <button
+                                                        onClick={() => handleDeleteUser(user.id, user.email)}
+                                                        className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition"
+                                                        title="Delete User"
+                                                    >
+                                                        🗑️ Delete
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {filteredUsers.length > itemsPerPage && (
+                                            <div className="flex justify-between items-center p-4 ">
+                                                <div className="flex gap-3 items-center">
+                                                    <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronLeft size={16} /></button>
+                                                    <span className="text-xs text-gray-500">Page {currentPage} of {totalUserPages}</span>
+                                                    <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalUserPages} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronRight size={16} /></button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </tbody>
-                            </table>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
