@@ -697,29 +697,31 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
 
                         {/* LIST SECTION */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-bold"><tr><th className="p-4">Type</th><th className="p-4">Title</th><th className="p-4">Category</th><th className="p-4">Actions</th></tr></thead>
-                                <tbody>
-                                    {/* USE currentItems FOR PAGINATION */}
-                                    {currentItems.map(s => (
-                                        <tr key={s.id} className="border-b border-gray-200 hover:bg-gray-50">
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${s.type === 'form' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {s.type ? s.type.toUpperCase() : 'SCHEME'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 font-medium text-gray-900">{s.title}</td>
-                                            <td className="p-4 text-gray-600">{s.category}</td>
-                                            <td className="p-4 flex gap-2">
-                                                <button onClick={() => toggleContentActive(s.id, s.active)} className={`px-3 py-1 rounded-full text-xs font-bold ${s.active ? 'bg-green-100 text-green-700 hover:bg-green-300' : 'bg-red-100 text-red-700 hover:bg-red-300'}`}>{s.active ? 'ACTIVE' : 'INACTIVE'}</button>
-                                                <button onClick={() => handleEdit(s)} className="text-blue-600 hover:text-blue-800 font-medium text-sm">Edit</button>
-                                                <button onClick={() => handleDeleteContent(s.id)} className="text-red-600 hover:text-red-800 font-medium text-sm">Delete</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredContent.length === 0 && <tr><td colSpan="4" className="p-6 text-center text-gray-500">No content found.</td></tr>}
-                                </tbody>
-                            </table>
+                            <div className="overflow-x-auto w-full">
+                                <table className="w-full text-left border-collapse min-w-[600px]">
+                                    <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-bold"><tr><th className="p-4">Type</th><th className="p-4">Title</th><th className="p-4">Category</th><th className="p-4">Actions</th></tr></thead>
+                                    <tbody>
+                                        {/* USE currentItems FOR PAGINATION */}
+                                        {currentItems.map(s => (
+                                            <tr key={s.id} className="border-b border-gray-200 hover:bg-gray-50">
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${s.type === 'form' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {s.type ? s.type.toUpperCase() : 'SCHEME'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 font-medium text-gray-900">{s.title}</td>
+                                                <td className="p-4 text-gray-600">{s.category}</td>
+                                                <td className="p-4 flex gap-2">
+                                                    <button onClick={() => toggleContentActive(s.id, s.active)} className={`px-3 py-1 rounded-full text-xs font-bold ${s.active ? 'bg-green-100 text-green-700 hover:bg-green-300' : 'bg-red-100 text-red-700 hover:bg-red-300'}`}>{s.active ? 'ACTIVE' : 'INACTIVE'}</button>
+                                                    <button onClick={() => handleEdit(s)} className="text-blue-600 hover:text-blue-800 font-medium text-sm">Edit</button>
+                                                    <button onClick={() => handleDeleteContent(s.id)} className="text-red-600 hover:text-red-800 font-medium text-sm">Delete</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {filteredContent.length === 0 && <tr><td colSpan="4" className="p-6 text-center text-gray-500">No content found.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
 
                             {/* --- PAGINATION CONTROLS (THEME PRESERVED) --- */}
                             {filteredContent.length > itemsPerPage && (
@@ -948,7 +950,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                             <div className="flex justify-between items-center p-4">
                                                 <div className="flex gap-3 items-center">
                                                     <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronLeft size={16} /></button>
-                                                <span className="text-xs text-gray-500">Page {currentPage} of {totalJobPages}</span>
+                                                    <span className="text-xs text-gray-500">Page {currentPage} of {totalJobPages}</span>
                                                     <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalJobPages} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronRight size={16} /></button>
                                                 </div>
                                             </div>
@@ -965,7 +967,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                 {activeTab === 'users' && (
                     <div className="max-w-6xl mx-auto">
                         <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">User Approvals</h2>
-                            
+
                         <div className="mb-4 relative">
                             <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
                             <input
@@ -1027,7 +1029,7 @@ function Admin({ schemes, setSchemes, carouselSlides, setCarouselSlides, categor
                                         <div className="flex justify-between items-center p-4 ">
                                             <div className="flex gap-3 items-center">
                                                 <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronLeft size={16} /></button>
-                                            <span className="text-xs text-gray-500">Page {currentPage} of {totalUserPages}</span>
+                                                <span className="text-xs text-gray-500">Page {currentPage} of {totalUserPages}</span>
                                                 <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalUserPages} className="p-1 border rounded bg-white disabled:opacity-50"><ChevronRight size={16} /></button>
                                             </div>
                                         </div>
