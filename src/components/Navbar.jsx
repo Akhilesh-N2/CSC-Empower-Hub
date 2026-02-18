@@ -151,6 +151,8 @@ const Navbar = () => {
             <>
               <Link to="/find-talent" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Find Candidates</Link>
               <Link to="/post-job" className="block text-blue-400 font-bold" onClick={() => setIsMenuOpen(false)}>+ Post Job</Link>
+              <Link to="/my-jobs" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>My Jobs</Link>
+              <Link to="/provider-profile" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Company Profile</Link>
             </>
           )}
 
