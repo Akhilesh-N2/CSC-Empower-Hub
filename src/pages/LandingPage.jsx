@@ -1,26 +1,89 @@
 import React, { useState, useMemo, useEffect } from 'react'
+import { supabase } from '../supabaseClient' // <--- Make sure this import path is correct
 import Search from '../components/Search'
 import SchemeCard from '../components/SchemeCard'
 import Carousel from '../components/Carousel'
 import SmartText from '../components/SmartText'
 
+function LandingPage() { // <--- Removed props, we fetch data internally now
+    // 1. STATE FOR DATA
+    const [schemes, setSchemes] = useState([]);
+    const [carouselSlides, setCarouselSlides] = useState([]);
 
-function LandingPage({ schemes = [], carouselSlides = [] }) {
+    // 2. STATE FOR UI
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("All");
-
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
 
-    // derive categories and filtered results with useMemo for performance
+    // --- FETCHING LOGIC ---
+    
+    // Fetch Schemes (Useful Links)
+    const fetchSchemes = async () => {
+        const { data, error } = await supabase
+            .from('schemes')
+            .select('*')
+            .eq('active', true) // Only show active schemes
+            .neq('category', 'Poster')
+            .order('id', { ascending: false }); // Newest first
+        if (!error) setSchemes(data || []);
+    };
+
+    // Fetch Carousel Slides
+    const fetchSlides = async () => {
+        const { data, error } = await supabase
+            .from('slides')
+            .select('*')
+            .order('id', { ascending: true });
+        if (!error) setCarouselSlides(data || []);
+    };
+
+    // --- REAL-TIME SUBSCRIPTION ---
+    useEffect(() => {
+        // A. Initial Load
+        fetchSchemes();
+        fetchSlides();
+
+        // B. Set up Realtime Listener
+        const channel = supabase
+            .channel('landing-page-updates')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'schemes' },
+                (payload) => {
+                    console.log('Schemes updated!', payload);
+                    fetchSchemes();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'slides' },
+                (payload) => {
+                    console.log('Slides updated!', payload);
+                    fetchSlides();
+                }
+            )
+            .subscribe();
+
+        // C. Cleanup
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+
+    // --- FILTERING LOGIC (Unchanged) ---
     const categories = useMemo(() => ["All", ...Array.from(new Set(schemes.map(item => item?.category).filter(Boolean)))], [schemes]);
 
     const filteredSchemes = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         return schemes.filter((scheme) => {
-            if (!scheme || scheme.active !== true) return false;
+            // Note: We already filtered 'active' in the SQL query, but double-checking is fine
+            if (!scheme) return false;
+            
             const categoryMatch = selectedCategory === "All" || scheme.category === selectedCategory;
             if (!q) return categoryMatch;
+            
             const title = (scheme.title || "").toLowerCase();
             const desc = (scheme.description || "").toLowerCase();
             return categoryMatch && (title.includes(q) || desc.includes(q));
@@ -30,25 +93,26 @@ function LandingPage({ schemes = [], carouselSlides = [] }) {
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentSchemes = filteredSchemes.slice(indexOfFirstItem, indexOfLastItem);
-
     const totalPages = Math.ceil(filteredSchemes.length / itemsPerPage);
 
     const handleSearch = (query) => setSearchQuery(query);
 
-    // Reset to Page 1 whenever the User Filters change
+    // Reset to Page 1 on filter change
     useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery, selectedCategory]);
+
 
     return (
         <div className="bg-gray-50 min-h-screen">
             {/* HERO / CAROUSEL */}
             <div className="bg-gradient-to-r from-sky-50 via-white to-white pb-6">
+                {/* Pass the live data to your Carousel component */}
                 <Carousel slides={carouselSlides} />
             </div>
 
             {/* MAIN CONTENT */}
-            <div className="max-w-[92rem] mx-auto px-4 py-8 md:py-12  border border-gray-200 rounded-xl bg-white">
+            <div className="max-w-[92rem] mx-auto px-4 py-8 md:py-12 border border-gray-200 rounded-xl bg-white">
                 {/* Search + Category row */}
                 <div className="flex flex-col md:items-center gap-4 md:gap-6">
                     <div className="w-full">
@@ -79,15 +143,12 @@ function LandingPage({ schemes = [], carouselSlides = [] }) {
                 </div>
 
                 {/* Results header */}
-
                 <div className='mt-8 flex flex-col gap-2'>
-
                     <h1 className='text-xl md:text-4xl font-bold text-slate-800 text-center'>
                         <SmartText ml="പ്രധാന ലിങ്കുകൾ">
                             Useful Links
                         </SmartText>
                     </h1>
-
                 </div>
 
                 {/* Grid */}
@@ -96,7 +157,7 @@ function LandingPage({ schemes = [], carouselSlides = [] }) {
                         currentSchemes.map(scheme => (
                             <div key={scheme.id} className="w-full">
                                 <SchemeCard
-                                    image={scheme.image}
+                                    image={scheme.image} // Changed from scheme.image_url if your DB uses 'image'
                                     title={scheme.title}
                                     category={scheme.category}
                                     description={scheme.description}
@@ -109,31 +170,17 @@ function LandingPage({ schemes = [], carouselSlides = [] }) {
                         <div className="col-span-full text-center text-slate-600 py-12 border border-dashed border-gray-100 rounded">
                             <p className="text-lg">No items match your search.</p>
                             <p className="mt-2 text-sm">Try different keywords or pick a different category.</p>
-                            <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
-                                {categories.slice(1, 6).map(cat => (
-                                    <button
-                                        key={cat}
-                                        onClick={() => setSelectedCategory(cat)}
-                                        className="px-3 py-1 rounded-full bg-gray-100 text-sm text-gray-700 hover:bg-gray-200"
-                                    >
-                                        {cat}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
                     )}
                 </div>
 
                 {/* Pagination */}
-                {/* Only show buttons if we have more than 1 page of content */}
                 {filteredSchemes.length > itemsPerPage && (
                     <div className="flex justify-center gap-4 mt-8 notranslate">
-
-                        {/* PREV BUTTON */}
                         <button
                             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                             disabled={currentPage === 1}
-                            className="px-4 py-2 w-24 border rounded  bg-gray-100 text-black shadow-md hover:bg-gray-500 hover:text-white scale-100 hover:scale-102 transition-transform"
+                            className="px-4 py-2 w-24 border rounded bg-gray-100 text-black shadow-md hover:bg-gray-500 hover:text-white scale-100 hover:scale-102 transition-transform disabled:opacity-50 disabled:hover:bg-gray-100 disabled:hover:text-black"
                         >
                             Previous
                         </button>
@@ -142,22 +189,15 @@ function LandingPage({ schemes = [], carouselSlides = [] }) {
                             {`${indexOfFirstItem + 1} to ${indexOfFirstItem + currentSchemes.length} of ${filteredSchemes.length} results`}
                         </div>
 
-                        {/* NEXT BUTTON */}
                         <button
                             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                             disabled={currentPage === totalPages}
-                            className="px-4  w-24 border border rounded  bg-gray-100 text-black shadow-md hover:bg-gray-500 hover:text-white scale-100 hover:scale-102 transition-transform"
+                            className="px-4 w-24 border border rounded bg-gray-100 text-black shadow-md hover:bg-gray-500 hover:text-white scale-100 hover:scale-102 transition-transform disabled:opacity-50 disabled:hover:bg-gray-100 disabled:hover:text-black"
                         >
                             Next
                         </button>
-
-
-
                     </div>
-
                 )}
-
-
             </div>
         </div>
     )

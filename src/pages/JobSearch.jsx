@@ -16,31 +16,19 @@ function JobSearch() {
   });
 
   // --- HELPER 1: SMART SALARY PARSER (Range Support) ---
-  // This finds the MAXIMUM potential salary in a text string.
-  // "60k - 90k" -> Returns 90000.
   const parseMaxSalary = (salaryInput) => {
     if (!salaryInput) return 0;
-    
-    // Normalize: lowercase, remove commas
     const str = String(salaryInput).toLowerCase().replace(/,/g, '');
-    
-    // Regex to find numbers, optionally followed by 'k' or 'l'
-    // Matches: "50", "50.5", "50k", "50l"
     const regex = /(\d+(\.\d+)?)\s*(k|l|lakhs?|thousands?)?/g;
     
     let maxVal = 0;
     let match;
 
-    // Loop through ALL numbers found in the string
     while ((match = regex.exec(str)) !== null) {
       let val = parseFloat(match[1]);
       const multiplierStr = match[3] || '';
-
-      // Apply multipliers
       if (multiplierStr.startsWith('k')) val *= 1000;
       else if (multiplierStr.startsWith('l')) val *= 100000;
-
-      // Keep the highest number found
       if (val > maxVal) maxVal = val;
     }
     
@@ -50,17 +38,16 @@ function JobSearch() {
   // --- HELPER 2: DISPLAY FORMATTING ---
   const formatSalary = (salary) => {
     if (!salary) return 'Not Disclosed';
-    // If it looks like a pure number, format it
     const num = Number(salary);
     if (!isNaN(num)) return `₹${num.toLocaleString()}`;
-    // Otherwise return text as-is (e.g. "10k - 20k")
     return salary;
   };
 
-  // --- 1. FETCH JOBS ---
+  // --- 1. FETCH & REAL-TIME LISTENERS ---
   useEffect(() => {
     const fetchJobs = async () => {
-      setLoading(true);
+      // Note: We don't set loading(true) here to avoid UI flickering on updates
+      
       const { data, error } = await supabase
         .from('jobs')
         .select('*')
@@ -69,9 +56,32 @@ function JobSearch() {
 
       if (error) console.error(error);
       else setJobs(data || []);
+      
+      // Stop loading only after the initial fetch
       setLoading(false);
     };
+
+    // A. Initial Load
+    setLoading(true); // Set loading true explicitly before first fetch
     fetchJobs();
+
+    // B. Real-Time Subscription
+    const channel = supabase
+      .channel('public-job-board')
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'jobs' }, 
+        (payload) => {
+          console.log('Job board updated!', payload);
+          fetchJobs(); // Re-fetch silently when data changes
+        }
+      )
+      .subscribe();
+
+    // C. Cleanup
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // --- 2. FILTER LOGIC ---
@@ -85,8 +95,7 @@ function JobSearch() {
                           job.location.toLowerCase().includes(filters.location.toLowerCase());
 
     // C. Salary (Checks MAX potential vs Filter)
-    const jobMaxSalary = parseMaxSalary(job.salary); // "60k-90k" becomes 90000
-    // If filter is 0, show everything. If filter > 0, hide "Negotiable" (0) jobs.
+    const jobMaxSalary = parseMaxSalary(job.salary); 
     const matchSalary = filters.minSalary === 0 || jobMaxSalary >= filters.minSalary;
 
     // D. Job Type (Exact match)
@@ -216,7 +225,7 @@ function JobSearch() {
             <p className="text-gray-400">Try adjusting your search criteria.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-in-up">
             {filteredJobs.map(job => (
               <div key={job.id} className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition border border-gray-100 flex flex-col h-full">
                 
@@ -245,15 +254,15 @@ function JobSearch() {
                   </p>
                 </div>
 
-                {/* --- CONTACT INFO (REPLACED BUTTONS) --- */}
+                {/* --- CONTACT INFO --- */}
                 <div className="mt-auto pt-4 border-t border-gray-100 flex flex-col gap-2">
                    {/* Phone */}
                    {job.contact_phone ? (
                      <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                           <Phone size={14} />
-                        </div>
-                        {job.contact_phone}
+                       <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                          <Phone size={14} />
+                       </div>
+                       <span className="select-all">{job.contact_phone}</span>
                      </div>
                    ) : (
                       <span className="text-xs text-gray-400 italic pl-1">No phone number provided</span>
@@ -262,10 +271,10 @@ function JobSearch() {
                    {/* Email */}
                    {job.contact_email ? (
                      <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                           <Mail size={14} />
-                        </div>
-                        <span className="truncate">{job.contact_email}</span>
+                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                          <Mail size={14} />
+                       </div>
+                       <span className="truncate select-all">{job.contact_email}</span>
                      </div>
                    ) : (
                       <span className="text-xs text-gray-400 italic pl-1">No email provided</span>

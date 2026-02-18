@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react';
-import GoogleTranslate from './GoogleTranslate';
 import SmartText from './SmartText';
 
 const Navbar = () => {
@@ -57,12 +56,7 @@ const Navbar = () => {
 
           {/* --- LEFT SIDE: LOGO & MOBILE TRANSLATE --- */}
           <Link to="/" className="text-2xl font-bold text-blue-400 flex items-center gap-2 notranslate">
-            CSC<span className="text-white">Empower</span>
-
-            {/* Mobile Translate (Visible only on small screens) */}
-            <div className="z-50 md:hidden ml-2">
-              <GoogleTranslate />
-            </div>
+            CSC<span className="text-white">Empower</span>Hub
           </Link>
 
           {/* --- RIGHT SIDE: DESKTOP MENU --- */}
@@ -93,16 +87,11 @@ const Navbar = () => {
                 <Link to="/my-jobs" className="hover:text-blue-300 transition">My Jobs</Link> {/* <--- NEW LINK */}
                 <Link to="/provider-profile" className="hover:text-blue-300 transition">Company Profile</Link>
 
-                <Link to="/post-job" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-bold transition">
+                {/* <Link to="/post-job" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-bold transition">
                   + Post Job
-                </Link>
+                </Link> */}
               </>
             )}
-
-            {/* Desktop Translate (Visible only on large screens) */}
-            <div className="hidden md:block">
-              <GoogleTranslate />
-            </div>
 
             {/* LOGIN / LOGOUT BUTTONS */}
             {user ? (
@@ -150,7 +139,7 @@ const Navbar = () => {
           {role === 'provider' && (
             <>
               <Link to="/find-talent" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Find Candidates</Link>
-              <Link to="/post-job" className="block text-blue-400 font-bold" onClick={() => setIsMenuOpen(false)}>+ Post Job</Link>
+              {/* <Link to="/post-job" className="block text-blue-400 font-bold" onClick={() => setIsMenuOpen(false)}>+ Post Job</Link> */}
               <Link to="/my-jobs" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>My Jobs</Link>
               <Link to="/provider-profile" className="block text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Company Profile</Link>
             </>
