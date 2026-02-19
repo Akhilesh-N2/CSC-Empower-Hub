@@ -322,11 +322,49 @@ function Admin() {
 
     const handleSlideSubmit = async (e) => {
         e.preventDefault();
-        const slideData = { ...currentSlide, title: currentSlide.title || "Untitled" };
-        await supabase.from('slides').insert([slideData]);
-        alert("Slide Added!");
-        setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000, object_fit: 'cover' });
-        fetchData();
+
+        // 1. Prepare clean data WITHOUT the 'id' field
+        const slideFields = {
+            title: currentSlide.title || "Untitled",
+            description: currentSlide.description || "",
+            image: currentSlide.image,
+            link: currentSlide.link || "",
+            duration: parseInt(currentSlide.duration) || 5000,
+            object_fit: currentSlide.object_fit || 'cover'
+        };
+
+        // Validation: Ensure an image exists
+        if (!slideFields.image) {
+            return alert("Please upload an image or video before adding the slide.");
+        }
+
+        try {
+            const { error } = await supabase
+                .from('slides')
+                .insert([slideFields]); // insert the clean object without ID
+
+            if (error) throw error;
+
+            alert("Slide Added successfully!");
+
+            // 2. Reset form
+            setCurrentSlide({
+                id: null,
+                title: '',
+                description: '',
+                image: '',
+                link: '',
+                duration: 5000,
+                object_fit: 'cover'
+            });
+
+            // 3. Refresh Data
+            fetchData();
+
+        } catch (error) {
+            console.error("Carousel Error:", error.message);
+            alert("Error adding slide: " + error.message);
+        }
     };
 
     const deleteSlide = async (id) => {

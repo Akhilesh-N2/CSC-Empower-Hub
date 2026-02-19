@@ -17,7 +17,7 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
     const itemsPerPage = 8;
 
     // --- FETCHING LOGIC ---
-    
+
     // Fetch Schemes (Useful Links)
     const fetchSchemes = async () => {
         const { data, error } = await supabase
@@ -80,10 +80,10 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
         return schemes.filter((scheme) => {
             // Note: We already filtered 'active' in the SQL query, but double-checking is fine
             if (!scheme) return false;
-            
+
             const categoryMatch = selectedCategory === "All" || scheme.category === selectedCategory;
             if (!q) return categoryMatch;
-            
+
             const title = (scheme.title || "").toLowerCase();
             const desc = (scheme.description || "").toLowerCase();
             return categoryMatch && (title.includes(q) || desc.includes(q));
@@ -107,8 +107,17 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
         <div className="bg-gray-50 min-h-screen">
             {/* HERO / CAROUSEL */}
             <div className="bg-gradient-to-r from-sky-50 via-white to-white pb-6">
-                {/* Pass the live data to your Carousel component */}
-                <Carousel slides={carouselSlides} />
+                {/* Only render the Carousel if there is at least one slide. 
+       Adding a unique key based on length forces React to 
+       re-evaluate correctly when data arrives.
+    */}
+                {carouselSlides && carouselSlides.length > 0 ? (
+                    <Carousel slides={carouselSlides} key={`carousel-${carouselSlides.length}`} />
+                ) : (
+                    <div className="h-64 flex items-center justify-center bg-gray-100 animate-pulse rounded-xl mx-4">
+                        <p className="text-gray-400">Loading Latest Updates...</p>
+                    </div>
+                )}
             </div>
 
             {/* MAIN CONTENT */}

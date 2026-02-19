@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Linkedin, MessageCircle, Mail, Phone, MapPin } from 'lucide-react';
 
 const Footer = () => {
   return (
@@ -21,7 +21,14 @@ const Footer = () => {
               <a href="#" className="hover:text-blue-400 transition"><Twitter size={20} /></a>
               <a href="#" className="hover:text-pink-500 transition"><Instagram size={20} /></a>
               <a href="#" className="hover:text-blue-600 transition"><Linkedin size={20} /></a>
+              <a href="#" className="hover:text-green-500 transition"><MessageCircle size={20} /></a>
+
             </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed mt-4">
+              Want your own website like this? <a target='blank' href="https://www.linkedin.com/in/akhilesh-n-3a1056267" className="text-blue-400 hover:underline">Hire me</a> to get a custom-built site tailored to your needs!
+            </p>
+            
           </div>
 
           {/* Column 2: Quick Links */}
