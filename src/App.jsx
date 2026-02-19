@@ -24,7 +24,7 @@ import Terms from './pages/Term'; // Ensure filename matches (Term vs Terms)
 // --- COMPONENTS ---
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
-import Footer from './components/Footer';
+// import Footer from './components/Footer';
 
 function App() {
 
