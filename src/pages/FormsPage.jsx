@@ -19,6 +19,7 @@ function FormsPage() {
                 .from('schemes')
                 .select('*')
                 .eq('active', true)
+                .eq('type', 'form')
                 // Optional: If you only want "Forms" category items, filter here. 
                 // But your UI suggests you have sub-categories like "Housing", "Loan", etc.
                 .order('title', { ascending: true });

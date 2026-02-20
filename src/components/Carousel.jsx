@@ -4,9 +4,8 @@ function Carousel({ slides }) {
     if (!slides || slides.length === 0) return null;
 
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [timeLeft, setTimeLeft] = useState(0); // Renamed from 'timer' to 'timeLeft'
+    const [timeLeft, setTimeLeft] = useState(0);
     
-    // --- TOUCH STATE ---
     const [touchStart, setTouchStart] = useState(null);
     const [touchEnd, setTouchEnd] = useState(null);
     const videoRefs = useRef([]);
@@ -59,10 +58,8 @@ function Carousel({ slides }) {
         const isVideoSlide = isVideo(currentSlide.image);
         const durationSec = (currentSlide.duration || 5000) / 1000;
 
-        // 1. Reset the visible Timer immediately
         setTimeLeft(durationSec);
 
-        // 2. Handle Video Playback (Play current, Pause others)
         videoRefs.current.forEach((video, index) => {
             if (video) {
                 if (index === currentIndex) {
@@ -74,14 +71,8 @@ function Carousel({ slides }) {
             }
         });
 
-        // 3. Logic Split: Video vs Image
-        if (isVideoSlide) {
-            // IF VIDEO: Do NOT start a timer interval. 
-            // We rely on the <video onEnded={...}> prop to change the slide.
-            return; 
-        } 
+        if (isVideoSlide) return; 
         
-        // IF IMAGE: Start the countdown interval
         const intervalID = setInterval(() => {
             setTimeLeft((prev) => {
                 if (prev <= 1) {
@@ -92,7 +83,6 @@ function Carousel({ slides }) {
             });
         }, 1000);
 
-        // Cleanup interval when slide changes
         return () => clearInterval(intervalID);
 
     }, [currentIndex, slides]);
@@ -100,44 +90,45 @@ function Carousel({ slides }) {
 
     return (
         <div
-            className='h-[500px] md:h-[550px] w-full m-auto relative group'
+            className='h-[400px] md:h-[550px] w-full m-auto relative group bg-white'
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
         >
-            <div className='w-full h-full relative overflow-hidden bg-slate-900'>
+            <div className='w-full h-full relative overflow-hidden'>
                 {slides.map((slide, index) => (
                     <div
-                        key={index}
+                        key={slide.id || index}
                         className={`absolute top-0 left-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
                             index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
                         }`}
                     >
                         {/* 1. MEDIA LAYER */}
-                        <div className="absolute inset-0 w-full h-full bg-white">
+                        <div className="absolute inset-0 w-full h-full flex items-center justify-center">
                             {isVideo(slide.image) ? (
                                 <video
                                     ref={el => videoRefs.current[index] = el}
                                     src={slide.image}
                                     muted
                                     playsInline
-                                    // IMPORTANT: Video drives the slide change when it finishes
                                     onEnded={nextSlide} 
-                                    // Optional: Updates timer based on video progress
                                     onTimeUpdate={(e) => {
                                         const remaining = Math.ceil(e.target.duration - e.target.currentTime);
                                         if (remaining >= 0) setTimeLeft(remaining);
                                     }}
+                                    // Use database value for object-fit scaling
                                     className={`w-full h-full ${slide.object_fit === 'contain' ? 'object-contain' : 'object-cover'} object-center pointer-events-none`}
                                 />
                             ) : (
                                 <img
                                     src={slide.image}
                                     alt={slide.title}
+                                    // Use database value for object-fit scaling
                                     className={`w-full h-full ${slide.object_fit === 'contain' ? 'object-contain' : 'object-cover'} object-center pointer-events-none`}
                                 />
                             )}
-                            <div className="absolute inset-0 bg-black/10"></div>
+                            {/* Subtle Overlay to make text readable if you add any */}
+                            <div className="absolute inset-0 bg-black/5"></div>
                         </div>
 
                         {/* 2. TIMER DISPLAY (Top Right) */}
@@ -148,45 +139,37 @@ function Carousel({ slides }) {
                                 </span>
                             </div>
                         </div>
-
-                        
                     </div>
                 ))}
             </div>
 
-            {/* ARROWS */}
+            {/* NAVIGATION CONTROLS */}
             <button
                 onClick={prevSlide}
-                className='hidden group-hover:flex absolute top-1/2 left-4 -translate-y-1/2 z-30 
-                           items-center justify-center w-12 h-12 rounded-full 
-                           bg-black/30 text-white backdrop-blur-sm hover:bg-black/60 
-                           transition-all duration-300 hover:scale-110'
+                className='hidden group-hover:flex absolute top-1/2 left-4 -translate-y-1/2 z-30 items-center justify-center w-10 h-10 rounded-full bg-black/30 text-white backdrop-blur-sm hover:bg-black/60 transition-all duration-300'
             >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                 </svg>
             </button>
 
             <button
                 onClick={nextSlide}
-                className='hidden group-hover:flex absolute top-1/2 right-4 -translate-y-1/2 z-30 
-                           items-center justify-center w-12 h-12 rounded-full 
-                           bg-black/30 text-white backdrop-blur-sm hover:bg-black/60 
-                           transition-all duration-300 hover:scale-110'
+                className='hidden group-hover:flex absolute top-1/2 right-4 -translate-y-1/2 z-30 items-center justify-center w-10 h-10 rounded-full bg-black/30 text-white backdrop-blur-sm hover:bg-black/60 transition-all duration-300'
             >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
             </button>
 
-            {/* DOTS */}
+            {/* PROGRESS DOTS */}
             <div className='flex justify-center py-2 absolute bottom-4 left-0 right-0 z-30'>
                 {slides.map((_, slideIndex) => (
                     <div
                         key={slideIndex}
                         onClick={() => goToSlide(slideIndex)}
-                        className={`h-2 rounded-full mx-1 cursor-pointer transition-all duration-300 ${
-                            currentIndex === slideIndex ? 'w-8 bg-blue-500' : 'w-2 bg-white/50 hover:bg-white'
+                        className={`h-1.5 rounded-full mx-1 cursor-pointer transition-all duration-300 ${
+                            currentIndex === slideIndex ? 'w-6 bg-blue-500' : 'w-1.5 bg-white/50 hover:bg-white'
                         }`}
                     ></div>
                 ))}

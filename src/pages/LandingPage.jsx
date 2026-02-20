@@ -24,6 +24,7 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
             .from('schemes')
             .select('*')
             .eq('active', true) // Only show active schemes
+            .eq('type', 'scheme')
             .neq('category', 'Poster')
             .order('id', { ascending: false }); // Newest first
         if (!error) setSchemes(data || []);

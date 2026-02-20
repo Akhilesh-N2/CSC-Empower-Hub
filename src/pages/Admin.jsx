@@ -24,6 +24,7 @@ function Admin() {
     const [pdfUploading, setPdfUploading] = useState(false);
     const [imageUploading, setImageUploading] = useState(false);
     const [slideImageUploading, setSlideImageUploading] = useState(false);
+    const [isEditingSlide, setIsEditingSlide] = useState(false);
     const [posterUploading, setPosterUploading] = useState(false);
     const [activeTab, setActiveTab] = useState('cards'); // 'cards' | 'carousel' | 'jobs' | 'users' | 'posters'
 
@@ -323,47 +324,33 @@ function Admin() {
     const handleSlideSubmit = async (e) => {
         e.preventDefault();
 
-        // 1. Prepare clean data WITHOUT the 'id' field
-        const slideFields = {
-            title: currentSlide.title || "Untitled",
-            description: currentSlide.description || "",
-            image: currentSlide.image,
-            link: currentSlide.link || "",
-            duration: parseInt(currentSlide.duration) || 5000,
-            object_fit: currentSlide.object_fit || 'cover'
+        // Destructure to pull 'id' out for the update query
+        const { id, ...slideData } = currentSlide;
+        const finalData = {
+            ...slideData,
+            duration: parseInt(slideData.duration) || 5000
         };
 
-        // Validation: Ensure an image exists
-        if (!slideFields.image) {
-            return alert("Please upload an image or video before adding the slide.");
-        }
-
         try {
-            const { error } = await supabase
-                .from('slides')
-                .insert([slideFields]); // insert the clean object without ID
+            if (isEditingSlide) {
+                const { error } = await supabase
+                    .from('slides')
+                    .update(finalData)
+                    .eq('id', id);
+                if (error) throw error;
+                alert("Slide updated successfully!");
+            } else {
+                const { error } = await supabase
+                    .from('slides')
+                    .insert([finalData]);
+                if (error) throw error;
+                alert("Slide added successfully!");
+            }
 
-            if (error) throw error;
-
-            alert("Slide Added successfully!");
-
-            // 2. Reset form
-            setCurrentSlide({
-                id: null,
-                title: '',
-                description: '',
-                image: '',
-                link: '',
-                duration: 5000,
-                object_fit: 'cover'
-            });
-
-            // 3. Refresh Data
+            cancelSlideEdit();
             fetchData();
-
         } catch (error) {
-            console.error("Carousel Error:", error.message);
-            alert("Error adding slide: " + error.message);
+            alert("Error: " + error.message);
         }
     };
 
@@ -372,6 +359,18 @@ function Admin() {
             await supabase.from('slides').delete().eq('id', id);
             fetchData();
         }
+    };
+
+    const handleEditSlide = (slide) => {
+        setCurrentSlide(slide);
+        setIsEditingSlide(true);
+        // Smooth scroll back to the top of the form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const cancelSlideEdit = () => {
+        setIsEditingSlide(false);
+        setCurrentSlide({ id: null, title: '', description: '', image: '', link: '', duration: 5000, object_fit: 'cover' });
     };
 
     // USER ACTIONS
@@ -597,12 +596,40 @@ function Admin() {
                                     <form onSubmit={handleSlideSubmit} className="grid grid-cols-1 gap-4">
                                         <input type="text" name="title" placeholder="Slide Title" required value={currentSlide.title} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
                                         <input type="text" name="description" placeholder="Short Description (Optional)" value={currentSlide.description} onChange={handleSlideInput} className="p-2 border rounded-lg w-full" />
-                                        <div className="border border-dashed border-gray-300 p-4 rounded-lg bg-gray-50">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Slide Image (Optional)</label>
-                                            <input type="file" accept="image/*, video/*" onChange={handleSlideImageUpload} className="block w-full text-sm text-gray-500" />
-                                            {slideImageUploading && <p className="text-sm text-blue-600 mt-2 animate-pulse">Uploading...</p>}
-                                            {currentSlide.image && <div className="mt-2"><p className="text-xs text-green-600 mb-1">✓ Media Attached</p>{isVideo(currentSlide.image) ? <video src={currentSlide.image} className="h-20 rounded border" muted autoPlay loop /> : <img src={currentSlide.image} alt="Preview" className="h-20 rounded border" />}</div>}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="border border-dashed border-gray-300 p-4 rounded-lg bg-gray-50">
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Slide Image (Optional)</label>
+                                                <input type="file" accept="image/*, video/*" onChange={handleSlideImageUpload} className="block w-full text-sm text-gray-500" />
+                                                {slideImageUploading && <p className="text-sm text-blue-600 mt-2 animate-pulse">Uploading...</p>}
+                                                {currentSlide.image && (
+                                                    <div className="mt-2">
+                                                        <p className="text-xs text-green-600 mb-1">✓ Media Attached</p>
+                                                        {isVideo(currentSlide.image) ? (
+                                                            <video src={currentSlide.image} className={`h-20 rounded border ${currentSlide.object_fit === 'contain' ? 'object-contain bg-black' : 'object-cover'}`} muted autoPlay loop />
+                                                        ) : (
+                                                            <img src={currentSlide.image} alt="Preview" className={`h-20 rounded border ${currentSlide.object_fit === 'contain' ? 'object-contain bg-black' : 'object-cover'}`} />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* CROP CONTROL DROPDOWN */}
+                                            <div className="flex flex-col justify-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                                <label className="block text-sm font-bold text-blue-800 mb-2">Image Scaling</label>
+                                                <select
+                                                    name="object_fit"
+                                                    value={currentSlide.object_fit}
+                                                    onChange={handleSlideInput}
+                                                    className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                >
+                                                    <option value="cover">Crop to Fill (Cover)</option>
+                                                    <option value="contain">Show Whole Image (Contain)</option>
+                                                </select>
+                                                <p className="text-[10px] text-blue-600 mt-2 italic">* Use 'Show Whole' for posters or images with important text on the edges.</p>
+                                            </div>
                                         </div>
+
                                         <div className="grid grid-cols-2 gap-4">
                                             <input name="link" placeholder="Link (Optional)" value={currentSlide.link} onChange={handleSlideInput} className="p-2 border rounded w-full" />
                                             <div className="flex items-center gap-2">
@@ -610,14 +637,57 @@ function Admin() {
                                                 <span className="text-sm text-gray-500">ms</span>
                                             </div>
                                         </div>
-                                        <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-full sm:w-fit">Add Slide</button>
+                                        <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 w-full sm:w-fit font-bold">Add Slide</button>
                                     </form>
                                 </div>
+
+                                {/* PREVIEW GRID */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {carouselSlides.map(s => (
-                                        <div key={s.id} className="relative group rounded-xl overflow-hidden shadow h-48 bg-black">
-                                            {isVideo(s.image) ? <video src={s.image} className={`w-full h-full ${s.object_fit === 'contain' ? 'object-contain' : 'object-cover'} opacity-90`} muted autoPlay loop playsInline /> : <img src={s.image} className={`w-full h-full ${s.object_fit === 'contain' ? 'object-contain' : 'object-cover'}`} alt="Slide" />}
-                                            <div className="absolute bottom-0 left-0 bg-black/60 text-white w-full p-2 flex justify-between"><p className="font-bold truncate w-2/3">{s.title || "Untitled"}</p><button onClick={() => deleteSlide(s.id)} className="bg-red-600 text-white p-1 rounded">🗑️</button></div>
+                                        <div key={s.id} className="relative group rounded-xl overflow-hidden shadow h-48 bg-slate-200 border border-gray-300">
+                                            {isVideo(s.image) ? (
+                                                <video
+                                                    src={s.image}
+                                                    className={`w-full h-full ${s.object_fit === 'contain' ? 'object-contain bg-black' : 'object-cover'}`}
+                                                    muted autoPlay loop playsInline
+                                                />
+                                            ) : (
+                                                <img
+                                                    src={s.image}
+                                                    className={`w-full h-full ${s.object_fit === 'contain' ? 'object-contain bg-black' : 'object-cover'}`}
+                                                    alt="Slide"
+                                                />
+                                            )}
+
+                                            {/* Label for Scaling Type */}
+                                            <div className="absolute top-2 left-2 z-10">
+                                                <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-md backdrop-blur-sm border border-white/20">
+                                                    {s.object_fit === 'contain' ? 'Whole' : 'Cropped'}
+                                                </span>
+                                            </div>
+
+                                            {/* ACTION BUTTONS (TOP RIGHT) */}
+                                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                                <button
+                                                    onClick={() => handleEditSlide(s)}
+                                                    className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
+                                                    title="Edit Slide"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteSlide(s.id)}
+                                                    className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-lg"
+                                                    title="Delete Slide"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div className="absolute bottom-0 left-0 bg-gradient-to-t from-black/80 to-transparent text-white w-full p-4">
+                                                <p className="font-bold truncate text-sm">{s.title || "Untitled"}</p>
+                                                <p className="text-[10px] text-gray-300">Duration: {s.duration}ms</p>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
