@@ -68,11 +68,11 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* <div className="flex flex-col md-flex-row justify-center">
+        <div className="flex flex-col md:flex-row justify-center">
           <p className="text-xs text-slate-500 leading-relaxed mt-4">
-            Want your own website like this? <a target='blank' href="https://www.linkedin.com/in/akhilesh-n-3a1056267" className="text-blue-400 hover:underline">Hire me</a> to get a custom-built site tailored to your needs!
+            Want your own website like this? <a target='blank' href="https://dossier-portfolio-zeta.vercel.app/" className="text-blue-400 hover:underline">Hire me</a> to get a custom-built site tailored to your needs!
           </p>
-        </div> */}
+        </div>
 
       </div>
     </footer>
