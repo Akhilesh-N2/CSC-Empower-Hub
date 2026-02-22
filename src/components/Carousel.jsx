@@ -131,6 +131,20 @@ function Carousel({ slides }) {
                             <div className="absolute inset-0 bg-black/5"></div>
                         </div>
 
+                        {/* --- NEW: ACTION BUTTON OVERLAY --- */}
+                        {slide.link && (
+                            <div className="absolute bottom-12 md:bottom-16 left-0 w-full flex justify-center z-30 pointer-events-auto">
+                                <a 
+                                    href={slide.link} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm md:text-base font-bold py-2.5 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105"
+                                >
+                                    Learn More
+                                </a>
+                            </div>
+                        )}
+
                         {/* 2. TIMER DISPLAY (Top Right) */}
                         <div className="absolute top-4 right-4 z-30">
                             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20">
