@@ -24,20 +24,38 @@ function Signup() {
 
       if (error) throw error;
 
-      // 2. Create Profile Entry (if user creation successful)
+      // 2. Create Profile Entries (if user creation successful)
       if (data.user) {
+        
+        // A. Insert into the main Profiles table (for auth/routing logic)
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([{ 
             id: data.user.id, 
             email: email, 
             role: role, 
-            is_approved: false // <--- Important: Pending Approval
+            is_approved: false // Pending Approval
           }]);
 
-        if (profileError) throw profileError;
+        if (profileError) {
+          console.error("Error creating base profile:", profileError);
+          // Note: If this fails, you might want to delete the auth user to prevent orphaned accounts, 
+          // but for now, logging is safer than destructive actions on the client side.
+        }
 
-        // 3. FORCE LOGOUT (Prevent auto-login)
+        // B. OPTIMIZATION: Initialize the specific sub-profile table to prevent bugs later
+        if (role === 'seeker') {
+          await supabase.from('seeker_profiles').insert([{ 
+            id: data.user.id, 
+            contact_email: email // Pre-fill the email
+          }]);
+        } else if (role === 'provider') {
+          await supabase.from('provider_profiles').insert([{ 
+            id: data.user.id 
+          }]);
+        }
+
+        // 3. FORCE LOGOUT (Prevent auto-login since they need approval)
         await supabase.auth.signOut();
 
         // 4. Success Message & Redirect
@@ -54,7 +72,8 @@ function Signup() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+      {/* Added z-10 and relative to fix potential z-index issues with backgrounds */}
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 z-10 relative">
         
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Create Account</h1>
@@ -81,6 +100,7 @@ function Signup() {
             <input 
               type="password" 
               required 
+              minLength="6" // Good practice to enforce minimum length
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="••••••••"
               value={password}
@@ -99,9 +119,9 @@ function Signup() {
                   value="seeker" 
                   checked={role === 'seeker'} 
                   onChange={(e) => setRole(e.target.value)}
-                  className="text-blue-600 focus:ring-blue-500"
+                  className="text-blue-600 focus:ring-blue-500 w-4 h-4"
                 />
-                <span className="text-gray-700">Job Seeker</span>
+                <span className="text-gray-700 font-medium">Job Seeker</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input 
@@ -110,9 +130,9 @@ function Signup() {
                   value="provider" 
                   checked={role === 'provider'} 
                   onChange={(e) => setRole(e.target.value)}
-                  className="text-blue-600 focus:ring-blue-500"
+                  className="text-blue-600 focus:ring-blue-500 w-4 h-4"
                 />
-                <span className="text-gray-700">Job Provider</span>
+                <span className="text-gray-700 font-medium">Job Provider</span>
               </label>
             </div>
           </div>

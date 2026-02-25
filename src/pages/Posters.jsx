@@ -9,18 +9,18 @@ function Posters() {
   useEffect(() => {
     // 1. Define the Fetch Function
     const fetchPosters = async () => {
-      // Note: We don't set loading(true) here to avoid flickering on updates
       const { data, error } = await supabase
         .from('schemes')
-        .select('*')
+        // OPTIMIZATION: Only fetch the 4 columns used in the UI
+        .select('id, image, title, category')
         .eq('active', true)
-        .eq('category', 'Poster') // Strict filter for Posters
+        .eq('category', 'Poster')
         .order('created_at', { ascending: false });
 
       if (error) console.error(error);
       else setPosters(data || []);
       
-      setLoading(false); // Only stop loading after the first fetch
+      setLoading(false); 
     };
 
     // 2. Initial Call
@@ -34,8 +34,6 @@ function Posters() {
         { event: '*', schema: 'public', table: 'schemes' },
         (payload) => {
           console.log('Poster change detected!', payload);
-          // Only re-fetch if the changed item might be a poster
-          // (Or just re-fetch everything to be safe and simple)
           fetchPosters();
         }
       )
@@ -47,7 +45,11 @@ function Posters() {
     };
   }, []);
 
-  // --- Download Function (Unchanged) ---
+  // --- Download Function ---
+  // Note: Since you are using Cloudinary now, downloading images via JS fetch() 
+  // might sometimes throw a CORS error depending on the browser. If users complain 
+  // they can't download, you might just want to open the image in a new tab:
+  // window.open(url, '_blank');
   const handleDownload = async (url, title) => {
     try {
       const response = await fetch(url);

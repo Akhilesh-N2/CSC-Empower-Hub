@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { supabase } from '../supabaseClient' // <--- Make sure this import path is correct
+import { supabase } from '../supabaseClient'
 import Search from '../components/Search'
 import SchemeCard from '../components/SchemeCard'
 import Carousel from '../components/Carousel'
 import SmartText from '../components/SmartText'
 
-function LandingPage() { // <--- Removed props, we fetch data internally now
+function LandingPage() { 
     // 1. STATE FOR DATA
     const [schemes, setSchemes] = useState([]);
     const [carouselSlides, setCarouselSlides] = useState([]);
@@ -22,11 +22,12 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
     const fetchSchemes = async () => {
         const { data, error } = await supabase
             .from('schemes')
-            .select('*')
-            .eq('active', true) // Only show active schemes
+            // OPTIMIZATION: Only fetch exactly what the SchemeCard needs
+            .select('id, image, title, category, description, visitUrl, downloadUrl') 
+            .eq('active', true) 
             .eq('type', 'scheme')
             .neq('category', 'Poster')
-            .order('id', { ascending: false }); // Newest first
+            .order('id', { ascending: false }); 
         if (!error) setSchemes(data || []);
     };
 
@@ -34,18 +35,17 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
     const fetchSlides = async () => {
         const { data, error } = await supabase
             .from('slides')
-            .select('*')
+            // OPTIMIZATION: Only fetch what the Carousel needs
+            .select('id, image, title, description, link, duration, object_fit') 
             .order('id', { ascending: true });
         if (!error) setCarouselSlides(data || []);
     };
 
     // --- REAL-TIME SUBSCRIPTION ---
     useEffect(() => {
-        // A. Initial Load
         fetchSchemes();
         fetchSlides();
 
-        // B. Set up Realtime Listener
         const channel = supabase
             .channel('landing-page-updates')
             .on(
@@ -66,20 +66,18 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
             )
             .subscribe();
 
-        // C. Cleanup
         return () => {
             supabase.removeChannel(channel);
         };
     }, []);
 
 
-    // --- FILTERING LOGIC (Unchanged) ---
+    // --- FILTERING LOGIC ---
     const categories = useMemo(() => ["All", ...Array.from(new Set(schemes.map(item => item?.category).filter(Boolean)))], [schemes]);
 
     const filteredSchemes = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         return schemes.filter((scheme) => {
-            // Note: We already filtered 'active' in the SQL query, but double-checking is fine
             if (!scheme) return false;
 
             const categoryMatch = selectedCategory === "All" || scheme.category === selectedCategory;
@@ -98,7 +96,6 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
 
     const handleSearch = (query) => setSearchQuery(query);
 
-    // Reset to Page 1 on filter change
     useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery, selectedCategory]);
@@ -108,10 +105,6 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
         <div className="bg-gray-50 min-h-screen">
             {/* HERO / CAROUSEL */}
             <div className="bg-gradient-to-r from-sky-50 via-white to-white pb-6">
-                {/* Only render the Carousel if there is at least one slide. 
-       Adding a unique key based on length forces React to 
-       re-evaluate correctly when data arrives.
-    */}
                 {carouselSlides && carouselSlides.length > 0 ? (
                     <Carousel slides={carouselSlides} key={`carousel-${carouselSlides.length}`} />
                 ) : (
@@ -167,7 +160,7 @@ function LandingPage() { // <--- Removed props, we fetch data internally now
                         currentSchemes.map(scheme => (
                             <div key={scheme.id} className="w-full">
                                 <SchemeCard
-                                    image={scheme.image} // Changed from scheme.image_url if your DB uses 'image'
+                                    image={scheme.image} 
                                     title={scheme.title}
                                     category={scheme.category}
                                     description={scheme.description}

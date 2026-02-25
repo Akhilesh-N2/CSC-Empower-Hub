@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../supabaseClient'; // Import Supabase
-import { Search, Folder, Download, X, ArrowLeft, FileText } from 'lucide-react'; // Assuming you use lucide-react
+import { supabase } from '../supabaseClient'; 
+import { Search, Folder, Download, X, ArrowLeft, FileText } from 'lucide-react'; 
 
 function FormsPage() {
     // 1. DATA STATE
@@ -14,14 +14,14 @@ function FormsPage() {
     // --- FETCH & REAL-TIME LOGIC ---
     useEffect(() => {
         const fetchForms = async () => {
-            // We fetch ALL active schemes here, then filter locally
             const { data, error } = await supabase
                 .from('schemes')
-                .select('*')
+                // OPTIMIZATION 1: Only fetch exactly the columns this UI needs
+                .select('id, category, title, description, downloadUrl')
                 .eq('active', true)
                 .eq('type', 'form')
-                // Optional: If you only want "Forms" category items, filter here. 
-                // But your UI suggests you have sub-categories like "Housing", "Loan", etc.
+                // OPTIMIZATION 2: Don't waste bandwidth downloading forms that have no PDF
+                .not('downloadUrl', 'is', null) 
                 .order('title', { ascending: true });
 
             if (error) console.error(error);
@@ -48,18 +48,16 @@ function FormsPage() {
     }, []);
 
     // --- DERIVED DATA ---
-    // Extract unique categories dynamically from the fetched data
     const categories = useMemo(() => {
         const cats = schemes.map(s => s.category).filter(Boolean);
         return [...new Set(cats)].sort();
     }, [schemes]);
 
-    // Helper: Count active forms per category
-    const getCount = (cat) => schemes.filter(s => s.category === cat && s.downloadUrl).length;
+    // Helper: Count active forms per category (Simplified since DB already filtered empty URLs)
+    const getCount = (cat) => schemes.filter(s => s.category === cat).length;
 
     // Filter Logic
     const currentList = schemes.filter(scheme => {
-        if (!scheme.downloadUrl) return false; // Safety check
         const matchesSearch = scheme.title.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = activeCategory ? scheme.category === activeCategory : true;
         return matchesSearch && matchesCategory;

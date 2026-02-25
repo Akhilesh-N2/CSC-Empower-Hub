@@ -19,22 +19,38 @@ function EditProfile() {
     // Load existing profile if they have one
     useEffect(() => {
         const loadProfile = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            try {
+                const { data: { user }, error: authError } = await supabase.auth.getUser();
+                if (authError || !user) return; // Exit cleanly if not logged in
 
-            const { data, error } = await supabase
-                .from('seeker_profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
+                const { data, error } = await supabase
+                    .from('seeker_profiles')
+                    .select('*') // Correct use of '*' to populate the whole form
+                    .eq('id', user.id)
+                    .single();
 
-            if (data) {
-                setFormData({
-                    ...data,
-                    skills: data.skills.join(', ') // Convert array back to string for input
-                });
+                if (error && error.code !== 'PGRST116') {
+                    // PGRST116 means "No rows found" (e.g., brand new user). We ignore that.
+                    console.error("Error loading profile:", error);
+                } else if (data) {
+                    // OPTIMIZATION: Safely handle null values to prevent React crashes
+                    setFormData({
+                        full_name: data.full_name || '',
+                        title: data.title || '',
+                        phone: data.phone || '',
+                        // Check if skills exist and is an array before calling join
+                        skills: (data.skills && Array.isArray(data.skills)) ? data.skills.join(', ') : '', 
+                        experience: data.experience || '',
+                        location: data.location || '',
+                        bio: data.bio || '',
+                        contact_email: data.contact_email || ''
+                    });
+                }
+            } catch (err) {
+                console.error("Unexpected error loading profile:", err);
             }
         };
+        
         loadProfile();
     }, []);
 
@@ -44,22 +60,28 @@ function EditProfile() {
         e.preventDefault();
         setLoading(true);
 
-        const { data: { user } } = await supabase.auth.getUser();
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("You must be logged in to update your profile.");
 
-        const updates = {
-            id: user.id,
-            ...formData,
-            skills: formData.skills.split(',').map(s => s.trim()), // Convert string to array
-            updated_at: new Date()
-        };
+            const updates = {
+                id: user.id,
+                ...formData,
+                // Clean up the skills array: split by comma, trim whitespace, and remove empty entries
+                skills: formData.skills.split(',').map(s => s.trim()).filter(s => s !== ''), 
+                updated_at: new Date()
+            };
 
-        const { error } = await supabase.from('seeker_profiles').upsert(updates);
+            const { error } = await supabase.from('seeker_profiles').upsert(updates);
+            if (error) throw error;
 
-        setLoading(false);
-        if (error) alert(error.message);
-        else {
             alert("Profile Updated!");
-            navigate('/profile'); // Send them back to job search
+            navigate('/profile'); 
+            
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -121,7 +143,7 @@ function EditProfile() {
                         </div>
                     </div>
 
-                    <button disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-bold">
+                    <button disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-bold disabled:bg-blue-300 transition-colors">
                         {loading ? "Saving..." : "Save Profile"}
                     </button>
 

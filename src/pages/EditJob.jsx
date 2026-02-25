@@ -24,15 +24,25 @@ function EditJob() {
     const fetchJob = async () => {
       const { data, error } = await supabase
         .from('jobs')
-        .select('*')
+        .select('*') // Correct use of '*' since we need all fields for the form
         .eq('id', id)
         .single();
 
       if (error) {
         alert("Error loading job.");
         navigate('/my-jobs');
-      } else {
-        setJobData(data);
+      } else if (data) {
+        // OPTIMIZATION: Convert nulls to empty strings to prevent React warnings
+        setJobData({
+          title: data.title || '',
+          company: data.company || '',
+          location: data.location || '',
+          salary: data.salary || '',
+          description: data.description || '',
+          type: data.type || 'Full-time',
+          contact_phone: data.contact_phone || '',
+          contact_email: data.contact_email || ''
+        });
         setLoading(false);
       }
     };
@@ -81,8 +91,6 @@ function EditJob() {
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Edit Job</h2>
         
         <form className="space-y-5" onSubmit={handleUpdate}>
-          {/* Reuse the input structure from PostJob, but simplified here for brevity */}
-          
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Job Title</label>
             <input name="title" value={jobData.title} onChange={handleChange} className="w-full p-2 border rounded" required />
@@ -130,7 +138,7 @@ function EditJob() {
           </div>
 
           <div className="flex gap-4 pt-4">
-            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 w-full">
+            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 w-full disabled:bg-blue-300">
               {saving ? "Saving..." : "Update Job"}
             </button>
             <button type="button" onClick={() => navigate('/my-jobs')} className="bg-gray-200 text-gray-700 px-6 py-2 rounded font-bold hover:bg-gray-300">

@@ -5,7 +5,7 @@ import { Search, MapPin, Briefcase, IndianRupee, Filter, Phone, Mail } from 'luc
 function JobSearch() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isFilterOpen, setIsFilterOpen] = useState(false); // Mobile toggle
+  const [isFilterOpen, setIsFilterOpen] = useState(false); 
 
   // --- FILTERS STATE ---
   const [filters, setFilters] = useState({
@@ -15,7 +15,7 @@ function JobSearch() {
     type: ''
   });
 
-  // --- HELPER 1: SMART SALARY PARSER (Range Support) ---
+  // --- HELPER 1: SMART SALARY PARSER ---
   const parseMaxSalary = (salaryInput) => {
     if (!salaryInput) return 0;
     const str = String(salaryInput).toLowerCase().replace(/,/g, '');
@@ -46,26 +46,22 @@ function JobSearch() {
   // --- 1. FETCH & REAL-TIME LISTENERS ---
   useEffect(() => {
     const fetchJobs = async () => {
-      // Note: We don't set loading(true) here to avoid UI flickering on updates
-      
       const { data, error } = await supabase
         .from('jobs')
-        .select('*')
+        // OPTIMIZATION: Only fetch columns displayed on the job card to save bandwidth
+        .select('id, title, company, type, location, salary, description, contact_phone, contact_email')
         .eq('is_active', true) 
         .order('created_at', { ascending: false });
 
       if (error) console.error(error);
       else setJobs(data || []);
       
-      // Stop loading only after the initial fetch
       setLoading(false);
     };
 
-    // A. Initial Load
-    setLoading(true); // Set loading true explicitly before first fetch
+    setLoading(true); 
     fetchJobs();
 
-    // B. Real-Time Subscription
     const channel = supabase
       .channel('public-job-board')
       .on(
@@ -73,12 +69,11 @@ function JobSearch() {
         { event: '*', schema: 'public', table: 'jobs' }, 
         (payload) => {
           console.log('Job board updated!', payload);
-          fetchJobs(); // Re-fetch silently when data changes
+          fetchJobs(); 
         }
       )
       .subscribe();
 
-    // C. Cleanup
     return () => {
       supabase.removeChannel(channel);
     };
@@ -86,13 +81,17 @@ function JobSearch() {
 
   // --- 2. FILTER LOGIC ---
   const filteredJobs = jobs.filter(job => {
-    // A. Category (Partial match)
+    // OPTIMIZATION: Protect against null values crashing the .toLowerCase() logic
+    const safeTitle = job.title || "";
+    const safeLocation = job.location || "";
+
+    // A. Category (Partial match on title)
     const matchCategory = filters.category === '' || 
-                          job.title.toLowerCase().includes(filters.category.toLowerCase());
+                          safeTitle.toLowerCase().includes(filters.category.toLowerCase());
     
     // B. Location (Partial match)
     const matchLocation = filters.location === '' || 
-                          job.location.toLowerCase().includes(filters.location.toLowerCase());
+                          safeLocation.toLowerCase().includes(filters.location.toLowerCase());
 
     // C. Salary (Checks MAX potential vs Filter)
     const jobMaxSalary = parseMaxSalary(job.salary); 
@@ -231,11 +230,11 @@ function JobSearch() {
                 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 leading-tight">{job.title}</h2>
-                    <p className="text-blue-600 font-medium">{job.company}</p>
+                  <div className="min-w-0 pr-2">
+                    <h2 className="text-xl font-bold text-gray-900 leading-tight truncate" title={job.title}>{job.title || "Untitled Job"}</h2>
+                    <p className="text-blue-600 font-medium truncate" title={job.company}>{job.company || "Company Name Hidden"}</p>
                   </div>
-                  <span className="px-2 py-1 bg-green-50 text-green-700 text-xs font-bold uppercase rounded-full border border-green-100">
+                  <span className="px-2 py-1 bg-green-50 text-green-700 text-xs font-bold uppercase rounded-full border border-green-100 shrink-0">
                     {job.type || 'Full-time'}
                   </span>
                 </div>
@@ -243,15 +242,18 @@ function JobSearch() {
                 {/* Details */}
                 <div className="space-y-3 mb-6 flex-1">
                   <div className="flex items-center text-gray-600 text-sm">
-                    <MapPin size={16} className="mr-2 text-gray-400"/> {job.location}
+                    <MapPin size={16} className="mr-2 text-gray-400 shrink-0"/> 
+                    <span className="truncate" title={job.location}>{job.location || "Location not specified"}</span>
                   </div>
                   <div className="flex items-center text-gray-600 text-sm">
-                    <IndianRupee size={16} className="mr-2 text-gray-400"/> 
-                    {formatSalary(job.salary)}
+                    <IndianRupee size={16} className="mr-2 text-gray-400 shrink-0"/> 
+                    <span className="truncate" title={job.salary}>{formatSalary(job.salary)}</span>
                   </div>
-                  <p className="text-gray-500 text-sm line-clamp-4 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    {job.description}
-                  </p>
+                  
+                  {/* OPTIMIZATION: Changed <p> to <div> to avoid HTML nesting errors if description contains line breaks */}
+                  <div className="text-gray-500 text-sm line-clamp-4 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    {job.description || "No description provided."}
+                  </div>
                 </div>
 
                 {/* --- CONTACT INFO --- */}
@@ -259,10 +261,10 @@ function JobSearch() {
                    {/* Phone */}
                    {job.contact_phone ? (
                      <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                       <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                       <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0">
                           <Phone size={14} />
                        </div>
-                       <span className="select-all">{job.contact_phone}</span>
+                       <span className="select-all truncate" title={job.contact_phone}>{job.contact_phone}</span>
                      </div>
                    ) : (
                       <span className="text-xs text-gray-400 italic pl-1">No phone number provided</span>
@@ -271,10 +273,10 @@ function JobSearch() {
                    {/* Email */}
                    {job.contact_email ? (
                      <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
                           <Mail size={14} />
                        </div>
-                       <span className="truncate select-all">{job.contact_email}</span>
+                       <span className="truncate select-all" title={job.contact_email}>{job.contact_email}</span>
                      </div>
                    ) : (
                       <span className="text-xs text-gray-400 italic pl-1">No email provided</span>

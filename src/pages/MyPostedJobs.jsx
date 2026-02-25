@@ -14,8 +14,9 @@ function MyPostedJobs() {
       if (user) {
         const { data, error } = await supabase
           .from('jobs')
-          .select('*')
-          .eq('provider_id', user.id) // <--- KEY: Filter by my ID
+          // OPTIMIZATION: Only select the columns used to render the card
+          .select('id, title, company, is_active, location, salary, type, description, admin_override')
+          .eq('provider_id', user.id) 
           .order('created_at', { ascending: false });
 
         if (error) console.error(error);
@@ -33,16 +34,14 @@ function MyPostedJobs() {
     try {
       const { error } = await supabase.from('jobs').delete().eq('id', id);
       if (error) throw error;
-      setJobs(jobs.filter(job => job.id !== id)); // Remove from UI
+      setJobs(jobs.filter(job => job.id !== id)); 
     } catch (error) {
       alert("Error deleting job: " + error.message);
     }
   };
 
-  // 3. Toggle Active Status
   // 3. Toggle Active Status (With Admin Check)
   const toggleStatus = async (id, currentStatus, adminOverride) => {
-
     // IF user is trying to Activate, but Admin has locked it -> BLOCK ACTION
     if (!currentStatus && adminOverride) {
       alert("⚠️ This job was disabled by an Administrator.\nYou cannot reactivate it. Please contact support.");
@@ -91,11 +90,11 @@ function MyPostedJobs() {
 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900 leading-tight">{job.title}</h2>
-                    <p className="text-sm text-blue-600 font-medium">{job.company}</p>
+                  <div className="min-w-0 pr-2">
+                    <h2 className="text-lg font-bold text-gray-900 leading-tight truncate" title={job.title}>{job.title}</h2>
+                    <p className="text-sm text-blue-600 font-medium truncate" title={job.company}>{job.company}</p>
                   </div>
-                  <span className={`px-2 py-1 text-xs font-bold rounded uppercase ${job.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  <span className={`px-2 py-1 text-xs font-bold rounded uppercase shrink-0 ${job.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {job.is_active ? 'Active' : 'Hidden'}
                   </span>
                 </div>
@@ -103,15 +102,16 @@ function MyPostedJobs() {
                 {/* Info */}
                 <div className="space-y-2 text-sm text-gray-600 mb-6 flex-1">
                   <div className="flex items-center gap-2">
-                    <MapPin size={16} /> {job.location}
+                    <MapPin size={16} className="shrink-0" /> <span className="truncate" title={job.location}>{job.location}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <IndianRupee size={16} /> {job.salary || "Not Disclosed"}
+                    <IndianRupee size={16} className="shrink-0" /> <span className="truncate" title={job.salary}>{job.salary || "Not Disclosed"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Briefcase size={16} /> {job.type}
+                    <Briefcase size={16} className="shrink-0" /> <span className="truncate">{job.type}</span>
                   </div>
-                  <p className="line-clamp-2 mt-2 text-gray-500">{job.description}</p>
+                  {/* Changed <p> to <div> for block-level safety if description has line breaks */}
+                  <div className="line-clamp-2 mt-2 text-gray-500">{job.description}</div>
                 </div>
 
                 {/* Actions */}

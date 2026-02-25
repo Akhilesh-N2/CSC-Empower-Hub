@@ -1,24 +1,26 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useGoogleLang } from '../hooks/useGoogleLang';
 
-function SmartText({ en, ml, children }) {
+const SmartText = ({ en, ml, children, className = "" }) => {
     const currentLang = useGoogleLang();
     const englishText = en || children;
 
-    // 1. If User is in Malayalam, show YOUR custom word
+    // 1. Malayalam custom text
     if (currentLang === 'ml' && ml) {
         return (
-            <span className="notranslate text-inherit">
+            <span className={`notranslate ${className}`}>
                 {ml}
             </span>
         );
     }
 
-    // 2. If User is in any other language (English, Hindi, etc.), 
-    // just render the English text and let Google auto-translate it.
+    // 2. English / Other languages
+    // FIX: Always wrap in a span to give React a stable parent node
     return (
-        <span>{englishText}</span>
+        <span className={className}>
+            {englishText}
+        </span>
     );
-}
+};
 
-export default SmartText;
+export default memo(SmartText);

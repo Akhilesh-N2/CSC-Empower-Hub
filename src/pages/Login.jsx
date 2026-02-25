@@ -14,19 +14,25 @@ function Login() {
 
     try {
       // 1. Sign In
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
 
       // 2. Check Role & Approval
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role, is_approved')
-        .eq('id', data.user.id)
+        .eq('id', authData.user.id)
         .single();
+
+      // OPTIMIZATION: Handle missing profiles gracefully
+      if (profileError) {
+        await supabase.auth.signOut();
+        throw new Error("Your account profile is incomplete. Please contact support or try signing up again.");
+      }
 
       // 3. Approval Check
       if (!profile?.is_approved) {
@@ -49,7 +55,8 @@ function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+      {/* Note: The outer div had a nesting issue with the background, so I adjusted the layout slightly for safety */}
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 z-10 relative">
         
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Welcome Back</h1>

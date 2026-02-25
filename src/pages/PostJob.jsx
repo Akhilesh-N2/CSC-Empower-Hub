@@ -5,43 +5,47 @@ import { useNavigate } from 'react-router-dom';
 function PostJob() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [profile, setProfile] = useState(null); // Store provider profile data
+  const [profile, setProfile] = useState(null); 
 
   // Form State
   const [jobData, setJobData] = useState({
     title: '',
-    company: '',       // If empty, use profile.company_name
-    location: '',      // If empty, use profile.location
+    company: '',       
+    location: '',      
     salary: '',
     description: '',
     type: 'Full-time',
-    contact_phone: '', // If empty, use profile.contact_phone
-    contact_email: ''  // If empty, use auth email
+    contact_phone: '', 
+    contact_email: ''  
   });
 
   // 1. Fetch Provider Profile on Load
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Get generic profile (for email)
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) return;
+
+        // Get generic profile (for email) - using maybeSingle to prevent errors if missing
         const { data: genericProfile } = await supabase
           .from('profiles')
           .select('email')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-        // Get provider details (for company name, location, phone)
+        // Get provider details - using maybeSingle!
         const { data: providerProfile } = await supabase
           .from('provider_profiles')
-          .select('*')
+          .select('company_name, location, contact_phone') // OPTIMIZATION: Only fetch what we need for defaults
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         setProfile({
-          email: genericProfile?.email,
+          email: genericProfile?.email || user.email, // Fallback to auth email if profile is blank
           ...providerProfile
         });
+      } catch (err) {
+        console.error("Error fetching provider defaults:", err);
       }
     };
     fetchProfile();
@@ -61,17 +65,17 @@ function PostJob() {
       if (!user) throw new Error("You must be logged in to post a job.");
 
       // --- SMART DEFAULTS LOGIC ---
-      // If the field is empty, fallback to the profile data.
       const finalJobData = {
         title: jobData.title,
         salary: jobData.salary,
         description: jobData.description,
         type: jobData.type,
         provider_id: user.id,
+        is_active: true, // Explicitly setting this in case DB defaults are off
         
         // Smart Fields: Use input OR fallback to profile
-        company: jobData.company || profile?.company_name || "Unknown Company",
-        location: jobData.location || profile?.location || "Remote",
+        company: jobData.company || profile?.company_name || "Independent Provider",
+        location: jobData.location || profile?.location || "Not Specified",
         contact_phone: jobData.contact_phone || profile?.contact_phone || "",
         contact_email: jobData.contact_email || profile?.email || user.email
       };
@@ -83,7 +87,7 @@ function PostJob() {
       if (error) throw error;
 
       alert("Job posted successfully!");
-      navigate('/find-talent'); // Redirect to dashboard or listing
+      navigate('/my-jobs'); // Changed to /my-jobs so they see the job they just posted!
 
     } catch (error) {
       alert("Error posting job: " + error.message);
@@ -204,6 +208,7 @@ function PostJob() {
               <textarea 
                 name="description" 
                 rows="4"
+                required
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 placeholder="Describe the role and responsibilities..."
                 onChange={handleChange}

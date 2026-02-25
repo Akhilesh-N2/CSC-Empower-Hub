@@ -5,13 +5,13 @@ import { Search, MapPin, Briefcase, Phone, Mail, Filter, UserCheck } from 'lucid
 function FindCandidates() {
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isFilterOpen, setIsFilterOpen] = useState(false); // Mobile toggle
+  const [isFilterOpen, setIsFilterOpen] = useState(false); 
 
   // --- FILTER STATE ---
   const [filters, setFilters] = useState({
-    keyword: '',    // Matches Title or Skills
+    keyword: '',    
     location: '',
-    experience: ''  // Simple text match like "2 years"
+    experience: ''  
   });
 
   // --- 1. FETCH CANDIDATES ---
@@ -20,8 +20,9 @@ function FindCandidates() {
       setLoading(true);
       const { data, error } = await supabase
         .from('seeker_profiles')
-        .select('*')
-        .order('updated_at', { ascending: false }); // Show recently active first
+        // OPTIMIZATION: Only fetch the columns used in the card and the filters
+        .select('id, full_name, title, location, experience, skills, contact_email, phone') 
+        .order('updated_at', { ascending: false }); 
 
       if (error) console.error(error);
       else setCandidates(data || []);
@@ -32,19 +33,24 @@ function FindCandidates() {
 
   // --- 2. FILTER LOGIC ---
   const filteredCandidates = candidates.filter(person => {
+    // OPTIMIZATION: Safe default fallbacks to prevent .toLowerCase() crashes on null fields
+    const safeTitle = person.title || "";
+    const safeLocation = person.location || "";
+    const safeExperience = person.experience || "";
+
     // A. Keyword (Checks Title AND Skills)
     const searchLower = filters.keyword.toLowerCase();
     const matchesKeyword = filters.keyword === '' || 
-                           person.title.toLowerCase().includes(searchLower) ||
+                           safeTitle.toLowerCase().includes(searchLower) ||
                            (person.skills && person.skills.some(s => s.toLowerCase().includes(searchLower)));
 
     // B. Location
     const matchesLocation = filters.location === '' || 
-                            person.location.toLowerCase().includes(filters.location.toLowerCase());
+                            safeLocation.toLowerCase().includes(filters.location.toLowerCase());
 
-    // C. Experience (Text Match)
+    // C. Experience 
     const matchesExperience = filters.experience === '' || 
-                              person.experience.toLowerCase().includes(filters.experience.toLowerCase());
+                              safeExperience.toLowerCase().includes(filters.experience.toLowerCase());
 
     return matchesKeyword && matchesLocation && matchesExperience;
   });
@@ -131,7 +137,6 @@ function FindCandidates() {
         </div>
       </aside>
 
-
       {/* --- RIGHT SIDE: CANDIDATE LIST --- */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">
@@ -157,21 +162,21 @@ function FindCandidates() {
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xl uppercase shrink-0">
                     {person.full_name ? person.full_name[0] : '?'}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-800 leading-tight">{person.full_name}</h3>
-                    <p className="text-blue-600 font-medium text-sm">{person.title}</p>
+                  <div className="min-w-0"> {/* min-w-0 fixes truncation issues in flex/grid children */}
+                    <h3 className="font-bold text-lg text-gray-800 leading-tight truncate" title={person.full_name}>{person.full_name || "Anonymous User"}</h3>
+                    <p className="text-blue-600 font-medium text-sm truncate" title={person.title}>{person.title || "No Title Set"}</p>
                   </div>
                 </div>
 
                 {/* Details */}
                 <div className="space-y-3 text-sm text-gray-600 mb-4 border-b border-gray-50 pb-4">
                   <div className="flex items-center gap-2">
-                    <Briefcase size={16} className="text-gray-400" /> 
-                    <span className="font-medium text-gray-700">{person.experience}</span>
+                    <Briefcase size={16} className="text-gray-400 shrink-0" /> 
+                    <span className="font-medium text-gray-700 truncate" title={person.experience}>{person.experience || "Not specified"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <MapPin size={16} className="text-gray-400" /> 
-                    <span className="font-medium text-gray-700">{person.location}</span>
+                    <MapPin size={16} className="text-gray-400 shrink-0" /> 
+                    <span className="font-medium text-gray-700 truncate" title={person.location}>{person.location || "Not specified"}</span>
                   </div>
                 </div>
 
@@ -187,18 +192,21 @@ function FindCandidates() {
                       +{person.skills.length - 4} more
                     </span>
                   )}
+                  {(!person.skills || person.skills.length === 0) && (
+                    <span className="text-xs text-gray-400 italic">No skills listed</span>
+                  )}
                 </div>
 
                 {/* Contact Footer */}
                 <div className="mt-auto pt-2 space-y-2">
                   <div className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
-                    <Mail size={16} className="text-gray-400" />
-                    <span className="text-gray-800 truncate">{person.contact_email}</span>
+                    <Mail size={16} className="text-gray-400 shrink-0" />
+                    <span className="text-gray-800 truncate" title={person.contact_email}>{person.contact_email || "No email"}</span>
                   </div>
                   {person.phone && (
                     <div className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
-                      <Phone size={16} className="text-gray-400" />
-                      <span className="text-gray-800">{person.phone}</span>
+                      <Phone size={16} className="text-gray-400 shrink-0" />
+                      <span className="text-gray-800 truncate">{person.phone}</span>
                     </div>
                   )}
                 </div>

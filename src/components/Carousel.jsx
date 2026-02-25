@@ -5,7 +5,7 @@ function Carousel({ slides }) {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [isPaused, setIsPaused] = useState(false); // NEW: Track pause state
+  const [isPaused, setIsPaused] = useState(false);
 
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
@@ -53,19 +53,19 @@ function Carousel({ slides }) {
     if (isRightSwipe) prevSlide();
   };
 
-  // --- EFFECT 1: Reset Timer & Unpause on Slide Change ---
+  // --- EFFECT 1: Slide Reset Logic ---
   useEffect(() => {
     const currentSlide = slides[currentIndex];
     const durationSec = (currentSlide.duration || 5000) / 1000;
 
-    setTimeLeft(durationSec);
-    setIsPaused(false); // Always start playing when a new slide appears
+    setTimeLeft(Math.ceil(durationSec));
+    setIsPaused(false); 
 
-    // Reset video to start
     videoRefs.current.forEach((video, index) => {
       if (video) {
         if (index === currentIndex) {
           video.currentTime = 0;
+          if (!isPaused) video.play().catch(() => {});
         } else {
           video.pause();
         }
@@ -73,26 +73,14 @@ function Carousel({ slides }) {
     });
   }, [currentIndex, slides]);
 
-  // --- EFFECT 2: Handle Autoplay (Intervals & Video) ---
+  // --- EFFECT 2: Timer & Autoplay ---
   useEffect(() => {
+    if (isPaused) return;
+
     const currentSlide = slides[currentIndex];
     const isVideoSlide = isVideo(currentSlide.image);
-    const currentVideo = videoRefs.current[currentIndex];
 
-    // 1. Video Playback Control
-    if (isVideoSlide) {
-      if (currentVideo) {
-        if (isPaused) {
-          currentVideo.pause();
-        } else {
-          currentVideo.play().catch((e) => console.log("Autoplay blocked:", e));
-        }
-      }
-      return; // Exit here, video handles its own timing
-    }
-
-    // 2. Image Timer Control
-    if (isPaused) return; // Do nothing if paused
+    if (isVideoSlide) return; // Video uses onTimeUpdate for timer
 
     const intervalID = setInterval(() => {
       setTimeLeft((prev) => {
@@ -105,11 +93,11 @@ function Carousel({ slides }) {
     }, 1000);
 
     return () => clearInterval(intervalID);
-  }, [currentIndex, slides, isPaused]); // This effect reacts to isPaused changing
+  }, [currentIndex, slides, isPaused]);
 
   return (
     <div
-      className="h-[400px] md:h-[550px] w-full m-auto relative group bg-white"
+      className="h-[300px] sm:h-[400px] md:h-[550px] w-full m-auto relative group bg-black"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -130,19 +118,19 @@ function Carousel({ slides }) {
                   src={slide.image}
                   muted
                   playsInline
+                  autoPlay
+                  loop={false}
                   onEnded={nextSlide}
                   onTimeUpdate={(e) => {
-                    const remaining = Math.ceil(
-                      e.target.duration - e.target.currentTime,
-                    );
-                    if (remaining >= 0 && !isPaused) setTimeLeft(remaining);
+                    const remaining = Math.ceil(e.target.duration - e.target.currentTime);
+                    if (remaining >= 0 && !isPaused && index === currentIndex) setTimeLeft(remaining);
                   }}
                   className={`w-full h-full ${slide.object_fit === "contain" ? "object-contain" : "object-cover"} object-center pointer-events-none`}
                 />
               ) : (
                 <img
                   src={slide.image}
-                  alt={slide.title}
+                  alt={slide.title || "Carousel slide"}
                   className={`w-full h-full ${slide.object_fit === "contain" ? "object-contain" : "object-cover"} object-center pointer-events-none`}
                 />
               )}
@@ -150,73 +138,41 @@ function Carousel({ slides }) {
               {/* Clickable Overlay for Pausing */}
               <div
                 onClick={() => setIsPaused(!isPaused)}
-                className="absolute inset-0 bg-black/5 cursor-pointer pointer-events-auto group/pausebox"
+                className="absolute inset-0 bg-black/5 cursor-pointer pointer-events-auto group/pausebox z-20"
               >
-                {/* Custom Hover/Pause Badge */}
+                {/* Pause/Resume Badge */}
                 <div
                   className={`
-        absolute bottom-12 left-1/2 -translate-x-1/2 
-        transform transition-all duration-300 pointer-events-none
-        ${isPaused ? "opacity-100 scale-100" : "opacity-0 scale-95 group-hover/pausebox:opacity-100 group-hover/pausebox:scale-100"}
-        bg-black/45 text-white px-5 py-2.5 rounded-full backdrop-blur-md shadow-lg font-bold text-xs tracking-wide flex items-center gap-2
-    `}
+                    absolute bottom-20 left-1/2 -translate-x-1/2 
+                    transform transition-all duration-300 pointer-events-none
+                    ${isPaused ? "opacity-100 scale-100" : "opacity-0 scale-95 group-hover/pausebox:opacity-100 group-hover/pausebox:scale-100"}
+                    bg-black/60 text-white px-5 py-2.5 rounded-full backdrop-blur-md shadow-xl font-bold text-xs tracking-wide flex items-center gap-2
+                  `}
                 >
-                  {isPaused ? (
-                    <>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Resume
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Pause
-                    </>
-                  )}
+                  {isPaused ? "Resume Slide" : "Pause Slide"}
                 </div>
               </div>
             </div>
 
-            {/* --- ACTION BUTTON OVERLAY --- */}
-            {slide.link && (
-              <div className="absolute bottom-12 md:bottom-10 left-0 w-full flex px-53 z-30 pointer-events-none">
+            {/* 2. ACTION BUTTON */}
+            {slide.link && index === currentIndex && (
+              <div className="absolute bottom-10 left-0 w-full flex justify-center z-30">
                 <a
                   href={slide.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm md:text-base font-bold py-2.5 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105 pointer-events-auto"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm md:text-base font-bold py-3 px-10 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95"
                 >
                   Learn More
                 </a>
               </div>
             )}
 
-            {/* 2. TIMER DISPLAY (Top Right) */}
+            {/* 3. TIMER DISPLAY */}
             <div className="absolute top-4 right-4 z-30 pointer-events-none">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 transition-all">
-                <span className="text-white text-xs font-bold notranslate">
-                  {`${timeLeft}s`}
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20">
+                <span className="text-white text-[10px] font-black notranslate">
+                  {timeLeft}s
                 </span>
               </div>
             </div>
@@ -224,59 +180,35 @@ function Carousel({ slides }) {
         ))}
       </div>
 
-      {/* NAVIGATION CONTROLS */}
+      {/* NAVIGATION CONTROLS (Desktop Only) */}
       <button
         onClick={prevSlide}
-        className="hidden group-hover:flex absolute top-1/2 left-4 -translate-y-1/2 z-30 items-center justify-center w-10 h-10 rounded-full bg-black/30 text-white backdrop-blur-sm hover:bg-black/60 transition-all duration-300 pointer-events-auto"
+        className="hidden md:group-hover:flex absolute top-1/2 left-4 -translate-y-1/2 z-40 items-center justify-center w-12 h-12 rounded-full bg-white/10 text-white backdrop-blur-md border border-white/10 hover:bg-white/30 transition-all"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2.5}
-          stroke="currentColor"
-          className="w-5 h-5"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15.75 19.5L8.25 12l7.5-7.5"
-          />
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-6 h-6">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
         </svg>
       </button>
 
       <button
         onClick={nextSlide}
-        className="hidden group-hover:flex absolute top-1/2 right-4 -translate-y-1/2 z-30 items-center justify-center w-10 h-10 rounded-full bg-black/30 text-white backdrop-blur-sm hover:bg-black/60 transition-all duration-300 pointer-events-auto"
+        className="hidden md:group-hover:flex absolute top-1/2 right-4 -translate-y-1/2 z-40 items-center justify-center w-12 h-12 rounded-full bg-white/10 text-white backdrop-blur-md border border-white/10 hover:bg-white/30 transition-all"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2.5}
-          stroke="currentColor"
-          className="w-5 h-5"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M8.25 4.5l7.5 7.5-7.5 7.5"
-          />
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-6 h-6">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
         </svg>
       </button>
 
       {/* PROGRESS DOTS */}
-      <div className="flex justify-center py-2 absolute bottom-4 left-0 right-0 z-30 pointer-events-auto">
+      <div className="flex justify-center py-2 absolute bottom-4 left-0 right-0 z-40">
         {slides.map((_, slideIndex) => (
-          <div
+          <button
             key={slideIndex}
             onClick={() => goToSlide(slideIndex)}
-            className={`h-1.5 rounded-full mx-1 cursor-pointer transition-all duration-300 ${
-              currentIndex === slideIndex
-                ? "w-6 bg-blue-500"
-                : "w-1.5 bg-gray-400 hover:bg-blue-400"
+            className={`h-1.5 rounded-full mx-1 transition-all duration-300 ${
+              currentIndex === slideIndex ? "w-8 bg-blue-500" : "w-2 bg-white/40 hover:bg-white/80"
             }`}
-          ></div>
+          />
         ))}
       </div>
     </div>

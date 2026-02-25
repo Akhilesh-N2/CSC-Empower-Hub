@@ -21,25 +21,45 @@ function ProviderProfile() {
   // 1. Fetch Profile on Load
   useEffect(() => {
     const getProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserSession(user);
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          setLoading(false);
+          return;
+        }
 
-      if (user) {
+        setUserSession(user);
+
         const { data, error } = await supabase
           .from('provider_profiles')
-          .select('*')
+          .select('*') // Correct, we need all fields
           .eq('id', user.id)
-          .single();
+          .maybeSingle(); // OPTIMIZATION: Prevents throwing an error if row doesn't exist yet
 
-        if (data) {
-          setFormData(data);
+        if (error) {
+          console.error("Error fetching provider profile:", error);
+        } else if (data) {
+          // OPTIMIZATION: Safely fallback to empty strings for null DB values
+          setFormData({
+            company_name: data.company_name || '',
+            industry: data.industry || '',
+            location: data.location || '',
+            website: data.website || '',
+            contact_phone: data.contact_phone || '',
+            about_company: data.about_company || ''
+          });
         } else {
           // If no profile exists yet, force Edit mode
           setIsEditing(true);
         }
+      } catch (err) {
+        console.error("Unexpected error loading provider profile:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
+    
     getProfile();
   }, []);
 
