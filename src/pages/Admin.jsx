@@ -171,16 +171,21 @@ function Admin() {
   useEffect(() => {
     fetchData();
 
-    const channel = supabase
-      .channel("admin-dashboard-updates")
-      .on("postgres_changes", { event: "*", schema: "public" }, () => {
-        fetchData(); // Refresh data whenever DB changes
-      })
-      .subscribe();
+    /* // 🚨 REALTIME DISABLED TEMPORARILY
+      // Vercel proxy does not support wss:// (WebSockets). 
+      // Uncomment this once the Indian ISP block is lifted and you remove the proxy.
+      
+      const channel = supabase
+        .channel("admin-dashboard-updates")
+        .on("postgres_changes", { event: "*", schema: "public" }, () => {
+          fetchData(); 
+        })
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    */
   }, []);
 
   // Reset pagination when tab changes
