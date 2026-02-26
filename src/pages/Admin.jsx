@@ -124,35 +124,55 @@ function Admin() {
   // --- STATE FOR JOBS (Loading state handled globally now, but keeping var for safety) ---
   const [jobsLoading, setJobsLoading] = useState(false);
 
+  // --- NEW: PHASE 3 ADMIN STATES ---
+  const [seekerDetails, setSeekerDetails] = useState([]);
+  const [providerDetails, setProviderDetails] = useState([]);
+  const [expandedUser, setExpandedUser] = useState(null);
+
   // --- 3. FETCH DATA FUNCTION (Replaces props) ---
   const fetchData = async () => {
     // Only set global loading on first load to prevent UI flickering on updates
     if (schemes.length === 0) setLoading(true);
 
     try {
-      const [schemesData, jobsData, usersData, slidesData, catsData] =
-        await Promise.all([
-          supabase
-            .from("schemes")
-            .select("*")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("jobs")
-            .select("*")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("profiles")
-            .select("*")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("slides")
-            .select("*")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("categories")
-            .select("*")
-            .order("name", { ascending: true }),
-        ]);
+      // Inside your fetchData() function...
+      const [
+        schemesData,
+        jobsData,
+        usersData,
+        slidesData,
+        catsData,
+        seekersData,
+        providersData,
+      ] = await Promise.all([
+        supabase
+          .from("schemes")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("jobs")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("slides")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("categories")
+          .select("*")
+          .order("name", { ascending: true }),
+        // NEW: Fetch detailed profiles
+        supabase.from("seeker_profiles").select("*"),
+        supabase.from("provider_profiles").select("*"),
+      ]);
+
+      // ... existing sets ...
+      if (seekersData?.data) setSeekerDetails(seekersData.data);
+      if (providersData?.data) setProviderDetails(providersData.data);
 
       if (schemesData.data) setSchemes(schemesData.data);
       if (jobsData.data) setJobs(jobsData.data);
@@ -589,16 +609,23 @@ function Admin() {
 
   // USER ACTIONS
   const toggleUserApproval = async (id, currentStatus) => {
-    // Optimistic UI update
-    setUsers(
-      users.map((u) =>
-        u.id === id ? { ...u, is_approved: !currentStatus } : u,
-      ),
-    );
-    await supabase
-      .from("profiles")
-      .update({ is_approved: !currentStatus })
-      .eq("id", id);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_approved: !currentStatus })
+        .eq("id", id);
+
+      if (error) throw error; // Stop if DB fails
+
+      // Update UI only if DB was successful
+      setUsers(
+        users.map((u) =>
+          u.id === id ? { ...u, is_approved: !currentStatus } : u,
+        ),
+      );
+    } catch (err) {
+      alert("Failed to approve user: " + err.message);
+    }
   };
 
   const handleDeleteUser = async (id, email) => {
@@ -1440,50 +1467,81 @@ function Admin() {
                         </tr>
                       </thead>
                       <tbody>
-                        {currentUsers.map((user) => (
-                          <tr
-                            key={user.id}
-                            className="border-b hover:bg-gray-50"
-                          >
-                            <td className="p-4 font-medium">{user.email}</td>
-                            <td className="p-4 capitalize">
-                              <span
-                                className={`px-2 py-1 rounded text-xs font-bold ${user.role === "provider" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}
-                              >
-                                {user.role}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              {user.is_approved ? (
-                                <span className="text-green-600 font-bold text-sm">
-                                  ✓ Active
+                        {currentUsers.map((user) => {
+                          // Find this user's specific details
+                          const details = user.role === 'seeker' 
+                            ? seekerDetails.find(s => s.id === user.id) 
+                            : providerDetails.find(p => p.id === user.id);
+
+                          return (
+                          <React.Fragment key={user.id}>
+                            <tr className="border-b hover:bg-gray-50">
+                              <td className="p-4 font-medium">{user.email}</td>
+                              <td className="p-4 capitalize">
+                                <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === "provider" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                  {user.role}
                                 </span>
-                              ) : (
-                                <span className="text-orange-500 font-bold text-sm">
-                                  ⏳ Pending
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-4 flex justify-center gap-3">
-                              <button
-                                onClick={() =>
-                                  toggleUserApproval(user.id, user.is_approved)
-                                }
-                                className={`px-4 py-2 rounded text-sm font-bold text-white transition ${user.is_approved ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-700"}`}
-                              >
-                                {user.is_approved ? "Block" : "Approve"}
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleDeleteUser(user.id, user.email)
-                                }
-                                className="px-4 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition"
-                              >
-                                🗑️ Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="p-4">
+                                {user.is_approved ? (
+                                  <span className="text-green-600 font-bold text-sm">✓ Active</span>
+                                ) : (
+                                  <span className="text-orange-500 font-bold text-sm">⏳ Pending</span>
+                                )}
+                              </td>
+                              <td className="p-4 flex justify-center gap-3">
+                                {/* NEW: Details Toggle Button */}
+                                <button
+                                  onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
+                                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded text-sm font-bold hover:bg-gray-300 transition"
+                                >
+                                  {expandedUser === user.id ? "Hide Details" : "Review"}
+                                </button>
+
+                                <button
+                                  onClick={() => toggleUserApproval(user.id, user.is_approved)}
+                                  className={`px-4 py-2 rounded text-sm font-bold text-white transition ${user.is_approved ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-700"}`}
+                                >
+                                  {user.is_approved ? "Block" : "Approve"}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(user.id, user.email)}
+                                  className="px-3 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition"
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            </tr>
+                            
+                            {/* --- EXPANDABLE DETAILS DRAWER --- */}
+                            {expandedUser === user.id && details && (
+                              <tr className="bg-blue-50/50 border-b-2 border-blue-100">
+                                <td colSpan="4" className="p-6">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                    {user.role === 'seeker' ? (
+                                      <>
+                                        <div><span className="font-bold text-gray-500 block">Full Name</span> {details.full_name || 'N/A'}</div>
+                                        <div><span className="font-bold text-gray-500 block">Phone</span> {details.phone || 'N/A'}</div>
+                                        <div><span className="font-bold text-gray-500 block">Location</span> {details.location || 'N/A'}</div>
+                                        <div><span className="font-bold text-gray-500 block">Qualification</span> {details.qualification || 'N/A'}</div>
+                                        <div className="md:col-span-2"><span className="font-bold text-gray-500 block">Looking For</span> {details.title || 'N/A'}</div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div><span className="font-bold text-gray-500 block">Company/Shop</span> {details.company_name || 'N/A'}</div>
+                                        <div><span className="font-bold text-gray-500 block">Contact Person</span> {details.full_name || 'N/A'}</div>
+                                        <div><span className="font-bold text-gray-500 block">Phone</span> {details.contact_phone || 'N/A'}</div>
+                                        <div><span className="font-bold text-gray-500 block">Location</span> {details.location || 'N/A'}</div>
+                                        <div className="md:col-span-2"><span className="font-bold text-gray-500 block">Offering</span> {details.job_offering || 'N/A'}</div>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
