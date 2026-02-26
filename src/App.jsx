@@ -2,6 +2,7 @@ import "./App.css";
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { supabase } from "./supabaseClient";
+import { Analytics } from "@vercel/analytics/react";
 
 // --- PAGES & COMPONENTS ---
 import LandingPage from "./pages/LandingPage";
@@ -113,6 +114,7 @@ function App() {
           )}
         </main>
         <Footer />
+        <Analytics />
       </div>
     </Router>
   );
