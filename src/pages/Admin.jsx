@@ -739,12 +739,6 @@ function Admin({ currentUser }) {
             🖼️ Manage Carousel
           </button>
           <button
-            onClick={() => setActiveTab("jobs")}
-            className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === "jobs" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-slate-800"}`}
-          >
-            💼 Manage Jobs
-          </button>
-          <button
             onClick={() => setActiveTab("users")}
             className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === "users" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-slate-800"}`}
           >
