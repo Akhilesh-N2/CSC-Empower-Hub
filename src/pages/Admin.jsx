@@ -21,25 +21,73 @@ const isVideo = (url) => {
   return url.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/i) !== null;
 };
 
+// Helper to create safe Cloudinary folder names from user titles
+const formatFolderName = (title) => {
+  if (!title || title.trim() === "") return "Untitled";
+  // Replaces spaces with underscores and removes special characters
+  return title
+    .trim()
+    .replace(/[^a-zA-Z0-9 \-]/g, "")
+    .replace(/\s+/g, "_");
+};
+
+// Add this helper function to your Admin panel
+const getUsageEstimate = async () => {
+  // 1. Check Row Counts (Database Storage impact)
+  const { count: userCount } = await supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true });
+
+  const { count: jobCount } = await supabase
+    .from("jobs")
+    .select("*", { count: "exact", head: true });
+
+  // 2. Logic: Each user record is ~0.5KB. Each job with text is ~2KB.
+  const estimatedDataSize = userCount * 0.5 + jobCount * 2;
+
+  return {
+    users: userCount,
+    jobs: jobCount,
+    estSizeKB: estimatedDataSize.toFixed(2),
+  };
+};
+
 // --- NEW: Cloudinary Upload Utility ---
-const uploadToCloudinary = async (file) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET); 
+// --- UPDATED: Smart Cloudinary Upload Utility ---
+// --- UPDATED: Organized Cloudinary Upload Utility ---
+const uploadToCloudinary = async (file, folderName) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append(
+    "upload_preset",
+    import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
+  );
 
-    const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
-        { method: "POST", body: formData }
-    );
+  // NEW: Tell Cloudinary which folder to use!
+  if (folderName) {
+    formData.append("folder", folderName);
+  }
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error.message);
-    
-    // THE MAGIC TRICK: Inject q_auto,f_auto into the URL for instant compression
-    // It changes /upload/v123... to /upload/q_auto,f_auto/v123...
-    const optimizedUrl = data.secure_url.replace('/upload/', '/upload/q_auto,f_auto/');
-    
-    return optimizedUrl; 
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+    { method: "POST", body: formData },
+  );
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error.message);
+
+  // 1. IF IT'S A PDF: Return the raw link
+  if (file.type === "application/pdf") {
+    return data.secure_url;
+  }
+
+  // 2. IF IT'S AN IMAGE/VIDEO: Inject q_auto,f_auto for instant compression
+  const optimizedUrl = data.secure_url.replace(
+    "/upload/",
+    "/upload/q_auto,f_auto/",
+  );
+
+  return optimizedUrl;
 };
 
 // Removed props here - The component now manages its own data!
@@ -277,27 +325,66 @@ function Admin() {
 
   // Keep separate upload handlers as requested
   const handlePdfUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file || file.type !== 'application/pdf') return alert("Please upload a PDF.");
-        setPdfUploading(true);
-        try {
-            // Cloudinary's 'auto' endpoint handles PDFs flawlessly
-            const secureUrl = await uploadToCloudinary(file);
-            setCurrentScheme(prev => ({ ...prev, downloadUrl: secureUrl }));
-            alert("PDF Uploaded securely to Cloudinary!");
-        } catch (error) { alert("Upload failed: " + error.message); } finally { setPdfUploading(false); }
-    };
+    // Force the admin to select a category first
+    if (!currentScheme.category) {
+      e.target.value = ""; // Resets the file input
+      return alert(
+        "Please select a Category first so we can organize the file!",
+      );
+    }
+
+    const file = e.target.files[0];
+    if (!file || file.type !== "application/pdf")
+      return alert("Please upload a PDF.");
+
+    setPdfUploading(true);
+    try {
+      // Clean the category name just in case it has weird characters
+      const safeCategory = formatFolderName(currentScheme.category);
+
+      // Dynamically routes to Forms/CategoryName or Schemes/CategoryName
+      const targetFolder =
+        currentScheme.type === "form"
+          ? `Forms/${safeCategory}`
+          : `Schemes/${safeCategory}`;
+
+      const secureUrl = await uploadToCloudinary(file, targetFolder);
+      setCurrentScheme((prev) => ({ ...prev, downloadUrl: secureUrl }));
+      alert(`PDF safely stored in Cloudinary folder: ${targetFolder}`);
+    } catch (error) {
+      alert("Upload failed: " + error.message);
+    } finally {
+      setPdfUploading(false);
+    }
+  };
 
   // 1. SCHEME IMAGE UPLOAD
   const handleImageUpload = async (e) => {
+    // Force the admin to select a category first
+    if (!currentScheme.category) {
+      e.target.value = "";
+      return alert(
+        "Please select a Category first so we can organize the image!",
+      );
+    }
+
     const file = e.target.files[0];
     if (!file || !file.type.startsWith("image/"))
       return alert("Please upload an image.");
+
     setImageUploading(true);
     try {
-      const secureUrl = await uploadToCloudinary(file);
+      const safeCategory = formatFolderName(currentScheme.category);
+
+      // Routes to the exact same folder as the PDF
+      const targetFolder =
+        currentScheme.type === "form"
+          ? `Forms/${safeCategory}`
+          : `Schemes/${safeCategory}`;
+
+      const secureUrl = await uploadToCloudinary(file, targetFolder);
       setCurrentScheme((prev) => ({ ...prev, image: secureUrl }));
-      alert("Image Uploaded securely to Cloudinary!");
+      alert(`Image safely stored in Cloudinary folder: ${targetFolder}`);
     } catch (error) {
       alert("Upload failed: " + error.message);
     } finally {
@@ -404,7 +491,7 @@ function Admin() {
     if (!file) return;
     setSlideImageUploading(true);
     try {
-      const secureUrl = await uploadToCloudinary(file);
+      const secureUrl = await uploadToCloudinary(file, "Carousel");
       setCurrentSlide((prev) => ({ ...prev, image: secureUrl }));
       alert("Media Uploaded securely to Cloudinary!");
     } catch (error) {
@@ -417,6 +504,13 @@ function Admin() {
   const handleSlideSubmit = async (e) => {
     e.preventDefault();
 
+    // 1. UPLOAD GUARD: Prevent submission if Cloudinary hasn't returned the URL yet
+    if (!currentSlide.image) {
+      return alert(
+        "Please wait for the image to upload or select a file first!",
+      );
+    }
+
     // Destructure to pull 'id' out for the update query
     const { id, ...slideData } = currentSlide;
     const finalData = {
@@ -425,15 +519,19 @@ function Admin() {
     };
 
     try {
+      console.log("Attempting to save to Supabase:", finalData); // Check your console!
+
       if (isEditingSlide) {
         const { error } = await supabase
           .from("slides")
           .update(finalData)
           .eq("id", id);
+
         if (error) throw error;
         alert("Slide updated successfully!");
       } else {
         const { error } = await supabase.from("slides").insert([finalData]);
+
         if (error) throw error;
         alert("Slide added successfully!");
       }
@@ -441,7 +539,11 @@ function Admin() {
       cancelSlideEdit();
       fetchData();
     } catch (error) {
-      alert("Error: " + error.message);
+      // 2. DEEP ERROR LOGGING: This will tell us exactly why Supabase rejected it
+      console.error("Supabase Rejection Details:", error);
+      alert(
+        `Database Error: ${error.message || error.details || "Check the Inspect Element Console"}`,
+      );
     }
   };
 
@@ -493,16 +595,36 @@ function Admin() {
   };
 
   // 3. POSTER UPLOAD
-    const handlePosterUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        setPosterUploading(true);
-        try {
-            const secureUrl = await uploadToCloudinary(file);
-            setPosterImage(secureUrl);
-            alert("Poster Uploaded securely to Cloudinary!");
-        } catch (error) { alert("Upload failed: " + error.message); } finally { setPosterUploading(false); }
-    };
+  // 3. UPDATED POSTER UPLOAD (Organized in Posters folder)
+  const handlePosterUpload = async (e) => {
+    // 1. Force the admin to enter a title first!
+    if (!posterTitle) {
+      e.target.value = ""; // Resets the file input
+      return alert(
+        "Please enter a Poster Title first so we can organize the image!",
+      );
+    }
+
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setPosterUploading(true);
+    try {
+      // 2. Clean the title to make it a safe folder name
+      const safeTitle = formatFolderName(posterTitle);
+
+      // 3. Route it to Posters/Clean_Title
+      const targetFolder = `Posters/${safeTitle}`;
+
+      const secureUrl = await uploadToCloudinary(file, targetFolder);
+      setPosterImage(secureUrl);
+      alert(`Poster safely stored in Cloudinary folder: ${targetFolder}`);
+    } catch (error) {
+      alert("Upload failed: " + error.message);
+    } finally {
+      setPosterUploading(false);
+    }
+  };
 
   const handlePosterSubmit = async (e) => {
     e.preventDefault();

@@ -34,7 +34,7 @@ function App() {
 
   // --- GLOBAL MAINTENANCE TOGGLE ---
   // Change to false tomorrow after the midnight reset!
-  const isMaintenanceMode = true;
+  const isMaintenanceMode = false;
 
   const MaintenanceScreen = () => (
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
