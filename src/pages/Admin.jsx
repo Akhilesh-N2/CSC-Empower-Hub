@@ -90,6 +90,19 @@ const uploadToCloudinary = async (file, folderName) => {
   return optimizedUrl;
 };
 
+const DetailBox = ({ label, value, highlight }) => (
+  <div className="flex flex-col">
+    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+      {label}
+    </span>
+    <span
+      className={`text-sm ${highlight ? "text-blue-600 font-black" : "text-gray-800 font-semibold"}`}
+    >
+      {value || "Not Provided"}
+    </span>
+  </div>
+);
+
 // Removed props here - The component now manages its own data!
 function Admin() {
   // --- 1. DATA STATE (Self-Contained) ---
@@ -127,7 +140,10 @@ function Admin() {
   // --- NEW: PHASE 3 ADMIN STATES ---
   const [seekerDetails, setSeekerDetails] = useState([]);
   const [providerDetails, setProviderDetails] = useState([]);
-  const [expandedUser, setExpandedUser] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null); // Tracks the user being reviewed in "Full Section" mode
+  const [selectedJobDetails, setSelectedJobDetails] = useState(null); // For the "Seeker View" popup
+
+  const [userSubTab, setUserSubTab] = useState("seekers"); // 'seekers' | 'providers'
 
   // --- 3. FETCH DATA FUNCTION (Replaces props) ---
   const fetchData = async () => {
@@ -242,11 +258,12 @@ function Admin() {
       job.company.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // 3. USERS FILTER
-  const filteredUsers = users.filter(
-    (user) =>
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase()),
+  // --- UPDATED USERS FILTER & PAGINATION ---
+  const usersByRole = users.filter(
+    (u) => u.role === (userSubTab === "seekers" ? "seeker" : "provider"),
+  );
+  const filteredUsers = usersByRole.filter((user) =>
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // PAGINATION SLICING
@@ -610,21 +627,33 @@ function Admin() {
   // USER ACTIONS
   const toggleUserApproval = async (id, currentStatus) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({ is_approved: !currentStatus })
-        .eq("id", id);
+        .eq("id", id)
+        .select();
 
-      if (error) throw error; // Stop if DB fails
+      if (error) throw error;
 
-      // Update UI only if DB was successful
-      setUsers(
-        users.map((u) =>
-          u.id === id ? { ...u, is_approved: !currentStatus } : u,
-        ),
-      );
+      if (!data || data.length === 0) {
+        throw new Error("Supabase RLS Policy blocked the update!");
+      }
+
+      const updatedUser = {
+        ...users.find((u) => u.id === id),
+        is_approved: !currentStatus,
+      };
+
+      // 1. Update the main list so the background table is correct
+      setUsers(users.map((u) => (u.id === id ? updatedUser : u)));
+
+      // 2. 🛠️ THE FIX: Update the 'selectedUser' state immediately
+      // This ensures the button color and text change on the Review screen without a refresh
+      if (selectedUser && selectedUser.id === id) {
+        setSelectedUser(updatedUser);
+      }
     } catch (err) {
-      alert("Failed to approve user: " + err.message);
+      alert("Database failed to approve user: " + err.message);
     }
   };
 
@@ -1439,136 +1468,490 @@ function Admin() {
             {/* --- TAB 4: USERS --- */}
             {activeTab === "users" && (
               <div className="max-w-6xl mx-auto">
-                <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
-                  User Approvals
-                </h2>
-                <div className="mb-4 relative">
-                  <Search
-                    className="absolute left-3 top-2.5 text-gray-400"
-                    size={18}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search by Email or Role..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div className="bg-white rounded-xl shadow border overflow-hidden">
-                  <div className="w-full overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[700px]">
-                      <thead className="bg-gray-50 border-b">
-                        <tr>
-                          <th className="p-4">Email</th>
-                          <th className="p-4">Role</th>
-                          <th className="p-4">Status</th>
-                          <th className="p-4 text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentUsers.map((user) => {
-                          // Find this user's specific details
-                          const details = user.role === 'seeker' 
-                            ? seekerDetails.find(s => s.id === user.id) 
-                            : providerDetails.find(p => p.id === user.id);
+                {!selectedUser ? (
+                  /* --- VIEW A: THE USER LIST --- */
+                  <div className="animate-in fade-in duration-500">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                      <h2 className="text-2xl md:text-3xl font-bold text-gray-800">
+                        User Management
+                      </h2>
 
-                          return (
-                          <React.Fragment key={user.id}>
-                            <tr className="border-b hover:bg-gray-50">
-                              <td className="p-4 font-medium">{user.email}</td>
-                              <td className="p-4 capitalize">
-                                <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === "provider" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                                  {user.role}
-                                </span>
-                              </td>
-                              <td className="p-4">
-                                {user.is_approved ? (
-                                  <span className="text-green-600 font-bold text-sm">✓ Active</span>
-                                ) : (
-                                  <span className="text-orange-500 font-bold text-sm">⏳ Pending</span>
-                                )}
-                              </td>
-                              <td className="p-4 flex justify-center gap-3">
-                                {/* NEW: Details Toggle Button */}
-                                <button
-                                  onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
-                                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded text-sm font-bold hover:bg-gray-300 transition"
-                                >
-                                  {expandedUser === user.id ? "Hide Details" : "Review"}
-                                </button>
-
-                                <button
-                                  onClick={() => toggleUserApproval(user.id, user.is_approved)}
-                                  className={`px-4 py-2 rounded text-sm font-bold text-white transition ${user.is_approved ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-700"}`}
-                                >
-                                  {user.is_approved ? "Block" : "Approve"}
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteUser(user.id, user.email)}
-                                  className="px-3 py-2 bg-red-600 text-white rounded text-sm font-bold hover:bg-red-700 transition"
-                                >
-                                  🗑️
-                                </button>
-                              </td>
-                            </tr>
-                            
-                            {/* --- EXPANDABLE DETAILS DRAWER --- */}
-                            {expandedUser === user.id && details && (
-                              <tr className="bg-blue-50/50 border-b-2 border-blue-100">
-                                <td colSpan="4" className="p-6">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                    {user.role === 'seeker' ? (
-                                      <>
-                                        <div><span className="font-bold text-gray-500 block">Full Name</span> {details.full_name || 'N/A'}</div>
-                                        <div><span className="font-bold text-gray-500 block">Phone</span> {details.phone || 'N/A'}</div>
-                                        <div><span className="font-bold text-gray-500 block">Location</span> {details.location || 'N/A'}</div>
-                                        <div><span className="font-bold text-gray-500 block">Qualification</span> {details.qualification || 'N/A'}</div>
-                                        <div className="md:col-span-2"><span className="font-bold text-gray-500 block">Looking For</span> {details.title || 'N/A'}</div>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <div><span className="font-bold text-gray-500 block">Company/Shop</span> {details.company_name || 'N/A'}</div>
-                                        <div><span className="font-bold text-gray-500 block">Contact Person</span> {details.full_name || 'N/A'}</div>
-                                        <div><span className="font-bold text-gray-500 block">Phone</span> {details.contact_phone || 'N/A'}</div>
-                                        <div><span className="font-bold text-gray-500 block">Location</span> {details.location || 'N/A'}</div>
-                                        <div className="md:col-span-2"><span className="font-bold text-gray-500 block">Offering</span> {details.job_offering || 'N/A'}</div>
-                                      </>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {filteredUsers.length > itemsPerPage && (
-                    <div className="flex justify-between items-center p-4">
-                      <div className="flex gap-3 items-center">
+                      <div className="flex bg-gray-200 p-1 rounded-xl w-fit">
                         <button
-                          onClick={() => paginate(currentPage - 1)}
-                          disabled={currentPage === 1}
-                          className="p-1 border rounded bg-white disabled:opacity-50"
+                          onClick={() => {
+                            setUserSubTab("seekers");
+                            setCurrentPage(1);
+                          }}
+                          className={`px-6 py-2 rounded-lg text-sm font-bold transition ${userSubTab === "seekers" ? "bg-white text-blue-600 shadow" : "text-gray-500 hover:text-gray-700"}`}
                         >
-                          <ChevronLeft size={16} />
+                          🎓 Seekers (
+                          {users.filter((u) => u.role === "seeker").length})
                         </button>
-                        <span className="text-xs text-gray-500">
-                          Page {currentPage} of {totalUserPages}
-                        </span>
                         <button
-                          onClick={() => paginate(currentPage + 1)}
-                          disabled={currentPage === totalUserPages}
-                          className="p-1 border rounded bg-white disabled:opacity-50"
+                          onClick={() => {
+                            setUserSubTab("providers");
+                            setCurrentPage(1);
+                          }}
+                          className={`px-6 py-2 rounded-lg text-sm font-bold transition ${userSubTab === "providers" ? "bg-white text-purple-600 shadow" : "text-gray-500 hover:text-gray-700"}`}
                         >
-                          <ChevronRight size={16} />
+                          🏢 Providers (
+                          {users.filter((u) => u.role === "provider").length})
                         </button>
                       </div>
                     </div>
-                  )}
-                </div>
+
+                    <div className="mb-4 relative">
+                      <Search
+                        className="absolute left-3 top-2.5 text-gray-400"
+                        size={18}
+                      />
+                      <input
+                        type="text"
+                        placeholder={`Search ${userSubTab} by email...`}
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full pl-10 pr-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      />
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow border overflow-hidden mb-4">
+                      <table className="w-full text-left border-collapse min-w-[600px]">
+                        <thead className="bg-gray-50 border-b text-[10px] uppercase text-gray-500 font-black tracking-widest">
+                          <tr>
+                            <th className="p-4">Account Email</th>
+                            <th className="p-4">Status</th>
+                            <th className="p-4 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {currentUsers.map((user) => (
+                            <tr
+                              key={user.id}
+                              className="border-b hover:bg-gray-50 transition-colors"
+                            >
+                              <td className="p-4">
+                                <div className="font-bold text-gray-900">
+                                  {user.email}
+                                </div>
+                                <div className="text-[10px] text-gray-400 font-mono uppercase tracking-tighter">
+                                  ID: {user.id.slice(0, 12)}...
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.is_approved ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700 animate-pulse"}`}
+                                >
+                                  {user.is_approved
+                                    ? "Approved"
+                                    : "Pending Review"}
+                                </span>
+                              </td>
+                              <td className="p-4 text-center">
+                                <button
+                                  onClick={() => setSelectedUser(user)}
+                                  className="px-6 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 shadow-md transition"
+                                >
+                                  Review Profile
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {currentUsers.length === 0 && (
+                            <tr>
+                              <td
+                                colSpan="3"
+                                className="p-10 text-center text-gray-400 italic"
+                              >
+                                No users found in this category.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* --- PAGINATION CONTROLS --- */}
+                    {totalUserPages > 1 && (
+                      <div className="flex justify-between items-center p-4 bg-white rounded-xl border shadow-sm">
+                        <span className="text-xs text-gray-500 font-bold">
+                          Page {currentPage} of {totalUserPages}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => paginate(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <button
+                            onClick={() => paginate(currentPage + 1)}
+                            disabled={currentPage === totalUserPages}
+                            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* --- VIEW B: THE DEDICATED REVIEW SECTION --- */
+                  <div className="animate-in slide-in-from-right duration-300">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                      <button
+                        onClick={() => setSelectedUser(null)}
+                        className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition group w-fit"
+                      >
+                        <ChevronLeft
+                          size={20}
+                          className="group-hover:-translate-x-1 transition-transform"
+                        />{" "}
+                        Back to User List
+                      </button>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() =>
+                            toggleUserApproval(
+                              selectedUser.id,
+                              selectedUser.is_approved,
+                            )
+                          }
+                          className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all ${
+                            selectedUser.is_approved
+                              ? "bg-amber-500 hover:bg-amber-600" // Revoke style
+                              : "bg-emerald-600 hover:bg-emerald-700" // Approve style
+                          }`}
+                        >
+                          {selectedUser.is_approved
+                            ? "Revoke Approval"
+                            : "Approve this User"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (
+                              window.confirm("Permanently delete this account?")
+                            ) {
+                              handleDeleteUser(
+                                selectedUser.id,
+                                selectedUser.email,
+                              );
+                              setSelectedUser(null);
+                            }
+                          }}
+                          className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                      {/* PROFILE DOSSIER */}
+                      {(() => {
+                        const details =
+                          selectedUser.role === "seeker"
+                            ? seekerDetails.find(
+                                (s) => s.id === selectedUser.id,
+                              )
+                            : providerDetails.find(
+                                (p) => p.id === selectedUser.id,
+                              );
+
+                        return (
+                          <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden">
+                            <div
+                              className={`absolute top-0 left-0 w-1.5 h-full ${selectedUser.role === "seeker" ? "bg-blue-600" : "bg-purple-600"}`}
+                            ></div>
+                            <h3 className="text-gray-400 font-black uppercase text-[10px] tracking-[0.3em] mb-8">
+                              {selectedUser.role === "seeker"
+                                ? "🎓 Applicant Dossier"
+                                : "🏢 Provider Dossier"}
+                            </h3>
+
+                            {details ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+                                <DetailBox
+                                  label="Full Name"
+                                  value={details.full_name}
+                                  highlight
+                                />
+                                <DetailBox
+                                  label="Contact Email"
+                                  value={selectedUser.email}
+                                />
+                                <DetailBox
+                                  label="Contact Phone"
+                                  value={details.phone || details.contact_phone}
+                                  highlight
+                                />
+                                <DetailBox
+                                  label="Location"
+                                  value={details.location}
+                                />
+
+                                {selectedUser.role === "seeker" ? (
+                                  <>
+                                    <DetailBox
+                                      label="Qualification"
+                                      value={details.qualification}
+                                    />
+                                    <DetailBox
+                                      label="Experience"
+                                      value={details.experience}
+                                    />
+                                    <div className="md:col-span-2">
+                                      <DetailBox
+                                        label="Target Job Title"
+                                        value={details.title}
+                                      />
+                                    </div>
+                                    <div className="lg:col-span-4 mt-4">
+                                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-4">
+                                        Reported Skills
+                                      </span>
+                                      <div className="flex flex-wrap gap-2">
+                                        {Array.isArray(details.skills) ? (
+                                          details.skills.map((s, i) => (
+                                            <span
+                                              key={i}
+                                              className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200"
+                                            >
+                                              {s}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="text-gray-400 italic">
+                                            No skills listed.
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <DetailBox
+                                      label="Company Name"
+                                      value={details.company_name}
+                                    />
+                                    <div className="md:col-span-3">
+                                      <DetailBox
+                                        label="Job Offering Summary"
+                                        value={details.job_offering}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="py-20 text-center text-gray-400 italic">
+                                This user has not completed the detailed profile
+                                form yet.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* JOB LISTINGS (Providers Only) */}
+                      {selectedUser.role === "provider" && (
+                        <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-800"></div>
+                          <div className="flex justify-between items-center mb-8 border-b pb-4">
+                            <h3 className="text-gray-400 font-black uppercase text-xs tracking-[0.3em]">
+                              💼 Published Job Listings
+                            </h3>
+                            <span className="bg-purple-50 text-purple-700 px-4 py-1 rounded-full text-[10px] font-black uppercase">
+                              {
+                                jobs.filter(
+                                  (j) => j.provider_id === selectedUser.id,
+                                ).length
+                              }{" "}
+                              Active Listings
+                            </span>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="text-[10px] font-black text-gray-400 uppercase border-b pb-4 tracking-widest">
+                                  <th className="pb-4">Role Title</th>
+                                  <th className="pb-4">Posted Date</th>
+                                  <th className="pb-4 text-center">Status</th>
+                                  <th className="pb-4 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {jobs
+                                  .filter(
+                                    (j) => j.provider_id === selectedUser.id,
+                                  )
+                                  .map((job) => (
+                                    <tr
+                                      key={job.id}
+                                      className="border-b last:border-0 group hover:bg-slate-50 transition-colors"
+                                    >
+                                      <td className="py-5 font-bold text-gray-800 text-sm">
+                                        {job.title}
+                                      </td>
+                                      <td className="py-5 text-xs text-gray-500 font-medium">
+                                        {new Date(
+                                          job.created_at,
+                                        ).toLocaleDateString()}
+                                      </td>
+                                      <td className="py-5 text-center">
+                                        <button
+                                          onClick={() =>
+                                            toggleJobStatus(
+                                              job.id,
+                                              job.is_active,
+                                            )
+                                          }
+                                          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${
+                                            job.is_active
+                                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                              : "bg-red-50 text-red-700 border-red-100"
+                                          }`}
+                                        >
+                                          {job.is_active
+                                            ? "● Public"
+                                            : "○ Hidden"}
+                                        </button>
+                                      </td>
+                                      <td className="py-5 text-right flex items-center justify-end gap-2">
+                                        {/* NEW: Seeker View Toggle */}
+                                        <button
+                                          onClick={() =>
+                                            setSelectedJobDetails(
+                                              selectedJobDetails?.id === job.id
+                                                ? null
+                                                : job,
+                                            )
+                                          }
+                                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                            selectedJobDetails?.id === job.id
+                                              ? "bg-blue-600 text-white border-blue-600 shadow-inner"
+                                              : "bg-white text-blue-600 border-blue-200 hover:bg-blue-50"
+                                          }`}
+                                        >
+                                          {selectedJobDetails?.id === job.id
+                                            ? "Close Preview"
+                                            : "Seeker View"}
+                                        </button>
+
+                                        <button
+                                          onClick={() => deleteJob(job.id)}
+                                          className="p-2 text-gray-300 hover:text-red-600 transition-colors"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                            {/* --- NESTED SEEKER VIEW PREVIEW --- */}
+                            {selectedJobDetails && (
+                              <div className="mt-8 p-8 bg-slate-50 rounded-3xl border-2 border-blue-100 shadow-inner animate-in zoom-in-95 duration-200 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4">
+                                  <button
+                                    onClick={() => setSelectedJobDetails(null)}
+                                    className="text-gray-400 hover:text-slate-800 transition"
+                                  >
+                                    <EyeOff size={20} />
+                                  </button>
+                                </div>
+
+                                <div className="flex flex-col gap-6">
+                                  <div className="border-b border-blue-100 pb-4">
+                                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
+                                      Job Preview (Live View)
+                                    </span>
+                                    <h2 className="text-2xl font-black text-slate-900 mt-3">
+                                      {selectedJobDetails.title}
+                                    </h2>
+                                    <p className="text-blue-600 font-bold flex items-center gap-2">
+                                      <span>
+                                        🏢 {selectedJobDetails.company}
+                                      </span>
+                                      <span className="text-slate-300">•</span>
+                                      <span>
+                                        📍 {selectedJobDetails.location}
+                                      </span>
+                                    </p>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                      <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">
+                                        Salary Range
+                                      </span>
+                                      <span className="text-sm font-bold text-emerald-600">
+                                        {selectedJobDetails.salary ||
+                                          "Negotiable"}
+                                      </span>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                      <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">
+                                        Job Type
+                                      </span>
+                                      <span className="text-sm font-bold text-slate-700">
+                                        {selectedJobDetails.type}
+                                      </span>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                      <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">
+                                        Primary Contact
+                                      </span>
+                                      <span className="text-sm font-bold text-slate-700 truncate block">
+                                        {selectedJobDetails.contact_email}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-4 tracking-widest">
+                                      Job Description
+                                    </span>
+                                    <div className="text-slate-700 leading-relaxed text-sm whitespace-pre-wrap">
+                                      {selectedJobDetails.description ||
+                                        "No description provided."}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2 pt-2">
+                                    {selectedJobDetails.tags
+                                      ?.split(",")
+                                      .map((tag, i) => (
+                                        <span
+                                          key={i}
+                                          className="bg-slate-100 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full uppercase"
+                                        >
+                                          #{tag.trim()}
+                                        </span>
+                                      ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {jobs.filter(
+                              (j) => j.provider_id === selectedUser.id,
+                            ).length === 0 && (
+                              <div className="py-20 text-center text-gray-400 text-sm italic border-2 border-dashed border-gray-100 rounded-3xl mt-4">
+                                This provider hasn't published any jobs to the
+                                hub yet.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
