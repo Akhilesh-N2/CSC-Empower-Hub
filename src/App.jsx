@@ -48,6 +48,18 @@ function App() {
 
   const [currentUser, setCurrentUser] = useState(null);
 
+  useEffect(() => {
+    // Only runs ONCE when the app loads
+    supabase.from("traffic_logs").insert([{}]).then();
+  }, []); // <--- This empty array [] is the most important part
+
+  useEffect(() => {
+    // Only log if the user IS NOT Manoj
+    if (currentUser?.email !== "manoj@gmail.com") {
+      supabase.from("traffic_logs").insert([{}]).then();
+    }
+  }, [currentUser]);
+
   // Listen for Auth changes to identify Manoj
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -104,7 +116,7 @@ function App() {
                 path="/admin"
                 element={
                   currentUser?.email === adminEmail ? (
-                    <Admin />
+                    <Admin currentUser={currentUser} />
                   ) : (
                     <div className="p-20 text-center font-bold">
                       Access Denied: Admins Only

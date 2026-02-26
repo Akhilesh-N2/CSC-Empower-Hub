@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import {
   UploadCloud,
@@ -10,6 +11,7 @@ import {
   Search,
   Filter,
   Loader,
+  Activity,
 } from "lucide-react";
 
 // A placeholder image to use if the user doesn't upload one
@@ -104,7 +106,7 @@ const DetailBox = ({ label, value, highlight }) => (
 );
 
 // Removed props here - The component now manages its own data!
-function Admin() {
+function Admin({ currentUser }) {
   // --- 1. DATA STATE (Self-Contained) ---
   const [schemes, setSchemes] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -754,8 +756,31 @@ function Admin() {
           >
             📢 Posters
           </button>
+
+
+          {/* --- DEVELOPER ONLY BUTTON --- */}
+          {currentUser?.email === "manoj@gmail.com" && (
+            <div className="mt-auto pt-10">
+              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4 mb-2">
+                Developer Tools
+              </div>
+              <Link
+                to="/dev-stats"
+                className="flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 transition-all group"
+              >
+                <div className="p-1.5 bg-slate-900 rounded-md group-hover:shadow-[0_0_10px_rgba(34,211,238,0.3)] transition-all">
+                  <Activity size={16} />
+                </div>
+                <span className="text-sm font-bold tracking-tight">
+                  Engine Room
+                </span>
+              </Link>
+            </div>
+          )}
+          
         </nav>
       </div>
+      
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 p-4 md:p-8 overflow-y-auto">
