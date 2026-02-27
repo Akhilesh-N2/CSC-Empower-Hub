@@ -132,8 +132,19 @@ const Navbar = () => {
       {/* --- MOBILE MENU --- */}
       {isMenuOpen && (
         <div className="md:hidden bg-slate-800 p-4 space-y-4 border-t border-slate-700">
-          <Link to="/" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>Home</Link>
+          <Link to="/" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>
+            <SmartText ml="ഹോം">Home</SmartText>
+          </Link>
+          <Link to="/forms" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>Forms</Link>
+          <Link to="/posters" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>Posters</Link>
           
+          {/* NEW: ADMIN PANEL FOR MOBILE */}
+          {role === 'admin' && (
+            <Link to="/admin" className="flex items-center gap-2 py-3 px-4 mt-2 bg-red-600 text-white rounded-lg font-bold" onClick={() => setIsMenuOpen(false)}>
+              <LayoutDashboard size={18} /> Admin Panel
+            </Link>
+          )}
+
           {role === 'seeker' && (
             <>
               <Link to="/job-search" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>Find Jobs</Link>
@@ -150,13 +161,15 @@ const Navbar = () => {
           )}
 
           {user ? (
-            <button onClick={handleLogout} className="block w-full text-left py-4 text-red-400 font-bold border-t border-slate-700 mt-2">
-              Logout
+            <button onClick={handleLogout} className="flex items-center gap-2 w-full text-left py-4 text-red-400 font-bold border-t border-slate-700 mt-2">
+              <LogOut size={18} /> Logout
             </button>
           ) : (
             <div className="flex flex-col gap-3 pt-4 border-t border-slate-700">
               <Link to="/login" className="text-center py-2 text-gray-300 font-bold" onClick={() => setIsMenuOpen(false)}>Login</Link>
-              <Link to="/signup" className="text-center py-3 bg-blue-600 text-white rounded-lg font-bold" onClick={() => setIsMenuOpen(false)}>Join Now</Link>
+              <Link to="/signup" className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg font-bold" onClick={() => setIsMenuOpen(false)}>
+                <UserPlus size={18} /> Join Now
+              </Link>
             </div>
           )}
         </div>

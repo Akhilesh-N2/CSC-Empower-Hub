@@ -12,6 +12,18 @@ import {
   Filter,
   Loader,
   Activity,
+  User,
+  CheckCircle2,
+  AlertCircle,
+  Briefcase,
+  MapPin,
+  Phone,
+  Mail,
+  GraduationCap,
+  FileText,
+  Image,
+  Users,
+  Megaphone,
 } from "lucide-react";
 
 // A placeholder image to use if the user doesn't upload one
@@ -720,61 +732,61 @@ function Admin({ currentUser }) {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       {/* RESPONSIVE NAV */}
-      <div className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0">
-        <div className="p-4 md:p-6 text-xl md:text-2xl font-bold border-b border-slate-700 flex justify-between items-center">
-          <span>Admin Panel</span>
+      <div className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 md:h-screen md:sticky top-0 z-30 shadow-md md:shadow-none">
+        <div className="p-4 md:p-6 text-xl md:text-2xl font-black border-b border-slate-800 flex justify-between items-center tracking-tight">
+          <span>Admin Hub</span>
         </div>
 
-        <nav className="flex flex-row md:flex-col p-2 md:p-4 gap-2 overflow-x-auto">
+        <nav className="flex flex-row md:flex-col p-3 md:p-4 gap-2 md:gap-3 overflow-x-auto no-scrollbar snap-x w-full">
           <button
             onClick={() => setActiveTab("cards")}
-            className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === "cards" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-slate-800"}`}
+            className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "cards" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            📑 Manage Content
+            <FileText size={18} /> <span className="whitespace-nowrap">Content</span>
           </button>
           <button
             onClick={() => setActiveTab("carousel")}
-            className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === "carousel" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-slate-800"}`}
+            className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "carousel" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            🖼️ Manage Carousel
+            <Image size={18} /> <span className="whitespace-nowrap">Carousel</span>
           </button>
           <button
             onClick={() => setActiveTab("users")}
-            className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === "users" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-slate-800"}`}
+            className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "users" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            👥 Manage Users
+            <Users size={18} /> <span className="whitespace-nowrap">Users</span>
           </button>
           <button
             onClick={() => setActiveTab("posters")}
-            className={`whitespace-nowrap flex-1 text-center md:text-left px-4 py-3 rounded-lg transition-colors ${activeTab === "posters" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-slate-800"}`}
+            className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "posters" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            📢 Posters
+            <Megaphone size={18} /> <span className="whitespace-nowrap">Posters</span>
           </button>
-
 
           {/* --- DEVELOPER ONLY BUTTON --- */}
           {currentUser?.email === "manoj@gmail.com" && (
-            <div className="mt-auto pt-10">
-              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4 mb-2">
-                Developer Tools
+            <>
+              {/* This label and spacing ONLY shows on desktop */}
+              <div className="hidden md:block mt-auto pt-6 border-t border-slate-800 ">
+                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4 mb-2">
+                  Developer Tools
+                </div>
               </div>
+              
+              {/* The Button acts as a normal flex item on mobile */}
               <Link
                 to="/dev-stats"
-                className="flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 transition-all group"
+                className="snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-cyan-400 hover:bg-slate-700 hover:text-cyan-300 transition-all group md:mb-4"
               >
-                <div className="p-1.5 bg-slate-900 rounded-md group-hover:shadow-[0_0_10px_rgba(34,211,238,0.3)] transition-all">
+                <div className="md:p-1.5 md:bg-slate-900 rounded-lg group-hover:shadow-[0_0_10px_rgba(34,211,238,0.3)] transition-all">
                   <Activity size={16} />
                 </div>
-                <span className="text-sm font-bold tracking-tight">
-                  Engine Room
-                </span>
+                <span className="text-sm font-bold tracking-tight whitespace-nowrap">Engine Room</span>
               </Link>
-            </div>
+            </>
           )}
-          
         </nav>
       </div>
-      
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 p-4 md:p-8 overflow-y-auto">
@@ -1490,38 +1502,52 @@ function Admin({ currentUser }) {
                 {!selectedUser ? (
                   /* --- VIEW A: THE USER LIST --- */
                   <div className="animate-in fade-in duration-500">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                      <h2 className="text-2xl md:text-3xl font-bold text-gray-800">
-                        User Management
-                      </h2>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-4">
+                      <div>
+                        <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                          User Directory
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1 font-medium">
+                          Manage platform access and review profiles.
+                        </p>
+                      </div>
 
-                      <div className="flex bg-gray-200 p-1 rounded-xl w-fit">
+                      {/* Professional Segmented Control */}
+                      <div className="inline-flex bg-slate-200/60 p-1 rounded-xl border border-slate-200/60 w-full md:w-fit overflow-x-auto no-scrollbar">
                         <button
                           onClick={() => {
                             setUserSubTab("seekers");
                             setCurrentPage(1);
                           }}
-                          className={`px-6 py-2 rounded-lg text-sm font-bold transition ${userSubTab === "seekers" ? "bg-white text-blue-600 shadow" : "text-gray-500 hover:text-gray-700"}`}
+                          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-xs md:text-sm font-bold transition-all duration-300 ${userSubTab === "seekers" ? "bg-white text-blue-600 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700"}`}
                         >
-                          🎓 Seekers (
-                          {users.filter((u) => u.role === "seeker").length})
+                          <GraduationCap size={16} /> Job Seekers
+                          <span
+                            className={`hidden sm:inline-block ml-1 px-2 py-0.5 rounded-full text-[10px] ${userSubTab === "seekers" ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-500"}`}
+                          >
+                            {users.filter((u) => u.role === "seeker").length}
+                          </span>
                         </button>
                         <button
                           onClick={() => {
                             setUserSubTab("providers");
                             setCurrentPage(1);
                           }}
-                          className={`px-6 py-2 rounded-lg text-sm font-bold transition ${userSubTab === "providers" ? "bg-white text-purple-600 shadow" : "text-gray-500 hover:text-gray-700"}`}
+                          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-xs md:text-sm font-bold transition-all duration-300 ${userSubTab === "providers" ? "bg-white text-purple-600 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700"}`}
                         >
-                          🏢 Providers (
-                          {users.filter((u) => u.role === "provider").length})
+                          <Briefcase size={16} /> Providers
+                          <span
+                            className={`hidden sm:inline-block ml-1 px-2 py-0.5 rounded-full text-[10px] ${userSubTab === "providers" ? "bg-purple-100 text-purple-700" : "bg-slate-200 text-slate-500"}`}
+                          >
+                            {users.filter((u) => u.role === "provider").length}
+                          </span>
                         </button>
                       </div>
                     </div>
 
-                    <div className="mb-4 relative">
+                    <div className="mb-6 relative max-w-md">
                       <Search
-                        className="absolute left-3 top-2.5 text-gray-400"
+                        className="absolute left-4 top-3 text-slate-400"
                         size={18}
                       />
                       <input
@@ -1532,84 +1558,114 @@ function Admin({ currentUser }) {
                           setSearchTerm(e.target.value);
                           setCurrentPage(1);
                         }}
-                        className="w-full pl-10 pr-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        className="w-full pl-11 pr-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm shadow-sm"
                       />
                     </div>
 
-                    <div className="bg-white rounded-xl shadow border overflow-hidden mb-4">
-                      <table className="w-full text-left border-collapse min-w-[600px]">
-                        <thead className="bg-gray-50 border-b text-[10px] uppercase text-gray-500 font-black tracking-widest">
-                          <tr>
-                            <th className="p-4">Account Email</th>
-                            <th className="p-4">Status</th>
-                            <th className="p-4 text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {currentUsers.map((user) => (
-                            <tr
-                              key={user.id}
-                              className="border-b hover:bg-gray-50 transition-colors"
-                            >
-                              <td className="p-4">
-                                <div className="font-bold text-gray-900">
-                                  {user.email}
-                                </div>
-                                <div className="text-[10px] text-gray-400 font-mono uppercase tracking-tighter">
-                                  ID: {user.id.slice(0, 12)}...
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.is_approved ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700 animate-pulse"}`}
-                                >
-                                  {user.is_approved
-                                    ? "Approved"
-                                    : "Pending Review"}
-                                </span>
-                              </td>
-                              <td className="p-4 text-center">
-                                <button
-                                  onClick={() => setSelectedUser(user)}
-                                  className="px-6 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 shadow-md transition"
-                                >
-                                  Review Profile
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                          {currentUsers.length === 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6">
+                      {/* 🛠️ FIX: Added overflow-x-auto to the table wrapper */}
+                      <div className="overflow-x-auto w-full rounded-2xl">
+                        <table className="w-full text-left border-collapse min-w-[600px]">
+                          <thead className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
                             <tr>
-                              <td
-                                colSpan="3"
-                                className="p-10 text-center text-gray-400 italic"
-                              >
-                                No users found in this category.
-                              </td>
+                              <th className="p-4 md:p-5">Account Details</th>
+                              <th className="p-4 md:p-5">Status</th>
+                              <th className="p-4 md:p-5 text-right">Actions</th>
                             </tr>
-                          )}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {currentUsers.map((user) => (
+                              <tr
+                                key={user.id}
+                                className="hover:bg-slate-50/80 transition-colors group"
+                              >
+                                <td className="p-4 md:p-5">
+                                  <div className="flex items-center gap-3 md:gap-4">
+                                    <div
+                                      className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner
+                                      ${user.role === "seeker" ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-purple-500 to-fuchsia-600"}`}
+                                    >
+                                      {user.email.substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <div className="font-bold text-slate-900 text-xs md:text-sm">
+                                        {user.email}
+                                      </div>
+                                      <div className="text-[10px] md:text-[11px] text-slate-400 font-mono tracking-tight mt-0.5">
+                                        ID: {user.id.slice(0, 8)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-4 md:p-5">
+                                  <div
+                                    className={`inline-flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-[11px] font-bold border ${
+                                      user.is_approved
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : "bg-amber-50 text-amber-700 border-amber-200"
+                                    }`}
+                                  >
+                                    {user.is_approved ? (
+                                      <CheckCircle2
+                                        size={12}
+                                        className="text-emerald-500"
+                                      />
+                                    ) : (
+                                      <AlertCircle
+                                        size={12}
+                                        className="text-amber-500"
+                                      />
+                                    )}
+                                    {user.is_approved ? "Verified" : "Pending"}
+                                  </div>
+                                </td>
+                                <td className="p-4 md:p-5 text-right">
+                                  <button
+                                    onClick={() => setSelectedUser(user)}
+                                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+                                  >
+                                    View Dossier
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {currentUsers.length === 0 && (
+                              <tr>
+                                <td colSpan="3" className="p-10 text-center">
+                                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-3">
+                                    <Search size={20} />
+                                  </div>
+                                  <h3 className="text-slate-900 font-bold text-base">
+                                    No accounts found
+                                  </h3>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
 
                     {/* --- PAGINATION CONTROLS --- */}
                     {totalUserPages > 1 && (
-                      <div className="flex justify-between items-center p-4 bg-white rounded-xl border shadow-sm">
-                        <span className="text-xs text-gray-500 font-bold">
-                          Page {currentPage} of {totalUserPages}
+                      <div className="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                        <span className="text-xs text-slate-500 font-bold">
+                          Page{" "}
+                          <span className="text-slate-900">{currentPage}</span>{" "}
+                          / {totalUserPages}
                         </span>
                         <div className="flex gap-2">
                           <button
                             onClick={() => paginate(currentPage - 1)}
                             disabled={currentPage === 1}
-                            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+                            className="p-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50 text-slate-600 transition"
                           >
                             <ChevronLeft size={16} />
                           </button>
                           <button
                             onClick={() => paginate(currentPage + 1)}
                             disabled={currentPage === totalUserPages}
-                            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+                            className="p-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50 text-slate-600 transition"
                           >
                             <ChevronRight size={16} />
                           </button>
@@ -1620,354 +1676,399 @@ function Admin({ currentUser }) {
                 ) : (
                   /* --- VIEW B: THE DEDICATED REVIEW SECTION --- */
                   <div className="animate-in slide-in-from-right duration-300">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                    {/* DOSSIER HEADER ACTIONS */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3 border-b border-slate-200 pb-4 md:pb-6">
                       <button
                         onClick={() => setSelectedUser(null)}
-                        className="flex items-center gap-2 text-gray-500 hover:text-blue-600 font-bold transition group w-fit"
+                        className="flex items-center justify-center sm:justify-start gap-2 text-slate-500 hover:text-blue-600 font-bold transition group w-full sm:w-fit text-sm bg-white px-4 py-2 border border-slate-200 rounded-lg shadow-sm"
                       >
                         <ChevronLeft
-                          size={20}
+                          size={18}
                           className="group-hover:-translate-x-1 transition-transform"
-                        />{" "}
-                        Back to User List
+                        />
+                        Back to Directory
                       </button>
 
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() =>
-                            toggleUserApproval(
-                              selectedUser.id,
-                              selectedUser.is_approved,
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Permanently delete this account? This action cannot be undone.",
                             )
+                          ) {
+                            handleDeleteUser(
+                              selectedUser.id,
+                              selectedUser.email,
+                            );
+                            setSelectedUser(null);
                           }
-                          className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all ${
-                            selectedUser.is_approved
-                              ? "bg-amber-500 hover:bg-amber-600" // Revoke style
-                              : "bg-emerald-600 hover:bg-emerald-700" // Approve style
-                          }`}
-                        >
-                          {selectedUser.is_approved
-                            ? "Revoke Approval"
-                            : "Approve this User"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (
-                              window.confirm("Permanently delete this account?")
-                            ) {
-                              handleDeleteUser(
-                                selectedUser.id,
-                                selectedUser.email,
-                              );
-                              setSelectedUser(null);
-                            }
-                          }}
-                          className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      </div>
+                        }}
+                        className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-600 hover:text-white transition w-full sm:w-fit"
+                      >
+                        <Trash2 size={16} /> Delete Account
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6">
-                      {/* PROFILE DOSSIER */}
-                      {(() => {
-                        const details =
-                          selectedUser.role === "seeker"
-                            ? seekerDetails.find(
-                                (s) => s.id === selectedUser.id,
-                              )
-                            : providerDetails.find(
-                                (p) => p.id === selectedUser.id,
-                              );
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+                      {/* LEFT COLUMN: IDENTITY & STATUS CARD */}
+                      <div className="lg:col-span-1 space-y-6">
+                        <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
+                          <div
+                            className={`absolute top-0 left-0 w-full h-2 ${selectedUser.role === "seeker" ? "bg-blue-500" : "bg-purple-500"}`}
+                          ></div>
 
-                        return (
-                          <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden">
+                          <div className="flex flex-col items-center text-center mt-2 mb-6">
                             <div
-                              className={`absolute top-0 left-0 w-1.5 h-full ${selectedUser.role === "seeker" ? "bg-blue-600" : "bg-purple-600"}`}
-                            ></div>
-                            <h3 className="text-gray-400 font-black uppercase text-[10px] tracking-[0.3em] mb-8">
-                              {selectedUser.role === "seeker"
-                                ? "🎓 Applicant Dossier"
-                                : "🏢 Provider Dossier"}
+                              className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-2xl md:text-3xl font-black text-white shadow-lg mb-4 transform rotate-3
+                              ${selectedUser.role === "seeker" ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-purple-500 to-fuchsia-600"}`}
+                            >
+                              <span className="-rotate-3">
+                                {selectedUser.email
+                                  .substring(0, 1)
+                                  .toUpperCase()}
+                              </span>
+                            </div>
+                            <h3
+                              className="text-lg md:text-xl font-black text-slate-900 w-full truncate px-2"
+                              title={selectedUser.email}
+                            >
+                              {(() => {
+                                const d =
+                                  selectedUser.role === "seeker"
+                                    ? seekerDetails.find(
+                                        (s) => s.id === selectedUser.id,
+                                      )
+                                    : providerDetails.find(
+                                        (p) => p.id === selectedUser.id,
+                                      );
+                                return (
+                                  d?.full_name ||
+                                  d?.company_name ||
+                                  "Name Not Provided"
+                                );
+                              })()}
                             </h3>
+                            <p className="text-slate-500 text-xs md:text-sm mt-1">
+                              {selectedUser.email}
+                            </p>
 
-                            {details ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
-                                <DetailBox
-                                  label="Full Name"
-                                  value={details.full_name}
-                                  highlight
-                                />
-                                <DetailBox
-                                  label="Contact Email"
-                                  value={selectedUser.email}
-                                />
-                                <DetailBox
-                                  label="Contact Phone"
-                                  value={details.phone || details.contact_phone}
-                                  highlight
-                                />
-                                <DetailBox
-                                  label="Location"
-                                  value={details.location}
-                                />
+                            <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest bg-slate-100 text-slate-600">
+                              <User size={14} /> {selectedUser.role}
+                            </div>
+                          </div>
 
+                          <div className="border-t border-slate-100 pt-6">
+                            <button
+                              onClick={() =>
+                                toggleUserApproval(
+                                  selectedUser.id,
+                                  selectedUser.is_approved,
+                                )
+                              }
+                              className={`w-full flex items-center justify-center gap-2 py-3 md:py-3.5 rounded-xl font-black text-xs md:text-sm uppercase tracking-widest shadow-md transition-all ${
+                                selectedUser.is_approved
+                                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                  : "bg-blue-600 text-white hover:bg-blue-700"
+                              }`}
+                            >
+                              {selectedUser.is_approved ? (
+                                <>
+                                  {" "}
+                                  <AlertCircle size={16} /> Revoke Approval{" "}
+                                </>
+                              ) : (
+                                <>
+                                  {" "}
+                                  <CheckCircle2 size={16} /> Approve User{" "}
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RIGHT COLUMN: DETAILED DOSSIER */}
+                      <div className="lg:col-span-2 space-y-6">
+                        {(() => {
+                          const details =
+                            selectedUser.role === "seeker"
+                              ? seekerDetails.find(
+                                  (s) => s.id === selectedUser.id,
+                                )
+                              : providerDetails.find(
+                                  (p) => p.id === selectedUser.id,
+                                );
+
+                          return (
+                            <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm">
+                              <h3 className="text-slate-400 font-black uppercase text-xs tracking-[0.2em] mb-6 flex items-center gap-2">
                                 {selectedUser.role === "seeker" ? (
-                                  <>
-                                    <DetailBox
-                                      label="Qualification"
-                                      value={details.qualification}
-                                    />
-                                    <DetailBox
-                                      label="Experience"
-                                      value={details.experience}
-                                    />
-                                    <div className="md:col-span-2">
+                                  <GraduationCap size={16} />
+                                ) : (
+                                  <Briefcase size={16} />
+                                )}
+                                {selectedUser.role === "seeker"
+                                  ? "Applicant Details"
+                                  : "Company Details"}
+                              </h3>
+
+                              {details ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-6">
+                                  <div className="space-y-4 md:col-span-2 bg-slate-50/50 p-4 md:p-6 rounded-2xl border border-slate-100">
+                                    <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-2">
+                                      Contact Info
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                      <div className="flex items-start gap-3">
+                                        <Phone
+                                          className="text-slate-400 mt-0.5 shrink-0"
+                                          size={16}
+                                        />
+                                        <DetailBox
+                                          label="Phone"
+                                          value={
+                                            details.phone ||
+                                            details.contact_phone
+                                          }
+                                          highlight
+                                        />
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <MapPin
+                                          className="text-slate-400 mt-0.5 shrink-0"
+                                          size={16}
+                                        />
+                                        <DetailBox
+                                          label="Location"
+                                          value={details.location}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {selectedUser.role === "seeker" ? (
+                                    <>
                                       <DetailBox
                                         label="Target Job Title"
                                         value={details.title}
+                                        highlight
                                       />
-                                    </div>
-                                    <div className="lg:col-span-4 mt-4">
-                                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-4">
-                                        Reported Skills
-                                      </span>
-                                      <div className="flex flex-wrap gap-2">
-                                        {Array.isArray(details.skills) ? (
-                                          details.skills.map((s, i) => (
-                                            <span
-                                              key={i}
-                                              className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200"
-                                            >
-                                              {s}
-                                            </span>
-                                          ))
-                                        ) : (
-                                          <span className="text-gray-400 italic">
-                                            No skills listed.
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <DetailBox
-                                      label="Company Name"
-                                      value={details.company_name}
-                                    />
-                                    <div className="md:col-span-3">
                                       <DetailBox
-                                        label="Job Offering Summary"
-                                        value={details.job_offering}
+                                        label="Experience Level"
+                                        value={details.experience}
                                       />
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="py-20 text-center text-gray-400 italic">
-                                This user has not completed the detailed profile
-                                form yet.
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* JOB LISTINGS (Providers Only) */}
-                      {selectedUser.role === "provider" && (
-                        <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-800"></div>
-                          <div className="flex justify-between items-center mb-8 border-b pb-4">
-                            <h3 className="text-gray-400 font-black uppercase text-xs tracking-[0.3em]">
-                              💼 Published Job Listings
-                            </h3>
-                            <span className="bg-purple-50 text-purple-700 px-4 py-1 rounded-full text-[10px] font-black uppercase">
-                              {
-                                jobs.filter(
-                                  (j) => j.provider_id === selectedUser.id,
-                                ).length
-                              }{" "}
-                              Active Listings
-                            </span>
-                          </div>
-
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                              <thead>
-                                <tr className="text-[10px] font-black text-gray-400 uppercase border-b pb-4 tracking-widest">
-                                  <th className="pb-4">Role Title</th>
-                                  <th className="pb-4">Posted Date</th>
-                                  <th className="pb-4 text-center">Status</th>
-                                  <th className="pb-4 text-right">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {jobs
-                                  .filter(
-                                    (j) => j.provider_id === selectedUser.id,
-                                  )
-                                  .map((job) => (
-                                    <tr
-                                      key={job.id}
-                                      className="border-b last:border-0 group hover:bg-slate-50 transition-colors"
-                                    >
-                                      <td className="py-5 font-bold text-gray-800 text-sm">
-                                        {job.title}
-                                      </td>
-                                      <td className="py-5 text-xs text-gray-500 font-medium">
-                                        {new Date(
-                                          job.created_at,
-                                        ).toLocaleDateString()}
-                                      </td>
-                                      <td className="py-5 text-center">
-                                        <button
-                                          onClick={() =>
-                                            toggleJobStatus(
-                                              job.id,
-                                              job.is_active,
-                                            )
-                                          }
-                                          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${
-                                            job.is_active
-                                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                              : "bg-red-50 text-red-700 border-red-100"
-                                          }`}
-                                        >
-                                          {job.is_active
-                                            ? "● Public"
-                                            : "○ Hidden"}
-                                        </button>
-                                      </td>
-                                      <td className="py-5 text-right flex items-center justify-end gap-2">
-                                        {/* NEW: Seeker View Toggle */}
-                                        <button
-                                          onClick={() =>
-                                            setSelectedJobDetails(
-                                              selectedJobDetails?.id === job.id
-                                                ? null
-                                                : job,
-                                            )
-                                          }
-                                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-                                            selectedJobDetails?.id === job.id
-                                              ? "bg-blue-600 text-white border-blue-600 shadow-inner"
-                                              : "bg-white text-blue-600 border-blue-200 hover:bg-blue-50"
-                                          }`}
-                                        >
-                                          {selectedJobDetails?.id === job.id
-                                            ? "Close Preview"
-                                            : "Seeker View"}
-                                        </button>
-
-                                        <button
-                                          onClick={() => deleteJob(job.id)}
-                                          className="p-2 text-gray-300 hover:text-red-600 transition-colors"
-                                        >
-                                          <Trash2 size={18} />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                              </tbody>
-                            </table>
-                            {/* --- NESTED SEEKER VIEW PREVIEW --- */}
-                            {selectedJobDetails && (
-                              <div className="mt-8 p-8 bg-slate-50 rounded-3xl border-2 border-blue-100 shadow-inner animate-in zoom-in-95 duration-200 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4">
-                                  <button
-                                    onClick={() => setSelectedJobDetails(null)}
-                                    className="text-gray-400 hover:text-slate-800 transition"
-                                  >
-                                    <EyeOff size={20} />
-                                  </button>
+                                      <div className="md:col-span-2">
+                                        <DetailBox
+                                          label="Highest Qualification"
+                                          value={details.qualification}
+                                        />
+                                      </div>
+                                      <div className="md:col-span-2 pt-2 border-t border-slate-100">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 mt-2">
+                                          Reported Skillset
+                                        </span>
+                                        <div className="flex flex-wrap gap-2">
+                                          {Array.isArray(details.skills) &&
+                                          details.skills.length > 0 ? (
+                                            details.skills.map((s, i) => (
+                                              <span
+                                                key={i}
+                                                className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-100"
+                                              >
+                                                {s}
+                                              </span>
+                                            ))
+                                          ) : (
+                                            <span className="text-slate-400 italic text-sm">
+                                              No skills listed.
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="md:col-span-2">
+                                        <DetailBox
+                                          label="Company Name"
+                                          value={details.company_name}
+                                          highlight
+                                        />
+                                      </div>
+                                      <div className="md:col-span-2">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                          Company Summary
+                                        </span>
+                                        <div className="text-slate-700 text-sm leading-relaxed bg-white p-4 rounded-xl border border-slate-200 shadow-inner whitespace-pre-wrap">
+                                          {details.job_offering || (
+                                            <span className="italic text-slate-400">
+                                              No description provided.
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
+                              ) : (
+                                <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                                  <AlertCircle
+                                    size={28}
+                                    className="mx-auto text-slate-300 mb-2"
+                                  />
+                                  <p className="text-slate-500 font-medium text-sm px-4">
+                                    Profile setup incomplete.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
-                                <div className="flex flex-col gap-6">
-                                  <div className="border-b border-blue-100 pb-4">
-                                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">
-                                      Job Preview (Live View)
-                                    </span>
-                                    <h2 className="text-2xl font-black text-slate-900 mt-3">
+                        {/* JOB LISTINGS (Providers Only) */}
+                        {selectedUser.role === "provider" && (
+                          <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden mt-6">
+                            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                              <h3 className="text-slate-800 font-bold flex items-center gap-2 text-sm md:text-base">
+                                <Briefcase
+                                  size={16}
+                                  className="text-purple-600"
+                                />{" "}
+                                Published Jobs
+                              </h3>
+                              <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-[10px] font-bold border border-purple-100">
+                                {
+                                  jobs.filter(
+                                    (j) => j.provider_id === selectedUser.id,
+                                  ).length
+                                }{" "}
+                                Active
+                              </span>
+                            </div>
+
+                            {/* 🛠️ FIX: Added overflow-x-auto for nested provider jobs table */}
+                            <div className="overflow-x-auto w-full">
+                              {jobs.filter(
+                                (j) => j.provider_id === selectedUser.id,
+                              ).length > 0 ? (
+                                <table className="w-full text-left min-w-[500px]">
+                                  <thead>
+                                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50">
+                                      <th className="p-3 rounded-tl-lg">
+                                        Title
+                                      </th>
+                                      <th className="p-3 text-center">
+                                        Status
+                                      </th>
+                                      <th className="p-3 text-right rounded-tr-lg">
+                                        Actions
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {jobs
+                                      .filter(
+                                        (j) =>
+                                          j.provider_id === selectedUser.id,
+                                      )
+                                      .map((job) => (
+                                        <tr
+                                          key={job.id}
+                                          className="hover:bg-slate-50"
+                                        >
+                                          <td className="p-3 font-bold text-slate-800 text-xs md:text-sm">
+                                            {job.title}
+                                          </td>
+                                          <td className="p-3 text-center">
+                                            <button
+                                              onClick={() =>
+                                                toggleJobStatus(
+                                                  job.id,
+                                                  job.is_active,
+                                                )
+                                              }
+                                              className={`px-2 py-1 rounded-full text-[9px] font-black uppercase border transition-all ${
+                                                job.is_active
+                                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                  : "bg-red-50 text-red-700 border-red-200"
+                                              }`}
+                                            >
+                                              {job.is_active
+                                                ? "Live"
+                                                : "Hidden"}
+                                            </button>
+                                          </td>
+                                          <td className="p-3 text-right flex items-center justify-end gap-2">
+                                            <button
+                                              onClick={() =>
+                                                setSelectedJobDetails(
+                                                  selectedJobDetails?.id ===
+                                                    job.id
+                                                    ? null
+                                                    : job,
+                                                )
+                                              }
+                                              className="px-3 py-1.5 rounded-lg text-[10px] font-bold border bg-white text-purple-600 border-purple-200 hover:bg-purple-50"
+                                            >
+                                              {selectedJobDetails?.id === job.id
+                                                ? "Close"
+                                                : "View"}
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <div className="py-8 text-center text-slate-400 text-xs md:text-sm font-medium border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                                  No jobs published yet.
+                                </div>
+                              )}
+
+                              {/* --- NESTED SEEKER VIEW PREVIEW --- */}
+                              {selectedJobDetails && (
+                                <div className="mt-6 p-4 md:p-6 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
+                                  <div className="absolute top-0 right-0 p-3 md:p-4">
+                                    <button
+                                      onClick={() =>
+                                        setSelectedJobDetails(null)
+                                      }
+                                      className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-full"
+                                    >
+                                      <EyeOff size={14} />
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-col gap-4 mt-2">
+                                    <h2 className="text-xl md:text-2xl font-black text-white pr-8">
                                       {selectedJobDetails.title}
                                     </h2>
-                                    <p className="text-blue-600 font-bold flex items-center gap-2">
+                                    <p className="text-purple-400 font-bold flex flex-wrap gap-2 text-xs md:text-sm">
                                       <span>
                                         🏢 {selectedJobDetails.company}
                                       </span>
-                                      <span className="text-slate-300">•</span>
+                                      <span className="text-slate-600 hidden md:inline">
+                                        •
+                                      </span>
                                       <span>
                                         📍 {selectedJobDetails.location}
                                       </span>
                                     </p>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                                      <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">
-                                        Salary Range
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                      <span className="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest">
+                                        Description
                                       </span>
-                                      <span className="text-sm font-bold text-emerald-600">
-                                        {selectedJobDetails.salary ||
-                                          "Negotiable"}
-                                      </span>
+                                      <div className="text-slate-300 text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
+                                        {selectedJobDetails.description ||
+                                          "No description provided."}
+                                      </div>
                                     </div>
-                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                                      <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">
-                                        Job Type
-                                      </span>
-                                      <span className="text-sm font-bold text-slate-700">
-                                        {selectedJobDetails.type}
-                                      </span>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                                      <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">
-                                        Primary Contact
-                                      </span>
-                                      <span className="text-sm font-bold text-slate-700 truncate block">
-                                        {selectedJobDetails.contact_email}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-4 tracking-widest">
-                                      Job Description
-                                    </span>
-                                    <div className="text-slate-700 leading-relaxed text-sm whitespace-pre-wrap">
-                                      {selectedJobDetails.description ||
-                                        "No description provided."}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex flex-wrap gap-2 pt-2">
-                                    {selectedJobDetails.tags
-                                      ?.split(",")
-                                      .map((tag, i) => (
-                                        <span
-                                          key={i}
-                                          className="bg-slate-100 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full uppercase"
-                                        >
-                                          #{tag.trim()}
-                                        </span>
-                                      ))}
                                   </div>
                                 </div>
-                              </div>
-                            )}
-                            {jobs.filter(
-                              (j) => j.provider_id === selectedUser.id,
-                            ).length === 0 && (
-                              <div className="py-20 text-center text-gray-400 text-sm italic border-2 border-dashed border-gray-100 rounded-3xl mt-4">
-                                This provider hasn't published any jobs to the
-                                hub yet.
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
