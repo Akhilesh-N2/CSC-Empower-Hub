@@ -59,6 +59,7 @@ const Navbar = () => {
     if (role === 'admin') return '/admin';
     if (role === 'provider') return '/find-talent';
     if (role === 'seeker') return '/job-search';
+    if (role === 'shop') return '/shop-dashboard'; 
     return '/';
   };
 
@@ -99,6 +100,12 @@ const Navbar = () => {
                 <Link to="/find-talent" className="hover:text-blue-300 transition">Find Candidates</Link>
                 <Link to="/my-jobs" className="hover:text-blue-300 transition">My Jobs</Link>
                 <Link to="/provider-profile" className="hover:text-blue-300 transition">Company Profile</Link>
+              </>
+            )}
+
+            {role === 'shop' && (
+              <>
+                <Link to="/shop-dashboard" className="hover:text-blue-300 transition">Billing System</Link>
               </>
             )}
 
@@ -157,6 +164,12 @@ const Navbar = () => {
               <Link to="/find-talent" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>Find Candidates</Link>
               <Link to="/my-jobs" className="block py-2 text-gray-300" onClick={() => setIsMenuOpen(false)}>My Jobs</Link>
               <Link to="/provider-profile" className="block py-2 text-blue-400 font-bold" onClick={() => setIsMenuOpen(false)}>Company Profile</Link>
+            </>
+          )}
+
+          {role === 'shop' && (
+            <>
+              <Link to="/shop-dashboard" className="block py-2 text-gray-300 font-bold" onClick={() => setIsMenuOpen(false)}>Billing System</Link>
             </>
           )}
 

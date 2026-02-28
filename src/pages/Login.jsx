@@ -41,10 +41,18 @@ function Login() {
         return;
       }
 
-      // 4. Redirect based on Role
-      if (profile.role === 'admin') navigate('/admin');
-      else if (profile.role === 'provider') navigate('/find-talent');
-      else navigate('/job-search');
+      // 4. Redirect based on Role (UPDATED WITH SHOP ROUTE)
+      if (profile.role === 'admin') {
+        navigate('/admin');
+      } else if (profile.role === 'provider') {
+        navigate('/find-talent');
+      } else if (profile.role === 'shop') {
+        navigate('/shop-dashboard'); // <-- SHOP REDIRECT ADDED HERE
+      } else if (profile.role === 'seeker') {
+        navigate('/job-search');
+      } else {
+        navigate('/'); // Fallback
+      }
 
     } catch (error) {
       alert("Login failed: " + error.message);

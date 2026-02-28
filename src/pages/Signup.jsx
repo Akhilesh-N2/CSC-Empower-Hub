@@ -20,12 +20,15 @@ function Signup() {
   // Seeker Specific
   const [qualification, setQualification] = useState("");
   const [targetJob, setTargetJob] = useState("");
-  const [skills, setSkills] = useState(""); // NEW
+  const [skills, setSkills] = useState("");
   const [experience, setExperience] = useState("");
 
   // Provider Specific
   const [companyName, setCompanyName] = useState("");
   const [jobOffering, setJobOffering] = useState("");
+
+  // Shop Specific
+  const [shopName, setShopName] = useState("");
   // -------------------------------
 
   const handleSignup = async (e) => {
@@ -58,12 +61,8 @@ function Signup() {
 
         // B. Insert detailed data into specific sub-profile tables
         if (role === "seeker") {
-          // Format skills into an array (e.g., "Driving, Cooking" -> ["Driving", "Cooking"])
           const skillsArray = skills.trim()
-            ? skills
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
+            ? skills.split(",").map((s) => s.trim()).filter(Boolean)
             : [];
 
           const finalExperience =
@@ -80,8 +79,8 @@ function Signup() {
                 location: location,
                 qualification: qualification,
                 title: targetJob,
-                skills: skillsArray, // Sends user data OR empty array
-                experience: finalExperience, // Sends user data OR "0 years"
+                skills: skillsArray,
+                experience: finalExperience,
               },
             ]);
 
@@ -107,6 +106,24 @@ function Signup() {
             console.error("PROVIDER DB ERROR:", providerErr);
             alert("Provider data rejected: " + providerErr.message);
           }
+        } else if (role === "shop") {
+          // --- NEW: SHOP INSERTION LOGIC ---
+          const { error: shopErr } = await supabase
+            .from("shop_profiles")
+            .insert([
+              {
+                id: data.user.id,
+                full_name: fullName,
+                shop_name: shopName,
+                phone: phone,
+                location: location,
+              },
+            ]);
+
+          if (shopErr) {
+            console.error("SHOP DB ERROR:", shopErr);
+            alert("Shop data rejected: " + shopErr.message);
+          }
         }
 
         // 3. FORCE LOGOUT
@@ -127,16 +144,15 @@ function Signup() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 py-8">
-      {/* 🛠️ WIDENED CONTAINER: max-w-md becomes max-w-4xl on large screens */}
       <div className="bg-white p-6 md:p-10 rounded-2xl shadow-xl w-full max-w-md lg:max-w-4xl border border-gray-100 z-10 relative my-auto overflow-y-auto max-h-[95vh]">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Create Account</h1>
-          <p className="text-gray-500 mt-2">Join us to find or post jobs.</p>
+          <p className="text-gray-500 mt-2">Join the Empower Hub community.</p>
         </div>
 
         <form onSubmit={handleSignup} className="flex flex-col gap-8">
-          {/* 🛠️ TWO COLUMN WRAPPER: Stacks on mobile, side-by-side on desktop */}
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+            
             {/* --- LEFT COLUMN: CORE AUTH --- */}
             <div className="flex-1 space-y-5">
               <div>
@@ -170,9 +186,9 @@ function Signup() {
 
               <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
                 <label className="block text-sm font-bold text-blue-800 mb-3">
-                  I am a:
+                  I am registering as a:
                 </label>
-                <div className="flex gap-6">
+                <div className="flex flex-wrap gap-4 sm:gap-6">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -182,9 +198,7 @@ function Signup() {
                       onChange={(e) => setRole(e.target.value)}
                       className="text-blue-600 focus:ring-blue-500 w-5 h-5"
                     />
-                    <span className="text-gray-800 font-medium">
-                      Job Seeker
-                    </span>
+                    <span className="text-gray-800 font-medium">Seeker</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -195,9 +209,18 @@ function Signup() {
                       onChange={(e) => setRole(e.target.value)}
                       className="text-blue-600 focus:ring-blue-500 w-5 h-5"
                     />
-                    <span className="text-gray-800 font-medium">
-                      Job Provider
-                    </span>
+                    <span className="text-gray-800 font-medium">Provider</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="shop"
+                      checked={role === "shop"}
+                      onChange={(e) => setRole(e.target.value)}
+                      className="text-emerald-600 focus:ring-emerald-500 w-5 h-5"
+                    />
+                    <span className="text-gray-800 font-medium">Shop</span>
                   </label>
                 </div>
               </div>
@@ -206,20 +229,25 @@ function Signup() {
             {/* --- RIGHT COLUMN: DYNAMIC PROFILE DETAILS --- */}
             <div className="flex-1 bg-gray-50 p-6 rounded-2xl border border-gray-200 shadow-inner">
               <p className="text-lg font-bold text-gray-800 border-b border-gray-200 pb-3 mb-5 flex items-center gap-2">
-                <span>{role === "seeker" ? "🎓" : "🏢"}</span>
+                <span>
+                  {role === "seeker" ? "🎓" : role === "provider" ? "🏢" : "🏪"}
+                </span>
                 {role === "seeker"
                   ? "Job Seeker Details"
-                  : "Job Provider Details"}
+                  : role === "provider"
+                  ? "Job Provider Details"
+                  : "Shop Details"}
               </p>
 
-              {/* 🛠️ INNER GRID: Side-by-side inputs within the right column */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Full Name spans both columns */}
+                {/* Shared Fields */}
                 <div className="sm:col-span-2">
                   <input
                     type="text"
                     placeholder={
-                      role === "seeker"
+                      role === "shop" 
+                        ? "Your Name (Owner/Manager)" 
+                        : role === "seeker"
                         ? "Your Full Name"
                         : "Contact Person's Full Name"
                     }
@@ -271,7 +299,6 @@ function Signup() {
                         className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white shadow-sm outline-none"
                       />
                     </div>
-                    {/* NEW OPTIONAL FIELDS */}
                     <div className="sm:col-span-2">
                       <input
                         type="text"
@@ -299,7 +326,7 @@ function Signup() {
                     <div className="sm:col-span-2 mt-2">
                       <input
                         type="text"
-                        placeholder="Company / Shop Name"
+                        placeholder="Company Name"
                         required
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
@@ -318,30 +345,45 @@ function Signup() {
                     </div>
                   </>
                 )}
+
+                {/* SHOP FIELDS */}
+                {role === "shop" && (
+                  <div className="sm:col-span-2 mt-2">
+                    <input
+                      type="text"
+                      placeholder="Shop / Store Name *"
+                      required
+                      value={shopName}
+                      onChange={(e) => setShopName(e.target.value)}
+                      className="w-full px-4 py-3 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm outline-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* --- SUBMIT BUTTON (Spans full width at bottom) --- */}
+          {/* --- SUBMIT BUTTON --- */}
           <div className="pt-2">
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg transition-all ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 hover:-translate-y-1"}`}
+              className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg transition-all ${
+                loading 
+                ? "bg-gray-400 cursor-not-allowed" 
+                : role === "shop" 
+                  ? "bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-1" 
+                  : "bg-blue-600 hover:bg-blue-700 hover:-translate-y-1"
+              }`}
             >
-              {loading
-                ? "Creating Account..."
-                : "Create Account & Request Approval"}
+              {loading ? "Creating Account..." : "Create Account & Request Approval"}
             </button>
           </div>
         </form>
 
         <div className="mt-8 text-center text-sm text-gray-600">
           Already have an account?
-          <Link
-            to="/login"
-            className="ml-2 font-bold text-blue-600 hover:text-blue-800 hover:underline"
-          >
+          <Link to="/login" className="ml-2 font-bold text-blue-600 hover:text-blue-800 hover:underline">
             Login here
           </Link>
         </div>

@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react'
-import { supabase } from '../supabaseClient'
-import Search from '../components/Search'
-import SchemeCard from '../components/SchemeCard'
-import Carousel from '../components/Carousel'
-import SmartText from '../components/SmartText'
-import { Filter, X, ChevronLeft, ChevronRight, LayoutGrid } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
+import Search from '../components/Search';
+import SchemeCard from '../components/SchemeCard';
+import Carousel from '../components/Carousel';
+import SmartText from '../components/SmartText';
 
 function LandingPage() { 
     // 1. STATE FOR DATA
@@ -18,12 +17,9 @@ function LandingPage() {
     const itemsPerPage = 8;
 
     // --- FETCHING LOGIC ---
-
-    // Fetch Schemes (Useful Links)
     const fetchSchemes = async () => {
         const { data, error } = await supabase
             .from('schemes')
-            // OPTIMIZATION: Only fetch exactly what the SchemeCard needs
             .select('id, image, title, category, description, visitUrl, downloadUrl') 
             .eq('active', true) 
             .eq('type', 'scheme')
@@ -32,44 +28,28 @@ function LandingPage() {
         if (!error) setSchemes(data || []);
     };
 
-    // Fetch Carousel Slides
     const fetchSlides = async () => {
         const { data, error } = await supabase
             .from('slides')
-            // OPTIMIZATION: Only fetch what the Carousel needs
             .select('id, image, title, description, link, duration, object_fit') 
             .order('id', { ascending: true });
         if (!error) setCarouselSlides(data || []);
     };
 
-    // --- REAL-TIME SUBSCRIPTION ---
+    // --- LOAD DATA (WebSockets Disabled for Vercel Proxy) ---
     useEffect(() => {
         fetchSchemes();
         fetchSlides();
 
+        /* 🚨 TEMPORARILY DISABLED: Vercel Proxy does not support WebSockets
         const channel = supabase
             .channel('landing-page-updates')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'schemes' },
-                (payload) => {
-                    console.log('Schemes updated!', payload);
-                    fetchSchemes();
-                }
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'slides' },
-                (payload) => {
-                    console.log('Slides updated!', payload);
-                    fetchSlides();
-                }
-            )
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schemes' }, () => { fetchSchemes(); })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'slides' }, () => { fetchSlides(); })
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
+        */
     }, []);
 
 
@@ -80,7 +60,6 @@ function LandingPage() {
         const q = searchQuery.trim().toLowerCase();
         return schemes.filter((scheme) => {
             if (!scheme) return false;
-
             const categoryMatch = selectedCategory === "All" || scheme.category === selectedCategory;
             if (!q) return categoryMatch;
 
@@ -104,8 +83,19 @@ function LandingPage() {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            {/* MAIN CONTENT */}
-            <div className="max-w-[92rem] mx-auto px-3 md:px-4 py-8 md:py-16">
+            {/* ================= HERO / CAROUSEL ================= */}
+            <div className="bg-gradient-to-r from-sky-50 via-white to-white pb-6">
+                {carouselSlides && carouselSlides.length > 0 ? (
+                    <Carousel slides={carouselSlides} key={`carousel-${carouselSlides.length}`} />
+                ) : (
+                    <div className="h-64 flex items-center justify-center bg-gray-100 animate-pulse rounded-xl mx-4 mt-4 border border-gray-200 shadow-inner">
+                        <p className="text-gray-400 font-bold">Loading Latest Updates...</p>
+                    </div>
+                )}
+            </div>
+
+            {/* ================= MAIN CONTENT ================= */}
+            <div className="max-w-[92rem] mx-auto px-3 md:px-4 py-8 md:py-12">
                 
                 {/* 1. CLEAN HEADER */}
                 <div className='flex flex-col items-center text-center gap-2 md:gap-3 mb-8 md:mb-10'>
@@ -121,12 +111,10 @@ function LandingPage() {
 
                 {/* 2. SEARCH & FILTER STACK */}
                 <div className="flex flex-col items-center gap-5 md:gap-6 mb-10 md:mb-12 w-full">
-                    {/* Search Bar */}
                     <div className="w-full max-w-3xl px-1 md:px-0">
                         <Search onSearch={handleSearch} initialValue={searchQuery} />
                     </div>
 
-                    {/* Category Pills - Scrollable on Mobile, Wrapped on Desktop */}
                     <div className="w-full flex overflow-x-auto no-scrollbar md:flex-wrap md:justify-center items-center gap-2 md:gap-3 pb-2 px-1 snap-x">
                         {categories.map(cat => (
                             <button
@@ -142,7 +130,6 @@ function LandingPage() {
                             </button>
                         ))}
                         
-                        {/* Subtle Clear Button */}
                         {(searchQuery || selectedCategory !== "All") && (
                             <button
                                 onClick={() => { setSearchQuery(""); setSelectedCategory("All"); }}
@@ -154,7 +141,7 @@ function LandingPage() {
                     </div>
                 </div>
 
-                {/* 3. GRID OF CARDS (Now 2-columns on mobile) */}
+                {/* 3. GRID OF CARDS */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-8">
                     {currentSchemes.length > 0 ? (
                         currentSchemes.map(scheme => (
@@ -217,4 +204,4 @@ function LandingPage() {
     )
 }
 
-export default LandingPage
+export default LandingPage;

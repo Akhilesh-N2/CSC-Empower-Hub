@@ -18,12 +18,12 @@ import {
   Briefcase,
   MapPin,
   Phone,
-  Mail,
   GraduationCap,
   FileText,
   Image,
   Users,
   Megaphone,
+  Store, // <-- Added Store icon for Shops
 } from "lucide-react";
 
 // A placeholder image to use if the user doesn't upload one
@@ -38,7 +38,6 @@ const isVideo = (url) => {
 // Helper to create safe Cloudinary folder names from user titles
 const formatFolderName = (title) => {
   if (!title || title.trim() === "") return "Untitled";
-  // Replaces spaces with underscores and removes special characters
   return title
     .trim()
     .replace(/[^a-zA-Z0-9 \-]/g, "")
@@ -47,7 +46,6 @@ const formatFolderName = (title) => {
 
 // Add this helper function to your Admin panel
 const getUsageEstimate = async () => {
-  // 1. Check Row Counts (Database Storage impact)
   const { count: userCount } = await supabase
     .from("profiles")
     .select("*", { count: "exact", head: true });
@@ -56,7 +54,6 @@ const getUsageEstimate = async () => {
     .from("jobs")
     .select("*", { count: "exact", head: true });
 
-  // 2. Logic: Each user record is ~0.5KB. Each job with text is ~2KB.
   const estimatedDataSize = userCount * 0.5 + jobCount * 2;
 
   return {
@@ -66,9 +63,6 @@ const getUsageEstimate = async () => {
   };
 };
 
-// --- NEW: Cloudinary Upload Utility ---
-// --- UPDATED: Smart Cloudinary Upload Utility ---
-// --- UPDATED: Organized Cloudinary Upload Utility ---
 const uploadToCloudinary = async (file, folderName) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -77,7 +71,6 @@ const uploadToCloudinary = async (file, folderName) => {
     import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
   );
 
-  // NEW: Tell Cloudinary which folder to use!
   if (folderName) {
     formData.append("folder", folderName);
   }
@@ -90,12 +83,10 @@ const uploadToCloudinary = async (file, folderName) => {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error.message);
 
-  // 1. IF IT'S A PDF: Return the raw link
   if (file.type === "application/pdf") {
     return data.secure_url;
   }
 
-  // 2. IF IT'S AN IMAGE/VIDEO: Inject q_auto,f_auto for instant compression
   const optimizedUrl = data.secure_url.replace(
     "/upload/",
     "/upload/q_auto,f_auto/",
@@ -117,9 +108,8 @@ const DetailBox = ({ label, value, highlight }) => (
   </div>
 );
 
-// Removed props here - The component now manages its own data!
 function Admin({ currentUser }) {
-  // --- 1. DATA STATE (Self-Contained) ---
+  // --- 1. DATA STATE ---
   const [schemes, setSchemes] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [users, setUsers] = useState([]);
@@ -133,7 +123,7 @@ function Admin({ currentUser }) {
   const [slideImageUploading, setSlideImageUploading] = useState(false);
   const [isEditingSlide, setIsEditingSlide] = useState(false);
   const [posterUploading, setPosterUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState("cards"); // 'cards' | 'carousel' | 'jobs' | 'users' | 'posters'
+  const [activeTab, setActiveTab] = useState("cards");
 
   // --- PAGINATION STATE ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -148,24 +138,22 @@ function Admin({ currentUser }) {
   const [posterTitle, setPosterTitle] = useState("");
   const [posterImage, setPosterImage] = useState("");
 
-  // --- STATE FOR JOBS (Loading state handled globally now, but keeping var for safety) ---
   const [jobsLoading, setJobsLoading] = useState(false);
 
-  // --- NEW: PHASE 3 ADMIN STATES ---
+  // --- PHASE 3 ADMIN STATES ---
   const [seekerDetails, setSeekerDetails] = useState([]);
   const [providerDetails, setProviderDetails] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null); // Tracks the user being reviewed in "Full Section" mode
-  const [selectedJobDetails, setSelectedJobDetails] = useState(null); // For the "Seeker View" popup
+  const [shopDetails, setShopDetails] = useState([]); // NEW: State for shops
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedJobDetails, setSelectedJobDetails] = useState(null);
 
-  const [userSubTab, setUserSubTab] = useState("seekers"); // 'seekers' | 'providers'
+  const [userSubTab, setUserSubTab] = useState("seekers"); // 'seekers' | 'providers' | 'shops'
 
-  // --- 3. FETCH DATA FUNCTION (Replaces props) ---
+  // --- 3. FETCH DATA FUNCTION ---
   const fetchData = async () => {
-    // Only set global loading on first load to prevent UI flickering on updates
     if (schemes.length === 0) setLoading(true);
 
     try {
-      // Inside your fetchData() function...
       const [
         schemesData,
         jobsData,
@@ -174,6 +162,7 @@ function Admin({ currentUser }) {
         catsData,
         seekersData,
         providersData,
+        shopsData, // NEW: Fetch shop data
       ] = await Promise.all([
         supabase
           .from("schemes")
@@ -195,14 +184,19 @@ function Admin({ currentUser }) {
           .from("categories")
           .select("*")
           .order("name", { ascending: true }),
-        // NEW: Fetch detailed profiles
         supabase.from("seeker_profiles").select("*"),
         supabase.from("provider_profiles").select("*"),
+        supabase.from("shop_profiles").select("*"), // Fetch shops
       ]);
 
-      // ... existing sets ...
       if (seekersData?.data) setSeekerDetails(seekersData.data);
       if (providersData?.data) setProviderDetails(providersData.data);
+      if (shopsData?.data) {
+        console.log("SHOPS DATA FETCHED:", shopsData.data); // <-- ADD THIS
+        setShopDetails(shopsData.data);
+      }
+
+      console.log("ALL USERS:", usersData.data); // <-- AND THIS // Set shops
 
       if (schemesData.data) setSchemes(schemesData.data);
       if (jobsData.data) setJobs(jobsData.data);
@@ -217,70 +211,42 @@ function Admin({ currentUser }) {
     }
   };
 
-  // --- 4. REAL-TIME LISTENER ---
   useEffect(() => {
     fetchData();
-
-    /* // 🚨 REALTIME DISABLED TEMPORARILY
-      // Vercel proxy does not support wss:// (WebSockets). 
-      // Uncomment this once the Indian ISP block is lifted and you remove the proxy.
-      
-      const channel = supabase
-        .channel("admin-dashboard-updates")
-        .on("postgres_changes", { event: "*", schema: "public" }, () => {
-          fetchData(); 
-        })
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    */
   }, []);
 
-  // Reset pagination when tab changes
   useEffect(() => {
     setSearchTerm("");
     setFilterCategory("");
     setFilterType("");
     setCurrentPage(1);
-  }, [activeTab]);
+  }, [activeTab, userSubTab]); // Reset pagination when sub-tabs change
 
-  // --- FILTER & PAGINATION LOGIC (Kept exactly as original) ---
-
-  // 1. CONTENT FILTER
-  // 1. CONTENT FILTER
+  // --- FILTER & PAGINATION LOGIC ---
   const filteredContent = schemes.filter((s) => {
     if (s.category === "Poster") return false;
-
     const matchesSearch = s.title
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
     const matchesCategory =
       filterCategory === "" || s.category === filterCategory;
-    // NEW: Check if the type matches our new dropdown
     const matchesType = filterType === "" || s.type === filterType;
-
-    // Return true ONLY if it matches all active filters
     return matchesSearch && matchesCategory && matchesType;
   });
 
-  // 2. JOBS FILTER
   const filteredJobs = jobs.filter(
     (job) =>
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.company.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // --- UPDATED USERS FILTER & PAGINATION ---
-  const usersByRole = users.filter(
-    (u) => u.role === (userSubTab === "seekers" ? "seeker" : "provider"),
-  );
+  // --- UPDATED USERS FILTER ---
+  const roleMap = { seekers: "seeker", providers: "provider", shops: "shop" };
+  const usersByRole = users.filter((u) => u.role === roleMap[userSubTab]);
   const filteredUsers = usersByRole.filter((user) =>
     user.email.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // PAGINATION SLICING
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredContent.slice(indexOfFirstItem, indexOfLastItem);
@@ -299,23 +265,16 @@ function Admin({ currentUser }) {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   // --- ACTION HANDLERS ---
-
-  // JOB ACTIONS
   const toggleJobStatus = async (id, currentStatus) => {
     const newStatus = !currentStatus;
-    // Optimistic update
     setJobs(
       jobs.map((j) => (j.id === id ? { ...j, is_active: newStatus } : j)),
     );
-
     await supabase
       .from("jobs")
-      .update({
-        is_active: newStatus,
-        admin_override: !newStatus,
-      })
+      .update({ is_active: newStatus, admin_override: !newStatus })
       .eq("id", id);
-    fetchData(); // Ensure sync
+    fetchData();
   };
 
   const deleteJob = async (id) => {
@@ -327,7 +286,6 @@ function Admin({ currentUser }) {
     fetchData();
   };
 
-  // CATEGORY ACTIONS
   const [newCategoryInput, setNewCategoryInput] = useState("");
 
   const handleAddCategory = async () => {
@@ -353,7 +311,6 @@ function Admin({ currentUser }) {
   const handleDeleteCategory = async () => {
     const categoryToDelete = currentScheme.category;
     if (!categoryToDelete) return alert("Please select a category first.");
-
     if (window.confirm(`Delete category "${categoryToDelete}" permanently?`)) {
       try {
         await supabase.from("categories").delete().eq("name", categoryToDelete);
@@ -365,7 +322,6 @@ function Admin({ currentUser }) {
     }
   };
 
-  // CARDS (SCHEME) ACTIONS
   const [isEditing, setIsEditing] = useState(false);
   const [currentScheme, setCurrentScheme] = useState({
     id: null,
@@ -387,31 +343,24 @@ function Admin({ currentUser }) {
     });
   };
 
-  // Keep separate upload handlers as requested
   const handlePdfUpload = async (e) => {
-    // Force the admin to select a category first
     if (!currentScheme.category) {
-      e.target.value = ""; // Resets the file input
+      e.target.value = "";
       return alert(
         "Please select a Category first so we can organize the file!",
       );
     }
-
     const file = e.target.files[0];
     if (!file || file.type !== "application/pdf")
       return alert("Please upload a PDF.");
 
     setPdfUploading(true);
     try {
-      // Clean the category name just in case it has weird characters
       const safeCategory = formatFolderName(currentScheme.category);
-
-      // Dynamically routes to Forms/CategoryName or Schemes/CategoryName
       const targetFolder =
         currentScheme.type === "form"
           ? `Forms/${safeCategory}`
           : `Schemes/${safeCategory}`;
-
       const secureUrl = await uploadToCloudinary(file, targetFolder);
       setCurrentScheme((prev) => ({ ...prev, downloadUrl: secureUrl }));
       alert(`PDF safely stored in Cloudinary folder: ${targetFolder}`);
@@ -422,16 +371,13 @@ function Admin({ currentUser }) {
     }
   };
 
-  // 1. SCHEME IMAGE UPLOAD
   const handleImageUpload = async (e) => {
-    // Force the admin to select a category first
     if (!currentScheme.category) {
       e.target.value = "";
       return alert(
         "Please select a Category first so we can organize the image!",
       );
     }
-
     const file = e.target.files[0];
     if (!file || !file.type.startsWith("image/"))
       return alert("Please upload an image.");
@@ -439,13 +385,10 @@ function Admin({ currentUser }) {
     setImageUploading(true);
     try {
       const safeCategory = formatFolderName(currentScheme.category);
-
-      // Routes to the exact same folder as the PDF
       const targetFolder =
         currentScheme.type === "form"
           ? `Forms/${safeCategory}`
           : `Schemes/${safeCategory}`;
-
       const secureUrl = await uploadToCloudinary(file, targetFolder);
       setCurrentScheme((prev) => ({ ...prev, image: secureUrl }));
       alert(`Image safely stored in Cloudinary folder: ${targetFolder}`);
@@ -458,14 +401,10 @@ function Admin({ currentUser }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // 1. Basic Validation
     if (currentScheme.type === "form" && !currentScheme.downloadUrl) {
       return alert("PDF is mandatory for downloadable forms.");
     }
 
-    // 2. Create a clean data object WITHOUT the 'id' field
-    // This object is used for both Insert and Update
     const schemeFields = {
       title: currentScheme.title,
       category: currentScheme.category,
@@ -479,25 +418,18 @@ function Admin({ currentUser }) {
 
     try {
       if (isEditing) {
-        // UPDATE logic
         const { error } = await supabase
           .from("schemes")
           .update(schemeFields)
           .eq("id", currentScheme.id);
-
         if (error) throw error;
         alert("Item updated successfully!");
         setIsEditing(false);
       } else {
-        // INSERT logic
-        // We pass [schemeFields] which strictly does NOT have an 'id' key
-        const { error } = await supabase.from("schemes").insert([schemeFields]); // Supabase will generate the ID automatically
-
+        const { error } = await supabase.from("schemes").insert([schemeFields]);
         if (error) throw error;
         alert("New item added to database!");
       }
-
-      // 3. Reset form and refresh UI
       setCurrentScheme({
         id: null,
         title: "",
@@ -535,7 +467,6 @@ function Admin({ currentUser }) {
     setIsEditing(true);
   };
 
-  // CAROUSEL ACTIONS
   const [currentSlide, setCurrentSlide] = useState({
     id: null,
     title: "",
@@ -549,7 +480,6 @@ function Admin({ currentUser }) {
   const handleSlideInput = (e) =>
     setCurrentSlide({ ...currentSlide, [e.target.name]: e.target.value });
 
-  // 2. CAROUSEL MEDIA UPLOAD
   const handleSlideImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -567,43 +497,31 @@ function Admin({ currentUser }) {
 
   const handleSlideSubmit = async (e) => {
     e.preventDefault();
-
-    // 1. UPLOAD GUARD: Prevent submission if Cloudinary hasn't returned the URL yet
-    if (!currentSlide.image) {
+    if (!currentSlide.image)
       return alert(
         "Please wait for the image to upload or select a file first!",
       );
-    }
-
-    // Destructure to pull 'id' out for the update query
     const { id, ...slideData } = currentSlide;
     const finalData = {
       ...slideData,
       duration: parseInt(slideData.duration) || 5000,
     };
-
     try {
-      console.log("Attempting to save to Supabase:", finalData); // Check your console!
-
       if (isEditingSlide) {
         const { error } = await supabase
           .from("slides")
           .update(finalData)
           .eq("id", id);
-
         if (error) throw error;
         alert("Slide updated successfully!");
       } else {
         const { error } = await supabase.from("slides").insert([finalData]);
-
         if (error) throw error;
         alert("Slide added successfully!");
       }
-
       cancelSlideEdit();
       fetchData();
     } catch (error) {
-      // 2. DEEP ERROR LOGGING: This will tell us exactly why Supabase rejected it
       console.error("Supabase Rejection Details:", error);
       alert(
         `Database Error: ${error.message || error.details || "Check the Inspect Element Console"}`,
@@ -621,7 +539,6 @@ function Admin({ currentUser }) {
   const handleEditSlide = (slide) => {
     setCurrentSlide(slide);
     setIsEditingSlide(true);
-    // Smooth scroll back to the top of the form
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -638,7 +555,6 @@ function Admin({ currentUser }) {
     });
   };
 
-  // USER ACTIONS
   const toggleUserApproval = async (id, currentStatus) => {
     try {
       const { data, error } = await supabase
@@ -646,23 +562,15 @@ function Admin({ currentUser }) {
         .update({ is_approved: !currentStatus })
         .eq("id", id)
         .select();
-
       if (error) throw error;
-
-      if (!data || data.length === 0) {
+      if (!data || data.length === 0)
         throw new Error("Supabase RLS Policy blocked the update!");
-      }
 
       const updatedUser = {
         ...users.find((u) => u.id === id),
         is_approved: !currentStatus,
       };
-
-      // 1. Update the main list so the background table is correct
       setUsers(users.map((u) => (u.id === id ? updatedUser : u)));
-
-      // 2. 🛠️ THE FIX: Update the 'selectedUser' state immediately
-      // This ensures the button color and text change on the Review screen without a refresh
       if (selectedUser && selectedUser.id === id) {
         setSelectedUser(updatedUser);
       }
@@ -672,33 +580,41 @@ function Admin({ currentUser }) {
   };
 
   const handleDeleteUser = async (id, email) => {
-    if (!window.confirm(`Delete user ${email}?`)) return;
-    await supabase.from("profiles").delete().eq("id", id);
-    fetchData();
+    if (
+      !window.confirm(
+        `🚨 WARNING: Are you absolutely sure you want to permanently delete ${email}? \n\nThis will wipe their login, profile, and all jobs they posted. This CANNOT be undone.`,
+      )
+    )
+      return;
+
+    try {
+      // Trigger the secure RPC function we built in the Supabase SQL editor
+      const { error } = await supabase.rpc("delete_user", { user_id: id });
+
+      if (error) throw error;
+
+      alert("User completely wiped from the system.");
+      setSelectedUser(null); // Close the dossier view
+      fetchData(); // Refresh the list
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      alert("Error deleting user: " + err.message);
+    }
   };
 
-  // 3. POSTER UPLOAD
-  // 3. UPDATED POSTER UPLOAD (Organized in Posters folder)
   const handlePosterUpload = async (e) => {
-    // 1. Force the admin to enter a title first!
     if (!posterTitle) {
-      e.target.value = ""; // Resets the file input
+      e.target.value = "";
       return alert(
         "Please enter a Poster Title first so we can organize the image!",
       );
     }
-
     const file = e.target.files[0];
     if (!file) return;
-
     setPosterUploading(true);
     try {
-      // 2. Clean the title to make it a safe folder name
       const safeTitle = formatFolderName(posterTitle);
-
-      // 3. Route it to Posters/Clean_Title
       const targetFolder = `Posters/${safeTitle}`;
-
       const secureUrl = await uploadToCloudinary(file, targetFolder);
       setPosterImage(secureUrl);
       alert(`Poster safely stored in Cloudinary folder: ${targetFolder}`);
@@ -728,7 +644,6 @@ function Admin({ currentUser }) {
     fetchData();
   };
 
-  // --- RENDER (Original Layout preserved) ---
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       {/* RESPONSIVE NAV */}
@@ -742,13 +657,15 @@ function Admin({ currentUser }) {
             onClick={() => setActiveTab("cards")}
             className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "cards" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            <FileText size={18} /> <span className="whitespace-nowrap">Content</span>
+            <FileText size={18} />{" "}
+            <span className="whitespace-nowrap">Content</span>
           </button>
           <button
             onClick={() => setActiveTab("carousel")}
             className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "carousel" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            <Image size={18} /> <span className="whitespace-nowrap">Carousel</span>
+            <Image size={18} />{" "}
+            <span className="whitespace-nowrap">Carousel</span>
           </button>
           <button
             onClick={() => setActiveTab("users")}
@@ -760,20 +677,17 @@ function Admin({ currentUser }) {
             onClick={() => setActiveTab("posters")}
             className={`snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all font-semibold text-sm md:text-base ${activeTab === "posters" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
           >
-            <Megaphone size={18} /> <span className="whitespace-nowrap">Posters</span>
+            <Megaphone size={18} />{" "}
+            <span className="whitespace-nowrap">Posters</span>
           </button>
 
-          {/* --- DEVELOPER ONLY BUTTON --- */}
           {currentUser?.email === "manoj@gmail.com" && (
             <>
-              {/* This label and spacing ONLY shows on desktop */}
               <div className="hidden md:block mt-auto pt-6 border-t border-slate-800 ">
                 <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4 mb-2">
                   Developer Tools
                 </div>
               </div>
-              
-              {/* The Button acts as a normal flex item on mobile */}
               <Link
                 to="/dev-stats"
                 className="snap-center shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-cyan-400 hover:bg-slate-700 hover:text-cyan-300 transition-all group md:mb-4"
@@ -781,7 +695,9 @@ function Admin({ currentUser }) {
                 <div className="md:p-1.5 md:bg-slate-900 rounded-lg group-hover:shadow-[0_0_10px_rgba(34,211,238,0.3)] transition-all">
                   <Activity size={16} />
                 </div>
-                <span className="text-sm font-bold tracking-tight whitespace-nowrap">Engine Room</span>
+                <span className="text-sm font-bold tracking-tight whitespace-nowrap">
+                  Engine Room
+                </span>
               </Link>
             </>
           )}
@@ -803,7 +719,6 @@ function Admin({ currentUser }) {
                   Content Management
                 </h2>
 
-                {/* FORM SECTION */}
                 <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
                   <h3 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">
                     {isEditing ? "Edit Item" : "Add New Item"}
@@ -1042,10 +957,7 @@ function Admin({ currentUser }) {
                   </form>
                 </div>
 
-                {/* SEARCH & FILTER BAR */}
-                {/* SEARCH & FILTER BAR */}
                 <div className="flex flex-col md:flex-row gap-4 mb-4">
-                  {/* Search Input */}
                   <div className="relative flex-1">
                     <Search
                       className="absolute left-3 top-2.5 text-gray-400"
@@ -1059,8 +971,6 @@ function Admin({ currentUser }) {
                       className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
-
-                  {/* NEW: Type Filter */}
                   <div className="relative md:w-1/4">
                     <Filter
                       className="absolute left-3 top-2.5 text-gray-400"
@@ -1076,8 +986,6 @@ function Admin({ currentUser }) {
                       <option value="form">Forms (PDFs)</option>
                     </select>
                   </div>
-
-                  {/* Category Filter */}
                   <div className="relative md:w-1/4">
                     <Filter
                       className="absolute left-3 top-2.5 text-gray-400"
@@ -1098,7 +1006,6 @@ function Admin({ currentUser }) {
                   </div>
                 </div>
 
-                {/* LIST SECTION */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="overflow-x-auto w-full">
                     <table className="w-full text-left border-collapse min-w-[700px]">
@@ -1164,7 +1071,6 @@ function Admin({ currentUser }) {
                       </tbody>
                     </table>
                   </div>
-                  {/* Pagination (Preserved) */}
                   {filteredContent.length > itemsPerPage && (
                     <div className="flex justify-between items-center p-4 bg-gray-50 border-t border-gray-200">
                       <span className="text-xs text-gray-500 font-medium">
@@ -1174,14 +1080,14 @@ function Admin({ currentUser }) {
                         <button
                           onClick={() => paginate(currentPage - 1)}
                           disabled={currentPage === 1}
-                          className="p-1.5 border border-gray-300 rounded bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                          className="p-1.5 border border-gray-300 rounded bg-white hover:bg-gray-100 disabled:opacity-50 text-gray-600"
                         >
                           <ChevronLeft size={16} />
                         </button>
                         <button
                           onClick={() => paginate(currentPage + 1)}
                           disabled={currentPage === totalPages}
-                          className="p-1.5 border border-gray-300 rounded bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                          className="p-1.5 border border-gray-300 rounded bg-white hover:bg-gray-100 disabled:opacity-50 text-gray-600"
                         >
                           <ChevronRight size={16} />
                         </button>
@@ -1223,7 +1129,6 @@ function Admin({ currentUser }) {
                       onChange={handleSlideInput}
                       className="p-2 border rounded-lg w-full"
                     />
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="border border-dashed border-gray-300 p-4 rounded-lg bg-gray-50">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1263,8 +1168,6 @@ function Admin({ currentUser }) {
                           </div>
                         )}
                       </div>
-
-                      {/* CROP CONTROL DROPDOWN */}
                       <div className="flex flex-col justify-center bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <label className="block text-sm font-bold text-blue-800 mb-2">
                           Image Scaling
@@ -1286,7 +1189,6 @@ function Admin({ currentUser }) {
                         </p>
                       </div>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                       <input
                         name="link"
@@ -1318,7 +1220,6 @@ function Admin({ currentUser }) {
                   </form>
                 </div>
 
-                {/* PREVIEW GRID */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {carouselSlides.map((s) => (
                     <div
@@ -1341,15 +1242,11 @@ function Admin({ currentUser }) {
                           alt="Slide"
                         />
                       )}
-
-                      {/* Label for Scaling Type */}
                       <div className="absolute top-2 left-2 z-10">
                         <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-md backdrop-blur-sm border border-white/20">
                           {s.object_fit === "contain" ? "Whole" : "Cropped"}
                         </span>
                       </div>
-
-                      {/* ACTION BUTTONS (TOP RIGHT) */}
                       <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                         <button
                           onClick={() => handleEditSlide(s)}
@@ -1379,7 +1276,6 @@ function Admin({ currentUser }) {
                           <Trash2 size={16} />
                         </button>
                       </div>
-
                       <div className="absolute bottom-0 left-0 bg-gradient-to-t from-black/80 to-transparent text-white w-full p-4">
                         <p className="font-bold truncate text-sm">
                           {s.title || "Untitled"}
@@ -1390,108 +1286,6 @@ function Admin({ currentUser }) {
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* --- TAB 3: JOBS --- */}
-            {activeTab === "jobs" && (
-              <div className="max-w-6xl mx-auto">
-                <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
-                  Job Management
-                </h2>
-                <div className="mb-4 relative">
-                  <Search
-                    className="absolute left-3 top-2.5 text-gray-400"
-                    size={18}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search by Job Title or Company..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <div className="w-full overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[700px]">
-                      <thead className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider border-b">
-                        <tr>
-                          <th className="p-4 font-semibold">Job Role</th>
-                          <th className="p-4 font-semibold">Company</th>
-                          <th className="p-4 font-semibold">Status</th>
-                          <th className="p-4 font-semibold text-right">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {currentJobs.map((job) => (
-                          <tr
-                            key={job.id}
-                            className="hover:bg-gray-50 transition"
-                          >
-                            <td className="p-4">
-                              <div className="font-bold text-gray-800">
-                                {job.title}
-                              </div>
-                            </td>
-                            <td className="p-4 text-gray-600">{job.company}</td>
-                            <td className="p-4">
-                              <button
-                                onClick={() =>
-                                  toggleJobStatus(job.id, job.is_active)
-                                }
-                                className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${job.is_active ? "bg-green-100 text-green-700 border-green-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}
-                              >
-                                {job.is_active ? "Active" : "Disabled"}
-                              </button>
-                            </td>
-                            <td className="p-4 text-right space-x-2">
-                              <button
-                                onClick={() =>
-                                  toggleJobStatus(job.id, job.is_active)
-                                }
-                                className="p-2 text-gray-400 hover:text-blue-600 transition"
-                              >
-                                {job.is_active ? "👁️" : "🚫"}
-                              </button>
-                              <button
-                                onClick={() => deleteJob(job.id)}
-                                className="p-2 text-gray-400 hover:text-red-600 transition"
-                              >
-                                🗑️
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {filteredJobs.length > itemsPerPage && (
-                    <div className="flex justify-between items-center p-4">
-                      <div className="flex gap-3 items-center">
-                        <button
-                          onClick={() => paginate(currentPage - 1)}
-                          disabled={currentPage === 1}
-                          className="p-1 border rounded bg-white disabled:opacity-50"
-                        >
-                          <ChevronLeft size={16} />
-                        </button>
-                        <span className="text-xs text-gray-500">
-                          Page {currentPage} of {totalJobPages}
-                        </span>
-                        <button
-                          onClick={() => paginate(currentPage + 1)}
-                          disabled={currentPage === totalJobPages}
-                          className="p-1 border rounded bg-white disabled:opacity-50"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1542,6 +1336,21 @@ function Admin({ currentUser }) {
                             {users.filter((u) => u.role === "provider").length}
                           </span>
                         </button>
+                        {/* NEW: SHOPS TAB BUTTON */}
+                        <button
+                          onClick={() => {
+                            setUserSubTab("shops");
+                            setCurrentPage(1);
+                          }}
+                          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-xs md:text-sm font-bold transition-all duration-300 ${userSubTab === "shops" ? "bg-white text-emerald-600 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700"}`}
+                        >
+                          <Store size={16} /> Shops
+                          <span
+                            className={`hidden sm:inline-block ml-1 px-2 py-0.5 rounded-full text-[10px] ${userSubTab === "shops" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}
+                          >
+                            {users.filter((u) => u.role === "shop").length}
+                          </span>
+                        </button>
                       </div>
                     </div>
 
@@ -1563,7 +1372,6 @@ function Admin({ currentUser }) {
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6">
-                      {/* 🛠️ FIX: Added overflow-x-auto to the table wrapper */}
                       <div className="overflow-x-auto w-full rounded-2xl">
                         <table className="w-full text-left border-collapse min-w-[600px]">
                           <thead className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
@@ -1583,7 +1391,7 @@ function Admin({ currentUser }) {
                                   <div className="flex items-center gap-3 md:gap-4">
                                     <div
                                       className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner
-                                      ${user.role === "seeker" ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-purple-500 to-fuchsia-600"}`}
+                                      ${user.role === "seeker" ? "bg-gradient-to-br from-blue-500 to-indigo-600" : user.role === "provider" ? "bg-gradient-to-br from-purple-500 to-fuchsia-600" : "bg-gradient-to-br from-emerald-500 to-teal-600"}`}
                                     >
                                       {user.email.substring(0, 2).toUpperCase()}
                                     </div>
@@ -1714,13 +1522,13 @@ function Admin({ currentUser }) {
                       <div className="lg:col-span-1 space-y-6">
                         <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
                           <div
-                            className={`absolute top-0 left-0 w-full h-2 ${selectedUser.role === "seeker" ? "bg-blue-500" : "bg-purple-500"}`}
+                            className={`absolute top-0 left-0 w-full h-2 ${selectedUser.role === "seeker" ? "bg-blue-500" : selectedUser.role === "provider" ? "bg-purple-500" : "bg-emerald-500"}`}
                           ></div>
 
                           <div className="flex flex-col items-center text-center mt-2 mb-6">
                             <div
                               className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-2xl md:text-3xl font-black text-white shadow-lg mb-4 transform rotate-3
-                              ${selectedUser.role === "seeker" ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-purple-500 to-fuchsia-600"}`}
+                              ${selectedUser.role === "seeker" ? "bg-gradient-to-br from-blue-500 to-indigo-600" : selectedUser.role === "provider" ? "bg-gradient-to-br from-purple-500 to-fuchsia-600" : "bg-gradient-to-br from-emerald-500 to-teal-600"}`}
                             >
                               <span className="-rotate-3">
                                 {selectedUser.email
@@ -1738,12 +1546,17 @@ function Admin({ currentUser }) {
                                     ? seekerDetails.find(
                                         (s) => s.id === selectedUser.id,
                                       )
-                                    : providerDetails.find(
-                                        (p) => p.id === selectedUser.id,
-                                      );
+                                    : selectedUser.role === "provider"
+                                      ? providerDetails.find(
+                                          (p) => p.id === selectedUser.id,
+                                        )
+                                      : shopDetails.find(
+                                          (s) => s.id === selectedUser.id,
+                                        );
                                 return (
                                   d?.full_name ||
                                   d?.company_name ||
+                                  d?.shop_name ||
                                   "Name Not Provided"
                                 );
                               })()}
@@ -1795,21 +1608,29 @@ function Admin({ currentUser }) {
                               ? seekerDetails.find(
                                   (s) => s.id === selectedUser.id,
                                 )
-                              : providerDetails.find(
-                                  (p) => p.id === selectedUser.id,
-                                );
+                              : selectedUser.role === "provider"
+                                ? providerDetails.find(
+                                    (p) => p.id === selectedUser.id,
+                                  )
+                                : shopDetails.find(
+                                    (s) => s.id === selectedUser.id,
+                                  );
 
                           return (
                             <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm">
                               <h3 className="text-slate-400 font-black uppercase text-xs tracking-[0.2em] mb-6 flex items-center gap-2">
                                 {selectedUser.role === "seeker" ? (
                                   <GraduationCap size={16} />
-                                ) : (
+                                ) : selectedUser.role === "provider" ? (
                                   <Briefcase size={16} />
+                                ) : (
+                                  <Store size={16} />
                                 )}
                                 {selectedUser.role === "seeker"
                                   ? "Applicant Details"
-                                  : "Company Details"}
+                                  : selectedUser.role === "provider"
+                                    ? "Company Details"
+                                    : "Shop Details"}
                               </h3>
 
                               {details ? (
@@ -1846,7 +1667,7 @@ function Admin({ currentUser }) {
                                     </div>
                                   </div>
 
-                                  {selectedUser.role === "seeker" ? (
+                                  {selectedUser.role === "seeker" && (
                                     <>
                                       <DetailBox
                                         label="Target Job Title"
@@ -1886,7 +1707,9 @@ function Admin({ currentUser }) {
                                         </div>
                                       </div>
                                     </>
-                                  ) : (
+                                  )}
+
+                                  {selectedUser.role === "provider" && (
                                     <>
                                       <div className="md:col-span-2">
                                         <DetailBox
@@ -1906,6 +1729,25 @@ function Admin({ currentUser }) {
                                             </span>
                                           )}
                                         </div>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* NEW: SHOP DETAILS */}
+                                  {selectedUser.role === "shop" && (
+                                    <>
+                                      <div className="md:col-span-2">
+                                        <DetailBox
+                                          label="Shop Name"
+                                          value={details.shop_name}
+                                          highlight
+                                        />
+                                      </div>
+                                      <div className="md:col-span-2">
+                                        <DetailBox
+                                          label="Owner/Manager Name"
+                                          value={details.full_name}
+                                        />
                                       </div>
                                     </>
                                   )}
@@ -1946,7 +1788,6 @@ function Admin({ currentUser }) {
                               </span>
                             </div>
 
-                            {/* 🛠️ FIX: Added overflow-x-auto for nested provider jobs table */}
                             <div className="overflow-x-auto w-full">
                               {jobs.filter(
                                 (j) => j.provider_id === selectedUser.id,
@@ -1974,7 +1815,7 @@ function Admin({ currentUser }) {
                                       .map((job) => (
                                         <tr
                                           key={job.id}
-                                          className="hover:bg-slate-50"
+                                          className="hover:bg-slate-50 transition-colors"
                                         >
                                           <td className="p-3 font-bold text-slate-800 text-xs md:text-sm">
                                             {job.title}
@@ -2011,8 +1852,14 @@ function Admin({ currentUser }) {
                                               className="px-3 py-1.5 rounded-lg text-[10px] font-bold border bg-white text-purple-600 border-purple-200 hover:bg-purple-50"
                                             >
                                               {selectedJobDetails?.id === job.id
-                                                ? "Close"
-                                                : "View"}
+                                                ? "Close View"
+                                                : "Seeker View"}
+                                            </button>
+                                            <button
+                                              onClick={() => deleteJob(job.id)}
+                                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            >
+                                              <Trash2 size={16} />
                                             </button>
                                           </td>
                                         </tr>
@@ -2025,7 +1872,6 @@ function Admin({ currentUser }) {
                                 </div>
                               )}
 
-                              {/* --- NESTED SEEKER VIEW PREVIEW --- */}
                               {selectedJobDetails && (
                                 <div className="mt-6 p-4 md:p-6 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
                                   <div className="absolute top-0 right-0 p-3 md:p-4">

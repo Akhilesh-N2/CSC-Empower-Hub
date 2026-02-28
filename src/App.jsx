@@ -31,6 +31,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Footer from "./components/Footer";
 import { Settings } from "lucide-react";
 import DevStats from "./pages/DevStats";
+import ShopDashboard from "./pages/ShopDashboard";
 
 // --- HELPER: Scroll to top on route change ---
 const ScrollToTop = () => {
@@ -202,6 +203,16 @@ function App() {
                 element={
                   <ProtectedRoute allowedRole="provider">
                     <ProviderProfile />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* SHOP */}
+              <Route
+                path="/shop-dashboard"
+                element={
+                  <ProtectedRoute allowedRole="shop">
+                    <ShopDashboard />
                   </ProtectedRoute>
                 }
               />
