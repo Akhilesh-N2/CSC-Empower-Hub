@@ -191,7 +191,7 @@ function Admin({ currentUser }) {
           .order("name", { ascending: true }),
         supabase.from("seeker_profiles").select("*"),
         supabase.from("provider_profiles").select("*"),
-        supabase.from("shop_profiles").select("*"),
+        supabase.from("shop_profiles").select("*, device_limit"),
       ]);
 
       if (seekersData?.data) setSeekerDetails(seekersData.data);
@@ -1823,6 +1823,67 @@ function Admin({ currentUser }) {
                                           value={details.full_name}
                                         />
                                       </div>
+
+                                      {/* 🛡️ DEVICE LICENSE LIMIT CONTROL */}
+                                      <div className="md:col-span-2 bg-indigo-50 p-4 rounded-xl border border-indigo-100 mt-4 mb-2">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                          <div>
+                                            <label className="block text-[10px] font-black text-indigo-900 uppercase tracking-widest mb-1">
+                                              Device License Limit
+                                            </label>
+                                            <p className="text-[11px] text-indigo-600 font-medium italic">
+                                              * Maximum unique computers allowed
+                                              to log into this account.
+                                            </p>
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                            <input
+                                              type="number"
+                                              min="1"
+                                              className="w-20 p-2 border border-indigo-200 rounded-lg font-bold text-center text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                                              value={details.device_limit || 1}
+                                              onChange={async (e) => {
+                                                const newLimit =
+                                                  parseInt(e.target.value) || 1;
+
+                                                // 1. Update Supabase Database instantly
+                                                const { error } = await supabase
+                                                  .from("shop_profiles")
+                                                  .update({
+                                                    device_limit: newLimit,
+                                                  })
+                                                  .eq("id", selectedUser.id);
+
+                                                if (error) {
+                                                  alert(
+                                                    "Error updating limit: " +
+                                                      error.message,
+                                                  );
+                                                  return;
+                                                }
+
+                                                // 2. Update Local State so UI refreshes without reload
+                                                setShopDetails((prev) =>
+                                                  prev.map((s) =>
+                                                    s.id === selectedUser.id
+                                                      ? {
+                                                          ...s,
+                                                          device_limit:
+                                                            newLimit,
+                                                        }
+                                                      : s,
+                                                  ),
+                                                );
+                                              }}
+                                            />
+                                            <span className="text-xs font-bold text-indigo-700 uppercase tracking-tighter">
+                                              Devices
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      
 
                                       {/* 🚀 DROP IN THE NEW DEVICE MANAGER HERE! */}
                                       <div className="md:col-span-2">

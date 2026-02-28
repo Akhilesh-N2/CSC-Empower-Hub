@@ -27,7 +27,7 @@ export function useDeviceTracker() {
                 let isPrivate = false;
                 if ("storage" in navigator && "estimate" in navigator.storage) {
                     const { quota } = await navigator.storage.estimate();
-                    if (quota < 120000000) isPrivate = true; // Incognito typically has <120MB quota
+                    if (quota < 120000000) isPrivate = true; 
                 }
 
                 if (isPrivate) {
@@ -42,8 +42,17 @@ export function useDeviceTracker() {
                 const result = await fp.get();
                 const hardwareId = result.visitorId; 
                 
-                // We store it in localStorage too for speed, but rely on the hardwareId above
+                // Hybrid combo: Hardware ID + LocalStorage
                 localStorage.setItem('shop_device_fingerprint', hardwareId);
+
+                // --- NEW: FETCH SHOP SPECIFIC DEVICE LIMIT ---
+                const { data: shopProfile } = await supabase
+                    .from('shop_profiles')
+                    .select('device_limit')
+                    .eq('id', user.id)
+                    .single();
+                
+                const limit = shopProfile?.device_limit || 1;
 
                 // 4. THE GLOBAL BAN CHECK
                 const { data: globalBlockCheck } = await supabase
@@ -60,7 +69,7 @@ export function useDeviceTracker() {
                     return;
                 }
 
-                // 5. UPDATE DATABASE LOG
+                // 5. UPDATE DATABASE LOG & LIMIT CHECK
                 let ip = 'Unknown';
                 try {
                     const res = await fetch('https://api.ipify.org?format=json');
@@ -70,19 +79,37 @@ export function useDeviceTracker() {
 
                 const browserInfo = ua.substring(0, 50) + '...'; 
 
-                // Check for existing row to avoid duplicates
-                const { data: existingRow } = await supabase
+                // Check for existing row for this specific shop to determine if this is a "new" device
+                const { data: existingDevice } = await supabase
                     .from('shop_devices')
                     .select('id')
                     .eq('shop_id', user.id)
                     .eq('device_id', hardwareId)
                     .single();
 
-                if (existingRow) {
+                // --- NEW: LICENSE LIMIT ENFORCEMENT ---
+                // If it's a new device, check if they have room in their license
+                if (!existingDevice) {
+                    const { count } = await supabase
+                        .from('shop_devices')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('shop_id', user.id)
+                        .eq('is_blocked', false);
+
+                    if (count >= limit) {
+                        await supabase.auth.signOut();
+                        alert(`LICENSE LIMIT REACHED: Your plan allows only ${limit} device(s). Please log out from other devices or contact Admin to upgrade.`);
+                        window.location.href = '/login';
+                        return;
+                    }
+                }
+
+                // Final Step: Update timestamp or Register new device
+                if (existingDevice) {
                     await supabase.from('shop_devices').update({
                         ip_address: ip,
                         last_active: new Date()
-                    }).eq('id', existingRow.id);
+                    }).eq('id', existingDevice.id);
                 } else {
                     await supabase.from('shop_devices').insert({
                         shop_id: user.id,
