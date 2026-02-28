@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx-js-style'; 
 import { supabase } from '../supabaseClient';
+import { useDeviceTracker } from '../hooks/useDeviceTracker'; // <-- 1. IMPORT THE HOOK
 import { Plus, Trash2, Download, Store, Receipt, IndianRupee, Settings, Save, MapPin, Phone, User, FileText, Printer } from 'lucide-react';
 
 function ShopDashboard() {
+  // 2. ACTIVATE THE TRACKER
+  // This one line replaces all the complex tracking and kicking logic!
+  useDeviceTracker();
+
   const [activeTab, setActiveTab] = useState('billing'); 
   const [userId, setUserId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // NEW: Print Page Size State
+  // Print Page Size State
   const [pageSize, setPageSize] = useState('Thermal80'); // Defaults to POS Thermal Receipt
 
   // 1. STATE: Shop Details & Profile Errors
@@ -79,60 +84,6 @@ function ShopDashboard() {
   useEffect(() => {
     localStorage.setItem('shop_billing_items', JSON.stringify(items));
   }, [items]);
-
-  // --- SAAS DEVICE TRACKING & SECURITY ---
-  useEffect(() => {
-    const trackAndVerifyDevice = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // 1. Get or Create a unique Device ID in the browser
-        let deviceId = localStorage.getItem('shop_device_fingerprint');
-        if (!deviceId) {
-          deviceId = crypto.randomUUID(); // Creates a permanent unique ID for this specific browser
-          localStorage.setItem('shop_device_fingerprint', deviceId);
-        }
-
-        // 2. Fetch their current IP address safely
-        let ip = 'Unknown';
-        try {
-          const ipResponse = await fetch('https://api.ipify.org?format=json');
-          const ipData = await ipResponse.json();
-          ip = ipData.ip;
-        } catch (e) { console.log("Could not fetch IP"); }
-
-        // 3. Get basic browser info
-        const browserInfo = navigator.userAgent;
-
-        // 4. Register or Update the device in Supabase
-        const { data: deviceData, error } = await supabase
-          .from('shop_devices')
-          .upsert({ 
-            shop_id: user.id, 
-            device_id: deviceId, 
-            ip_address: ip, 
-            browser_info: browserInfo,
-            last_active: new Date()
-          }, { onConflict: 'shop_id, device_id' })
-          .select()
-          .single();
-
-        // 5. THE KILL SWITCH: If Admin blocked this device, kick them out!
-        if (deviceData?.is_blocked) {
-          await supabase.auth.signOut();
-          localStorage.removeItem('shop_device_fingerprint'); // Wipe the fingerprint
-          alert("SECURITY ALERT: This device has been revoked by the Administrator. Please contact support to upgrade your license.");
-          window.location.href = '/login';
-        }
-
-      } catch (err) {
-        console.error("Device tracking error:", err);
-      }
-    };
-
-    trackAndVerifyDevice();
-  }, []);
 
   // 5. BILLING LOGIC WITH CUSTOM VALIDATION
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
@@ -261,7 +212,7 @@ function ShopDashboard() {
           <style>
             body { font-family: sans-serif; color: #000; margin: 0; padding: 0; background: #fff; }
             ${pageCSS}
-            table { w-full; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; width: 100%; }
+            table { border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; width: 100%; }
             th { border-bottom: 2px solid #000; padding-bottom: 6px; text-align: left; font-size: 0.9em; text-transform: uppercase; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }

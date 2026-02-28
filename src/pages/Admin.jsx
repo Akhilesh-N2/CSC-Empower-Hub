@@ -27,6 +27,8 @@ import {
   KeyRound, // <-- Added icon for Reset Password button
 } from "lucide-react";
 
+import ShopDeviceManager from "../components/ShopDeviceManager";
+
 // A placeholder image to use if the user doesn't upload one
 const DEFAULT_IMAGE =
   "https://placehold.co/600x400/e2e8f0/1e293b?text=No+Image+Available";
@@ -645,14 +647,14 @@ function Admin({ currentUser }) {
         "admin-reset-password",
         {
           body: { userId: userId, newPassword: newPassword },
-        }
+        },
       );
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
       alert(
-        `Success! The password for ${userEmail} has been securely changed to:\n\n${newPassword}\n\nPlease share this with the user.`
+        `Success! The password for ${userEmail} has been securely changed to:\n\n${newPassword}\n\nPlease share this with the user.`,
       );
     } catch (err) {
       alert("Failed to reset password: " + err.message);
@@ -1557,12 +1559,17 @@ function Admin({ currentUser }) {
                       <div className="flex gap-2 w-full sm:w-fit">
                         {/* NEW RESET BUTTON */}
                         <button
-                          onClick={() => handleForcePasswordReset(selectedUser.id, selectedUser.email)}
+                          onClick={() =>
+                            handleForcePasswordReset(
+                              selectedUser.id,
+                              selectedUser.email,
+                            )
+                          }
                           className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-sm font-bold hover:bg-amber-100 transition shadow-sm"
                         >
                           <KeyRound size={16} /> Reset Password
                         </button>
-                        
+
                         <button
                           onClick={() => {
                             if (
@@ -1814,6 +1821,13 @@ function Admin({ currentUser }) {
                                         <DetailBox
                                           label="Owner/Manager Name"
                                           value={details.full_name}
+                                        />
+                                      </div>
+
+                                      {/* 🚀 DROP IN THE NEW DEVICE MANAGER HERE! */}
+                                      <div className="md:col-span-2">
+                                        <ShopDeviceManager
+                                          shopId={selectedUser.id}
                                         />
                                       </div>
                                     </>
