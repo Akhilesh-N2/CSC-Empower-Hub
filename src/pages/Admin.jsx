@@ -23,7 +23,8 @@ import {
   Image,
   Users,
   Megaphone,
-  Store, // <-- Added Store icon for Shops
+  Store,
+  KeyRound, // <-- Added icon for Reset Password button
 } from "lucide-react";
 
 // A placeholder image to use if the user doesn't upload one
@@ -143,12 +144,13 @@ function Admin({ currentUser }) {
   // --- PHASE 3 ADMIN STATES ---
   const [seekerDetails, setSeekerDetails] = useState([]);
   const [providerDetails, setProviderDetails] = useState([]);
-  const [shopDetails, setShopDetails] = useState([]); // NEW: State for shops
+  const [shopDetails, setShopDetails] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedJobDetails, setSelectedJobDetails] = useState(null);
 
-  const [userSubTab, setUserSubTab] = useState("seekers"); // 'seekers' | 'providers' | 'shops'
-  
+  const [userSubTab, setUserSubTab] = useState("seekers");
+
+  const [shopDevices, setShopDevices] = useState([]);
 
   // --- 3. FETCH DATA FUNCTION ---
   const fetchData = async () => {
@@ -163,7 +165,7 @@ function Admin({ currentUser }) {
         catsData,
         seekersData,
         providersData,
-        shopsData, // NEW: Fetch shop data
+        shopsData,
       ] = await Promise.all([
         supabase
           .from("schemes")
@@ -187,17 +189,14 @@ function Admin({ currentUser }) {
           .order("name", { ascending: true }),
         supabase.from("seeker_profiles").select("*"),
         supabase.from("provider_profiles").select("*"),
-        supabase.from("shop_profiles").select("*"), // Fetch shops
+        supabase.from("shop_profiles").select("*"),
       ]);
 
       if (seekersData?.data) setSeekerDetails(seekersData.data);
       if (providersData?.data) setProviderDetails(providersData.data);
       if (shopsData?.data) {
-        console.log("SHOPS DATA FETCHED:", shopsData.data); // <-- ADD THIS
         setShopDetails(shopsData.data);
       }
-
-      console.log("ALL USERS:", usersData.data); // <-- AND THIS // Set shops
 
       if (schemesData.data) setSchemes(schemesData.data);
       if (jobsData.data) setJobs(jobsData.data);
@@ -212,6 +211,34 @@ function Admin({ currentUser }) {
     }
   };
 
+  // Function to fetch a specific shop's devices
+  const fetchShopDevices = async (shopId) => {
+    const { data } = await supabase
+      .from("shop_devices")
+      .select("*")
+      .eq("shop_id", shopId)
+      .order("last_active", { ascending: false });
+    setShopDevices(data || []);
+  };
+
+  // Function to Kick a user out
+  const handleBlockDevice = async (deviceId) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to block this device? They will be logged out immediately.",
+      )
+    )
+      return;
+
+    await supabase
+      .from("shop_devices")
+      .update({ is_blocked: true })
+      .eq("id", deviceId);
+
+    alert("Device blocked! The user will be kicked out on their next click.");
+    fetchShopDevices(selectedUser.id);
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -221,7 +248,7 @@ function Admin({ currentUser }) {
     setFilterCategory("");
     setFilterType("");
     setCurrentPage(1);
-  }, [activeTab, userSubTab]); // Reset pagination when sub-tabs change
+  }, [activeTab, userSubTab]);
 
   // --- FILTER & PAGINATION LOGIC ---
   const filteredContent = schemes.filter((s) => {
@@ -241,7 +268,6 @@ function Admin({ currentUser }) {
       job.company.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // --- UPDATED USERS FILTER ---
   const roleMap = { seekers: "seeker", providers: "provider", shops: "shop" };
   const usersByRole = users.filter((u) => u.role === roleMap[userSubTab]);
   const filteredUsers = usersByRole.filter((user) =>
@@ -595,11 +621,41 @@ function Admin({ currentUser }) {
       if (error) throw error;
 
       alert("User completely wiped from the system.");
-      setSelectedUser(null); // Close the dossier view
-      fetchData(); // Refresh the list
+      setSelectedUser(null);
+      fetchData();
     } catch (err) {
       console.error("Failed to delete user:", err);
       alert("Error deleting user: " + err.message);
+    }
+  };
+
+  // --- NEW: FORCE PASSWORD RESET ---
+  const handleForcePasswordReset = async (userId, userEmail) => {
+    const newPassword = window.prompt(
+      `Enter a new temporary password for ${userEmail}\n(Minimum 6 characters):`,
+    );
+
+    if (!newPassword) return; // User clicked cancel
+    if (newPassword.length < 6)
+      return alert("Password must be at least 6 characters long.");
+
+    try {
+      // Call the Edge Function we deployed!
+      const { data, error } = await supabase.functions.invoke(
+        "admin-reset-password",
+        {
+          body: { userId: userId, newPassword: newPassword },
+        }
+      );
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      alert(
+        `Success! The password for ${userEmail} has been securely changed to:\n\n${newPassword}\n\nPlease share this with the user.`
+      );
+    } catch (err) {
+      alert("Failed to reset password: " + err.message);
     }
   };
 
@@ -1498,24 +1554,34 @@ function Admin({ currentUser }) {
                         Back to Directory
                       </button>
 
-                      <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Permanently delete this account? This action cannot be undone.",
-                            )
-                          ) {
-                            handleDeleteUser(
-                              selectedUser.id,
-                              selectedUser.email,
-                            );
-                            setSelectedUser(null);
-                          }
-                        }}
-                        className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-600 hover:text-white transition w-full sm:w-fit"
-                      >
-                        <Trash2 size={16} /> Delete Account
-                      </button>
+                      <div className="flex gap-2 w-full sm:w-fit">
+                        {/* NEW RESET BUTTON */}
+                        <button
+                          onClick={() => handleForcePasswordReset(selectedUser.id, selectedUser.email)}
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-sm font-bold hover:bg-amber-100 transition shadow-sm"
+                        >
+                          <KeyRound size={16} /> Reset Password
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Permanently delete this account? This action cannot be undone.",
+                              )
+                            ) {
+                              handleDeleteUser(
+                                selectedUser.id,
+                                selectedUser.email,
+                              );
+                              setSelectedUser(null);
+                            }
+                          }}
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-600 hover:text-white transition shadow-sm"
+                        >
+                          <Trash2 size={16} /> Delete Account
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
