@@ -84,7 +84,7 @@ function LandingPage() {
     return (
         <div className="bg-gray-50 min-h-screen">
             {/* ================= HERO / CAROUSEL ================= */}
-            <div className="bg-gradient-to-r from-sky-50 via-white to-white pb-6">
+            <div className="bg-linear-to-r from-sky-50 via-white to-white pb-6">
                 {carouselSlides && carouselSlides.length > 0 ? (
                     <Carousel slides={carouselSlides} key={`carousel-${carouselSlides.length}`} />
                 ) : (
@@ -95,7 +95,7 @@ function LandingPage() {
             </div>
 
             {/* ================= MAIN CONTENT ================= */}
-            <div className="max-w-[92rem] mx-auto px-3 md:px-4 py-8 md:py-12">
+            <div className="max-w-368 mx-auto px-3 md:px-4 py-8 md:py-12">
                 
                 {/* 1. CLEAN HEADER */}
                 <div className='flex flex-col items-center text-center gap-2 md:gap-3 mb-8 md:mb-10'>

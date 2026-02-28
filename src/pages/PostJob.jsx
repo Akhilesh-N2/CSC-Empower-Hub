@@ -19,31 +19,46 @@ function PostJob() {
     contact_email: ''  
   });
 
-  // 1. Fetch Provider Profile on Load
+  // Error Tracking State
+  const [errors, setErrors] = useState({});
+
+  // 1. Fetch Provider Profile on Load and PRE-FILL the form
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) return;
 
-        // Get generic profile (for email) - using maybeSingle to prevent errors if missing
+        // Get generic profile (for email)
         const { data: genericProfile } = await supabase
           .from('profiles')
           .select('email')
           .eq('id', user.id)
           .maybeSingle();
 
-        // Get provider details - using maybeSingle!
+        // Get provider details
         const { data: providerProfile } = await supabase
           .from('provider_profiles')
-          .select('company_name, location, contact_phone') // OPTIMIZATION: Only fetch what we need for defaults
+          .select('company_name, location, contact_phone') 
           .eq('id', user.id)
           .maybeSingle();
 
+        const fetchedEmail = genericProfile?.email || user.email;
+
         setProfile({
-          email: genericProfile?.email || user.email, // Fallback to auth email if profile is blank
+          email: fetchedEmail, 
           ...providerProfile
         });
+
+        // Automatically fill the form state with the fetched defaults!
+        setJobData(prevData => ({
+          ...prevData,
+          company: providerProfile?.company_name || '',
+          location: providerProfile?.location || '',
+          contact_phone: providerProfile?.contact_phone || '',
+          contact_email: fetchedEmail || ''
+        }));
+
       } catch (err) {
         console.error("Error fetching provider defaults:", err);
       }
@@ -52,11 +67,31 @@ function PostJob() {
   }, []);
 
   const handleChange = (e) => {
-    setJobData({ ...jobData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setJobData({ ...jobData, [name]: value });
+    
+    // Clear the error for this field as the user types
+    if (errors[name]) {
+      setErrors({ ...errors, [name]: false });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // --- CUSTOM VALIDATION LOGIC ---
+    const newErrors = {
+      title: !jobData.title.trim(),
+      description: !jobData.description.trim(),
+    };
+
+    // Check if ANY error flag is true for required fields
+    if (newErrors.title || newErrors.description) {
+      setErrors(newErrors);
+      return; // Stop submission
+    }
+
+    setErrors({});
     setLoading(true);
 
     try {
@@ -64,20 +99,20 @@ function PostJob() {
 
       if (!user) throw new Error("You must be logged in to post a job.");
 
-      // --- SMART DEFAULTS LOGIC ---
+      // --- SUBMIT DATA ---
       const finalJobData = {
         title: jobData.title,
         salary: jobData.salary,
         description: jobData.description,
         type: jobData.type,
         provider_id: user.id,
-        is_active: true, // Explicitly setting this in case DB defaults are off
+        is_active: true, 
         
-        // Smart Fields: Use input OR fallback to profile
-        company: jobData.company || profile?.company_name || "Independent Provider",
-        location: jobData.location || profile?.location || "Not Specified",
-        contact_phone: jobData.contact_phone || profile?.contact_phone || "",
-        contact_email: jobData.contact_email || profile?.email || user.email
+        // Use the form state (which is now pre-filled with defaults or user edits)
+        company: jobData.company || "Independent Provider",
+        location: jobData.location || "Not Specified",
+        contact_phone: jobData.contact_phone || "",
+        contact_email: jobData.contact_email || user.email
       };
 
       const { error } = await supabase
@@ -87,7 +122,7 @@ function PostJob() {
       if (error) throw error;
 
       alert("Job posted successfully!");
-      navigate('/my-jobs'); // Changed to /my-jobs so they see the job they just posted!
+      navigate('/my-jobs'); 
 
     } catch (error) {
       alert("Error posting job: " + error.message);
@@ -103,11 +138,11 @@ function PostJob() {
         <div>
           <h2 className="text-3xl font-bold text-gray-900 text-center">Post a New Job</h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Leave fields blank to use your default profile information.
+            We've pre-filled your default profile information. Feel free to edit it.
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Job Title (Required) */}
@@ -116,10 +151,21 @@ function PostJob() {
               <input 
                 name="title" 
                 required 
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`w-full px-4 py-2 border rounded-lg outline-none transition-all ${
+                  errors.title 
+                  ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' 
+                  : 'border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white'
+                }`}
                 placeholder="e.g. Senior Electrician"
                 onChange={handleChange}
+                value={jobData.title}
               />
+              {/* NEW: Explicit Error Message */}
+              {errors.title && (
+                <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
+                  ⚠️ Job Title is required
+                </p>
+              )}
             </div>
 
             {/* Company Name (Optional) */}
@@ -129,9 +175,10 @@ function PostJob() {
               </label>
               <input 
                 name="company" 
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder={profile?.company_name ? `Default: ${profile.company_name}` : "Enter Company Name"}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Enter Company Name"
                 onChange={handleChange}
+                value={jobData.company}
               />
             </div>
 
@@ -142,9 +189,10 @@ function PostJob() {
               </label>
               <input 
                 name="location" 
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder={profile?.location ? `Default: ${profile.location}` : "e.g. Kochi"}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="e.g. Kochi"
                 onChange={handleChange}
+                value={jobData.location}
               />
             </div>
 
@@ -153,9 +201,10 @@ function PostJob() {
               <label className="block text-sm font-bold text-gray-700 mb-1">Salary / Pay</label>
               <input 
                 name="salary" 
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 placeholder="e.g. 15000 - 20000"
                 onChange={handleChange}
+                value={jobData.salary}
               />
             </div>
 
@@ -164,7 +213,7 @@ function PostJob() {
               <label className="block text-sm font-bold text-gray-700 mb-1">Job Type</label>
               <select 
                 name="type" 
-                className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 onChange={handleChange}
                 value={jobData.type}
               >
@@ -182,9 +231,10 @@ function PostJob() {
               </label>
               <input 
                 name="contact_phone" 
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder={profile?.contact_phone ? `Default: ${profile.contact_phone}` : "+91..."}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="+91..."
                 onChange={handleChange}
+                value={jobData.contact_phone}
               />
             </div>
 
@@ -196,23 +246,35 @@ function PostJob() {
               <input 
                 name="contact_email" 
                 type="email"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder={profile?.email ? `Default: ${profile.email}` : "you@example.com"}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="you@example.com"
                 onChange={handleChange}
+                value={jobData.contact_email}
               />
             </div>
 
-            {/* Description */}
+            {/* Description (Required) */}
             <div className="col-span-1 md:col-span-2">
               <label className="block text-sm font-bold text-gray-700 mb-1">Job Description *</label>
               <textarea 
                 name="description" 
                 rows="4"
                 required
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`w-full px-4 py-2 border rounded-lg outline-none transition-all ${
+                  errors.description 
+                  ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' 
+                  : 'border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white'
+                }`}
                 placeholder="Describe the role and responsibilities..."
                 onChange={handleChange}
+                value={jobData.description}
               ></textarea>
+              {/* NEW: Explicit Error Message */}
+              {errors.description && (
+                <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
+                  ⚠️ Job Description is required
+                </p>
+              )}
             </div>
 
           </div>
