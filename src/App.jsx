@@ -32,6 +32,7 @@ import Footer from "./components/Footer";
 import { Settings } from "lucide-react";
 import DevStats from "./pages/DevStats";
 import ShopDashboard from "./pages/ShopDashboard";
+import WhatsAppWidget from './components/WhatsAppWidget';
 
 // --- HELPER: Scroll to top on route change ---
 const ScrollToTop = () => {
@@ -94,135 +95,139 @@ function App() {
   );
 
   return (
-    <Router>
-      <ScrollToTop />
-      <div className="flex flex-col min-h-screen">
-        <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
+    <>
+    <WhatsAppWidget />
+      <Router>
+        <ScrollToTop />
+        <div className="flex flex-col min-h-screen">
+          <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
 
-        <main className="flex-grow">
-          {isMaintenanceMode ? (
-            <MaintenanceScreen />
-          ) : (
-            <Routes>
-              {/* PUBLIC */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/forms" element={<FormsPage />} />
-              <Route path="/posters" element={<Posters />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
 
-              {/* ADMIN: Double Protected via Email Check */}
-              <Route
-                path="/admin"
-                element={
-                  currentUser?.email === adminEmail ? (
-                    <Admin currentUser={currentUser} />
-                  ) : (
-                    <div className="p-20 text-center font-bold">
-                      Access Denied: Admins Only
-                    </div>
-                  )
-                }
-              />
+          <main className="flex-grow">
+            {isMaintenanceMode ? (
+              <MaintenanceScreen />
+            ) : (
+              <Routes>
+                {/* PUBLIC */}
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/forms" element={<FormsPage />} />
+                <Route path="/posters" element={<Posters />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
 
-              <Route
-                path="/dev-stats"
-                element={
-                  currentUser?.email === adminEmail ? (
-                    <DevStats />
-                  ) : (
-                    <div className="p-20 text-center font-bold text-slate-400 uppercase tracking-widest">
-                      Security Breach: Access Denied
-                    </div>
-                  )
-                }
-              />
+                {/* ADMIN: Double Protected via Email Check */}
+                <Route
+                  path="/admin"
+                  element={
+                    currentUser?.email === adminEmail ? (
+                      <Admin currentUser={currentUser} />
+                    ) : (
+                      <div className="p-20 text-center font-bold">
+                        Access Denied: Admins Only
+                      </div>
+                    )
+                  }
+                />
 
-              {/* SEEKER */}
-              <Route
-                path="/job-search"
-                element={
-                  <ProtectedRoute allowedRole="seeker">
-                    <JobSearch />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute allowedRole="seeker">
-                    <ViewProfile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile/edit"
-                element={
-                  <ProtectedRoute allowedRole="seeker">
-                    <EditProfile />
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/dev-stats"
+                  element={
+                    currentUser?.email === adminEmail ? (
+                      <DevStats />
+                    ) : (
+                      <div className="p-20 text-center font-bold text-slate-400 uppercase tracking-widest">
+                        Security Breach: Access Denied
+                      </div>
+                    )
+                  }
+                />
 
-              {/* PROVIDER */}
-              <Route
-                path="/post-job"
-                element={
-                  <ProtectedRoute allowedRole="provider">
-                    <PostJob />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/find-talent"
-                element={
-                  <ProtectedRoute allowedRole="provider">
-                    <FindCandidates />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/my-jobs"
-                element={
-                  <ProtectedRoute allowedRole="provider">
-                    <MyPostedJobs />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/edit-job/:id"
-                element={
-                  <ProtectedRoute allowedRole="provider">
-                    <EditJob />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/provider-profile"
-                element={
-                  <ProtectedRoute allowedRole="provider">
-                    <ProviderProfile />
-                  </ProtectedRoute>
-                }
-              />
+                {/* SEEKER */}
+                <Route
+                  path="/job-search"
+                  element={
+                    <ProtectedRoute allowedRole="seeker">
+                      <JobSearch />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute allowedRole="seeker">
+                      <ViewProfile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile/edit"
+                  element={
+                    <ProtectedRoute allowedRole="seeker">
+                      <EditProfile />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* SHOP */}
-              <Route
-                path="/shop-dashboard"
-                element={
-                  <ProtectedRoute allowedRole="shop">
-                    <ShopDashboard />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          )}
-        </main>
-        <Footer />
-        <Analytics />
-      </div>
-    </Router>
+                {/* PROVIDER */}
+                <Route
+                  path="/post-job"
+                  element={
+                    <ProtectedRoute allowedRole="provider">
+                      <PostJob />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/find-talent"
+                  element={
+                    <ProtectedRoute allowedRole="provider">
+                      <FindCandidates />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my-jobs"
+                  element={
+                    <ProtectedRoute allowedRole="provider">
+                      <MyPostedJobs />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/edit-job/:id"
+                  element={
+                    <ProtectedRoute allowedRole="provider">
+                      <EditJob />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/provider-profile"
+                  element={
+                    <ProtectedRoute allowedRole="provider">
+                      <ProviderProfile />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* SHOP */}
+                <Route
+                  path="/shop-dashboard"
+                  element={
+                    <ProtectedRoute allowedRole="shop">
+                      <ShopDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            )}
+          </main>
+          <Footer />
+          <Analytics />
+        </div>
+      </Router>
+    </>
   );
 }
 

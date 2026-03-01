@@ -1,30 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Image as ImageIcon } from 'lucide-react';
+import { Download, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { downloadWatermarkedPoster } from '../utils/watermark'; // <-- Make sure to create this file!
 
 function Posters() {
   const [posters, setPosters] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // NEW: State for Shop Details and Downloading Status
+  const [shopInfo, setShopInfo] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   useEffect(() => {
-    // 1. Define the Fetch Function
-    const fetchPosters = async () => {
-      const { data, error } = await supabase
+    const initializePage = async () => {
+      // 1. Fetch Posters
+      const { data: posterData, error: posterError } = await supabase
         .from('schemes')
-        // OPTIMIZATION: Only fetch the 4 columns used in the UI
         .select('id, image, title, category')
         .eq('active', true)
         .eq('category', 'Poster')
         .order('created_at', { ascending: false });
 
-      if (error) console.error(error);
-      else setPosters(data || []);
-      
+      if (posterError) console.error(posterError);
+      else setPosters(posterData || []);
+
+      // 2. Check if the current viewer is a Shop
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: shopProfile } = await supabase
+          .from('shop_profiles')
+          .select('shop_name, address, phone')
+          .eq('id', user.id)
+          .single();
+        
+        if (shopProfile) {
+          setShopInfo(shopProfile); // Save their shop details for the watermark!
+        }
+      }
+
       setLoading(false); 
     };
 
-    // 2. Initial Call
-    fetchPosters();
+    initializePage();
 
     // 3. Real-time Subscription
     const channel = supabase
@@ -34,35 +51,48 @@ function Posters() {
         { event: '*', schema: 'public', table: 'schemes' },
         (payload) => {
           console.log('Poster change detected!', payload);
-          fetchPosters();
+          // Just fetch posters again without touching shop profile
+          supabase
+            .from('schemes')
+            .select('id, image, title, category')
+            .eq('active', true)
+            .eq('category', 'Poster')
+            .order('created_at', { ascending: false })
+            .then(({ data }) => setPosters(data || []));
         }
       )
       .subscribe();
 
-    // 4. Cleanup
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  // --- Download Function ---
-  // Note: Since you are using Cloudinary now, downloading images via JS fetch() 
-  // might sometimes throw a CORS error depending on the browser. If users complain 
-  // they can't download, you might just want to open the image in a new tab:
-  // window.open(url, '_blank');
-  const handleDownload = async (url, title) => {
+  // --- Smart Download Function ---
+  const handleDownload = async (id, url, title) => {
+    setDownloadingId(id); // Start loading spinner
+
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = `${title.replace(/\s+/g, '_')}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (shopInfo) {
+        // If they are a shop, use the watermark utility!
+        await downloadWatermarkedPoster(url, shopInfo, title);
+      } else {
+        // If they are a standard user, do a normal clean download
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const link = document.createElement("a");
+        link.href = window.URL.createObjectURL(blob);
+        link.download = `${title.replace(/\s+/g, '_')}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (error) {
       console.error("Download failed:", error);
-      alert("Could not download image. Try right-clicking and 'Save Image As'.");
+      // Ultimate fallback if their browser blocks canvas/blob downloads
+      window.open(url, '_blank');
+    } finally {
+      setDownloadingId(null); // Stop loading spinner
     }
   };
 
@@ -78,6 +108,11 @@ function Posters() {
           <p className="text-gray-500 max-w-2xl mx-auto">
             Browse and download high-quality posters, notices, and awareness materials.
           </p>
+          {shopInfo && (
+            <div className="mt-4 inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-xs font-bold shadow-sm">
+              ✨ Auto-Branding Active: Posters will download with your shop details.
+            </div>
+          )}
         </div>
 
         {/* Gallery Grid */}
@@ -106,10 +141,15 @@ function Posters() {
                   {/* Overlay on Hover (Desktop) */}
                   <div className="hidden md:flex absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition items-center justify-center">
                     <button 
-                      onClick={() => handleDownload(item.image, item.title)}
-                      className="bg-white text-gray-900 px-4 py-2 rounded-full font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition duration-300 hover:bg-blue-50"
+                      onClick={() => handleDownload(item.id, item.image, item.title)}
+                      disabled={downloadingId === item.id}
+                      className="bg-white text-gray-900 px-5 py-2.5 rounded-full font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition duration-300 hover:bg-blue-50 disabled:opacity-80 disabled:cursor-not-allowed shadow-lg"
                     >
-                      <Download size={18} /> Download
+                      {downloadingId === item.id ? (
+                        <><Loader2 size={18} className="animate-spin text-blue-600" /> Processing...</>
+                      ) : (
+                        <><Download size={18} /> {shopInfo ? 'Brand & Download' : 'Download'}</>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -125,10 +165,15 @@ function Posters() {
                   
                   {/* Mobile Download Button (Always Visible) */}
                   <button 
-                    onClick={() => handleDownload(item.image, item.title)}
-                    className="w-full md:hidden bg-gray-100 text-gray-700 py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95 transition"
+                    onClick={() => handleDownload(item.id, item.image, item.title)}
+                    disabled={downloadingId === item.id}
+                    className="w-full md:hidden bg-gray-100 text-gray-800 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95 transition disabled:opacity-70"
                   >
-                    <Download size={16} /> Save Image
+                    {downloadingId === item.id ? (
+                      <><Loader2 size={16} className="animate-spin text-blue-600" /> Generating...</>
+                    ) : (
+                      <><Download size={16} /> Save Image</>
+                    )}
                   </button>
                 </div>
               </div>
