@@ -113,7 +113,7 @@ function Login() {
             {/* Explicit Error Message */}
             {errors.email && (
               <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                ⚠️ Email is required
+                * Email is required
               </p>
             )}
           </div>
@@ -139,7 +139,7 @@ function Login() {
             {/* Explicit Error Message */}
             {errors.password && (
               <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                ⚠️ Password is required
+                * Password is required
               </p>
             )}
           </div>

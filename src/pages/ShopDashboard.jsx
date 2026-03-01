@@ -338,7 +338,7 @@ function ShopDashboard() {
                       placeholder="e.g. A4 Paper Rim"
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.itemName ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white'}`}
                     />
-                    {billErrors.itemName && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">⚠️ Product Name is required</p>}
+                    {billErrors.itemName && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Product Name is required</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -348,7 +348,7 @@ function ShopDashboard() {
                         onChange={e => { setQuantity(e.target.value); if(billErrors.quantity) setBillErrors({...billErrors, quantity: false}); }}
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.quantity ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white'}`}
                       />
-                      {billErrors.quantity && <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 flex items-center gap-1">⚠️ Invalid Qty</p>}
+                      {billErrors.quantity && <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 flex items-center gap-1">* Invalid Qty</p>}
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Price (₹)</label>
@@ -358,7 +358,7 @@ function ShopDashboard() {
                         placeholder="0.00"
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.price ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white'}`}
                       />
-                      {billErrors.price && <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 flex items-center gap-1">⚠️ Required</p>}
+                      {billErrors.price && <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 flex items-center gap-1">* Required</p>}
                     </div>
                   </div>
                   <button type="submit" className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 mt-2">
@@ -422,17 +422,17 @@ function ShopDashboard() {
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Store size={14} /> Shop / Business Name *</label>
                     <input type="text" value={shopInfo.shop_name} onChange={e => { setShopInfo({...shopInfo, shop_name: e.target.value}); if(profileErrors.shop_name) setProfileErrors({...profileErrors, shop_name: false}); }} className={`w-full p-3.5 border rounded-xl outline-none font-bold text-slate-800 transition-all ${profileErrors.shop_name ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500'}`} />
-                    {profileErrors.shop_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">⚠️ Shop Name is required</p>}
+                    {profileErrors.shop_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Shop Name is required</p>}
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><User size={14} /> Owner Name *</label>
                     <input type="text" value={shopInfo.full_name} onChange={e => { setShopInfo({...shopInfo, full_name: e.target.value}); if(profileErrors.full_name) setProfileErrors({...profileErrors, full_name: false}); }} className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.full_name ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500'}`} />
-                    {profileErrors.full_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">⚠️ Owner Name is required</p>}
+                    {profileErrors.full_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Owner Name is required</p>}
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Phone size={14} /> Contact Number *</label>
                     <input type="tel" value={shopInfo.phone} onChange={e => { setShopInfo({...shopInfo, phone: e.target.value}); if(profileErrors.phone) setProfileErrors({...profileErrors, phone: false}); }} className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.phone ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500'}`} />
-                    {profileErrors.phone && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">⚠️ Contact Number is required</p>}
+                    {profileErrors.phone && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Contact Number is required</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><FileText size={14} /> GSTIN / Tax ID (Optional)</label>

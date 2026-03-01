@@ -136,7 +136,7 @@ function EditProfile() {
                             />
                             {errors.full_name && (
                                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                    ⚠️ Full Name is required
+                                    * Full Name is required
                                 </p>
                             )}
                         </div>
@@ -156,7 +156,7 @@ function EditProfile() {
                             />
                             {errors.title && (
                                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                    ⚠️ Job Title is required
+                                    * Job Title is required
                                 </p>
                             )}
                         </div>
@@ -178,7 +178,7 @@ function EditProfile() {
                         />
                         {errors.skills && (
                             <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                ⚠️ At least one skill is required
+                                * At least one skill is required
                             </p>
                         )}
                     </div>
@@ -200,7 +200,7 @@ function EditProfile() {
                             />
                             {errors.experience && (
                                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                    ⚠️ Experience is required
+                                    * Experience is required
                                 </p>
                             )}
                         </div>
@@ -220,7 +220,7 @@ function EditProfile() {
                             />
                             {errors.location && (
                                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                    ⚠️ Location is required
+                                    * Location is required
                                 </p>
                             )}
                         </div>
@@ -256,7 +256,7 @@ function EditProfile() {
                             />
                             {errors.contact_email && (
                                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                    ⚠️ Email is required
+                                    * Email is required
                                 </p>
                             )}
                         </div>
@@ -277,7 +277,7 @@ function EditProfile() {
                             />
                             {errors.phone && (
                                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                                    ⚠️ Phone is required
+                                    * Phone is required
                                 </p>
                             )}
                         </div>

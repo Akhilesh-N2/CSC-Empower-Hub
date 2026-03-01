@@ -4,6 +4,31 @@ import { Link, useNavigate } from "react-router-dom";
 // Imported icons for the role selector
 import { GraduationCap, Briefcase, Store } from "lucide-react";
 
+// ✨ SMART EMAIL VALIDATOR (Catches formats and common typos)
+const validateEmail = (email) => {
+  if (!email || !email.trim()) return "Email is required.";
+
+  // 1. Standard format check (e.g., text@text.com)
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!regex.test(email)) {
+    return "Please enter a valid email address.";
+  }
+
+  // 2. Common Typo Checks
+  const lowerEmail = email.toLowerCase();
+  if (lowerEmail.includes("@gmial.") || lowerEmail.includes("@gmai.") || lowerEmail.includes("@gamil.") || lowerEmail.includes("@gmai.") || lowerEmail.includes("@mail.")) {
+    return "Did you mean @gmail.com?";
+  }
+  if (lowerEmail.includes("@yahhoo.") || lowerEmail.includes("@yaho.")) {
+    return "Did you mean @yahoo.com?";
+  }
+  if (lowerEmail.includes("@outlok.") || lowerEmail.includes("@otlook.")) {
+    return "Did you mean @outlook.com?";
+  }
+
+  return null; // Email is perfectly fine
+};
+
 function Signup() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -34,13 +59,18 @@ function Signup() {
   
   // --- ERROR TRACKING STATE ---
   const [errors, setErrors] = useState({});
+  const [emailErrorMsg, setEmailErrorMsg] = useState(""); // ✨ NEW: Stores the specific typo message
 
   const handleSignup = async (e) => {
     e.preventDefault();
+    setEmailErrorMsg(""); // Reset custom email error on submit
     
+    // ✨ Run the smart email validation
+    const emailValidationError = validateEmail(email);
+
     // --- CUSTOM VALIDATION LOGIC ---
     const newErrors = {
-      email: !email.trim(),
+      email: !!emailValidationError, // True if the validator returns a string message
       password: !password.trim() || password.length < 6,
       fullName: !fullName.trim(),
       phone: !phone.trim(),
@@ -62,6 +92,7 @@ function Signup() {
     const hasErrors = Object.values(newErrors).some((err) => err);
     if (hasErrors) {
       setErrors(newErrors);
+      if (emailValidationError) setEmailErrorMsg(emailValidationError); // Set specific text
       return; // Stop the form submission
     }
 
@@ -196,7 +227,7 @@ function Signup() {
                   type="email"
                   required
                   className={`w-full px-4 py-3 border rounded-xl outline-none transition-all ${
-                    errors.email 
+                    errors.email || emailErrorMsg
                     ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' 
                     : 'border-gray-200 focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white'
                   }`}
@@ -205,11 +236,13 @@ function Signup() {
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (errors.email) setErrors({ ...errors, email: false });
+                    if (emailErrorMsg) setEmailErrorMsg(""); // ✨ Clear specific warning on type
                   }}
                 />
-                {errors.email && (
+                {/* ✨ Display specific typo warning or generic required warning */}
+                {(errors.email || emailErrorMsg) && (
                   <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                    ⚠️ Email is required
+                    * {emailErrorMsg || "Email is required"}
                   </p>
                 )}
               </div>
@@ -235,7 +268,7 @@ function Signup() {
                 />
                 {errors.password && (
                   <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                    ⚠️ Password must be at least 6 characters
+                    * Password must be at least 6 characters
                   </p>
                 )}
               </div>
@@ -323,7 +356,7 @@ function Signup() {
                   />
                   {errors.fullName && (
                     <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                      ⚠️ Name is required
+                      * Name is required
                     </p>
                   )}
                 </div>
@@ -345,7 +378,7 @@ function Signup() {
                   />
                   {errors.phone && (
                     <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                      ⚠️ Phone is required
+                      * Phone is required
                     </p>
                   )}
                 </div>
@@ -367,7 +400,7 @@ function Signup() {
                   />
                   {errors.location && (
                     <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                      ⚠️ Location is required
+                      * Location is required
                     </p>
                   )}
                 </div>
@@ -391,7 +424,7 @@ function Signup() {
                       />
                       {errors.qualification && (
                         <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                          ⚠️ Qualification is required
+                          * Qualification is required
                         </p>
                       )}
                     </div>
@@ -411,7 +444,7 @@ function Signup() {
                       />
                       {errors.targetJob && (
                         <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                          ⚠️ Target job is required
+                          * Target job is required
                         </p>
                       )}
                     </div>
@@ -455,7 +488,7 @@ function Signup() {
                       />
                       {errors.companyName && (
                         <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                          ⚠️ Company Name is required
+                          * Company Name is required
                         </p>
                       )}
                     </div>
@@ -475,7 +508,7 @@ function Signup() {
                       />
                       {errors.jobOffering && (
                         <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                          ⚠️ Job offering is required
+                          * Job offering is required
                         </p>
                       )}
                     </div>
@@ -500,7 +533,7 @@ function Signup() {
                     />
                     {errors.shopName && (
                       <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                        ⚠️ Shop Name is required
+                        * Shop Name is required
                       </p>
                     )}
                   </div>

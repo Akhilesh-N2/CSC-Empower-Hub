@@ -163,7 +163,7 @@ function PostJob() {
               {/* NEW: Explicit Error Message */}
               {errors.title && (
                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                  ⚠️ Job Title is required
+                  * Job Title is required
                 </p>
               )}
             </div>
@@ -272,7 +272,7 @@ function PostJob() {
               {/* NEW: Explicit Error Message */}
               {errors.description && (
                 <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                  ⚠️ Job Description is required
+                  * Job Description is required
                 </p>
               )}
             </div>
