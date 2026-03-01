@@ -4,7 +4,7 @@ export default function WhatsAppWidget() {
   const [isScrolling, setIsScrolling] = useState(false);
 
   // Add your actual WhatsApp Group Link here!
-  const whatsappLink = "https://chat.whatsapp.com/YOUR_INVITE_LINK";
+  const whatsappLink = "https://chat.whatsapp.com/CFJKdhbqiO89wx3jPEAuMN?mode=gi_t";
 
   useEffect(() => {
     let scrollTimeout;
