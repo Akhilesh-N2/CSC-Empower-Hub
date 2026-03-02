@@ -395,7 +395,7 @@ function ShopDashboard() {
               {/* ✨ CUSTOMER DETAILS BLOCK */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
-                  <User size={18} className="text-blue-500" /> Customer Details
+                  <User size={18} className="text-emerald-600" /> Customer Details
                 </h3>
                 <div className="space-y-3">
                   <input 

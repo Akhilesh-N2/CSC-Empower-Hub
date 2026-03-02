@@ -34,7 +34,9 @@ import DevStats from "./pages/DevStats";
 import ShopDashboard from "./pages/ShopDashboard";
 import WhatsAppWidget from './components/WhatsAppWidget';
 
-// --- HELPER: Scroll to top on route change ---
+const adminEmail = "manoj@gmail.com"; // Moved up so it's globally accessible
+
+// --- HELPER 1: Scroll to top on route change ---
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -43,26 +45,47 @@ const ScrollToTop = () => {
   return null;
 };
 
+// --- ✨ HELPER 2: The Smart Traffic Tracker ---
+const TrafficTracker = ({ currentUser }) => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    const logVisit = async () => {
+      // 1. If we haven't finished checking auth yet, wait.
+      if (currentUser === undefined) return; 
+
+      // 2. If the user is the Admin, STOP executing. Do not log.
+      if (currentUser?.email === adminEmail) {
+        console.log("Admin visit detected. Skipping analytics log.");
+        return;
+      }
+
+      // 3. Otherwise, log the visit with the specific page path!
+      try {
+        await supabase.from("traffic_logs").insert([{ 
+          path: pathname,
+          user_id: currentUser ? currentUser.id : null
+        }]);
+      } catch (err) {
+        console.error("Failed to log visit:", err);
+      }
+    };
+
+    logVisit();
+  }, [pathname, currentUser]); // Runs when URL changes OR when user logs in/out
+
+  return null; // This component doesn't render anything visually
+};
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem("isAdminLoggedIn") === "true";
   });
 
-  const [currentUser, setCurrentUser] = useState(null);
+  // Changed to undefined initially so our tracker knows it's still "loading"
+  const [currentUser, setCurrentUser] = useState(undefined); 
 
-  useEffect(() => {
-    // Only runs ONCE when the app loads
-    supabase.from("traffic_logs").insert([{}]).then();
-  }, []); // <--- This empty array [] is the most important part
-
-  useEffect(() => {
-    // Only log if the user IS NOT Manoj
-    if (currentUser?.email !== "manoj@gmail.com") {
-      supabase.from("traffic_logs").insert([{}]).then();
-    }
-  }, [currentUser]);
-
-  // Listen for Auth changes to identify Manoj
+  // Listen for Auth changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setCurrentUser(session?.user ?? null);
@@ -78,7 +101,6 @@ function App() {
   }, []);
 
   const isMaintenanceMode = false;
-  const adminEmail = "manoj@gmail.com";
 
   const MaintenanceScreen = () => (
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
@@ -99,9 +121,11 @@ function App() {
     <WhatsAppWidget />
       <Router>
         <ScrollToTop />
+        {/* ✨ Mount the new Tracker here so it has access to the router! */}
+        <TrafficTracker currentUser={currentUser} /> 
+        
         <div className="flex flex-col min-h-screen">
           <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
-
 
           <main className="flex-grow">
             {isMaintenanceMode ? (

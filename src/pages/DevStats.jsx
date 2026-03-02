@@ -16,38 +16,67 @@ function DevStats() {
 
   const fetchAnalytics = async () => {
     try {
-      const [visits, users, jobs, pending] = await Promise.all([
-        supabase.from('traffic_logs').select('created_at'),
-        supabase.from('profiles').select('created_at'),
-        supabase.from('jobs').select('created_at'),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_approved', false)
+      // 1. Fetch exact total counts (bypasses row limits)
+      const [users, jobs, pending, visits] = await Promise.all([
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_approved', false),
+        supabase.from('traffic_logs').select('id', { count: 'exact', head: true })
       ]);
 
-      setVisitData(processTimeline(visits.data, timeRange));
-      setUserGrowth(processTimeline(users.data, 'daily'));
-      setJobGrowth(processTimeline(jobs.data, 'daily'));
+      // 2. Fetch the pre-calculated graph data using our fast SQL RPCs
+      const [ { data: dailyVisits }, { data: dailySignups }, { data: dailyJobs } ] = await Promise.all([
+        supabase.rpc('get_daily_visits'),
+        supabase.rpc('get_daily_signups'),
+        supabase.rpc('get_daily_jobs') // ✨ NEW: Fetching the job timeline!
+      ]);
 
+      // 3. Process the pre-counted data for the Recharts components
+      setVisitData(formatAggregatedData(dailyVisits, timeRange, 'visit_date', 'visit_count'));
+      setUserGrowth(formatAggregatedData(dailySignups, timeRange, 'signup_date', 'signup_count'));
+      setJobGrowth(formatAggregatedData(dailyJobs, timeRange, 'job_date', 'job_count')); // ✨ NEW: Setting Job Growth
+      
+      // Update totals in the stat boxes
       setStats({
-        totalUsers: users.data?.length || 0,
-        totalJobs: jobs.data?.length || 0,
+        totalUsers: users.count || 0,
+        totalJobs: jobs.count || 0,
         pendingApprovals: pending.count || 0,
-        totalVisits: visits.data?.length || 0
+        totalVisits: visits.count || 0
       });
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+      
+    } catch (err) { 
+      console.error("Error fetching analytics:", err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
-  const processTimeline = (data, range) => {
-    if (!data) return [];
-    const groups = data.reduce((acc, item) => {
-      const d = new Date(item.created_at);
-      let key;
-      if (range === 'yearly') key = d.getFullYear().toString();
-      else if (range === 'monthly') key = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-      else key = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-      acc[key] = (acc[key] || 0) + 1;
+  // HELPER: Formats the pre-counted SQL data for Recharts based on Time Range
+  const formatAggregatedData = (data, range, dateKey, countKey) => {
+    if (!data || data.length === 0) return [];
+    
+    if (range === 'daily') {
+      return data.map(row => ({
+        date: new Date(row[dateKey]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+        count: Number(row[countKey])
+      }));
+    }
+
+    // Grouping by Month or Year
+    const grouped = data.reduce((acc, row) => {
+      const d = new Date(row[dateKey]);
+      let displayKey = range === 'yearly' 
+        ? d.getFullYear().toString() 
+        : d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+
+      acc[displayKey] = (acc[displayKey] || 0) + Number(row[countKey]);
       return acc;
     }, {});
-    return Object.keys(groups).map(date => ({ date, count: groups[date] }));
+
+    return Object.keys(grouped).map(key => ({
+      date: key,
+      count: grouped[key]
+    }));
   };
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-cyan-400 font-mono tracking-tighter">INITIALIZING ENGINE ROOM...</div>;
@@ -117,8 +146,8 @@ function DevStats() {
 
         {/* BOTTOM GROWTH GRIDS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10">
-          <GrowthCard title="Daily Signups" data={userGrowth} color="#3b82f6" icon={<Users size={18} className="text-blue-400"/>} yLabel="Users" />
-          <GrowthCard title="Job Activity" data={jobGrowth} color="#a855f7" icon={<Briefcase size={18} className="text-purple-400"/>} yLabel="Jobs" type="step" />
+          <GrowthCard title="Signups Over Time" data={userGrowth} color="#3b82f6" icon={<Users size={18} className="text-blue-400"/>} yLabel="Users" />
+          <GrowthCard title="Job Activity Over Time" data={jobGrowth} color="#a855f7" icon={<Briefcase size={18} className="text-purple-400"/>} yLabel="Jobs" type="step" />
         </div>
       </div>
     </div>
