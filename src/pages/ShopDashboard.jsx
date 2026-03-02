@@ -12,7 +12,7 @@ function ShopDashboard() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Print Page Size State
-  const [pageSize, setPageSize] = useState('Thermal80'); // Defaults to POS Thermal Receipt
+  const [pageSize, setPageSize] = useState('Thermal80'); 
 
   // 1. STATE: Shop Details & Profile Errors
   const [shopInfo, setShopInfo] = useState({ 
@@ -36,7 +36,13 @@ function ShopDashboard() {
     phone: false
   });
 
-  // 2. STATE: Billing Items & Billing Errors
+  // ✨ 2. STATE: Customer Details (Syncs with Local Storage)
+  const [customerInfo, setCustomerInfo] = useState(() => {
+    const saved = localStorage.getItem('shop_billing_customer');
+    return saved ? JSON.parse(saved) : { name: '', phone: '', address: '' };
+  });
+
+  // 3. STATE: Billing Items & Errors
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem('shop_billing_items');
     return saved ? JSON.parse(saved) : [];
@@ -52,7 +58,7 @@ function ShopDashboard() {
     price: false
   });
 
-  // 3. FETCH SHOP DETAILS ON LOAD
+  // 4. FETCH SHOP DETAILS ON LOAD
   useEffect(() => {
     const fetchShopData = async () => {
       try {
@@ -60,14 +66,12 @@ function ShopDashboard() {
         if (user) {
           setUserId(user.id);
           
-          // Fetch Profile Data
           const { data, error } = await supabase
             .from('shop_profiles')
             .select('*')
             .eq('id', user.id)
             .single();
             
-          // Fetch Device Count
           const { count: deviceCount } = await supabase
             .from('shop_devices')
             .select('*', { count: 'exact', head: true })
@@ -90,7 +94,6 @@ function ShopDashboard() {
               active_devices: deviceCount || 0
             });
             
-            // Fetch Billing/Renewal History
             const { data: history } = await supabase
               .from('license_renewals')
               .select('*')
@@ -106,10 +109,11 @@ function ShopDashboard() {
     fetchShopData();
   }, []);
 
-  // 4. SYNC WITH LOCAL STORAGE
+  // 5. SYNC WITH LOCAL STORAGE
   useEffect(() => {
     localStorage.setItem('shop_billing_items', JSON.stringify(items));
-  }, [items]);
+    localStorage.setItem('shop_billing_customer', JSON.stringify(customerInfo)); // ✨ Sync customer info
+  }, [items, customerInfo]);
 
   // HANDLE RENEWAL REQUEST
   const handleRequestRenewal = async () => {
@@ -129,7 +133,7 @@ function ShopDashboard() {
     }
   };
 
-  // 5. BILLING LOGIC
+  // 6. BILLING LOGIC
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
 
   const handleAddItem = (e) => {
@@ -158,9 +162,16 @@ function ShopDashboard() {
   };
 
   const handleRemoveItem = (id) => setItems(items.filter(item => item.id !== id));
-  const clearAll = () => { if(window.confirm("Are you sure you want to clear the current bill?")) setItems([]); }
+  
+  // ✨ CLEARS BILL AND CUSTOMER
+  const clearAll = () => { 
+    if(window.confirm("Are you sure you want to clear the current bill and customer details?")) {
+      setItems([]); 
+      setCustomerInfo({ name: '', phone: '', address: '' });
+    } 
+  }
 
-  // 6. PROFILE UPDATE LOGIC
+  // 7. PROFILE UPDATE LOGIC
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     const newErrors = {
@@ -196,7 +207,7 @@ function ShopDashboard() {
     }
   };
 
-  // 7. PRINT & EXPORT LOGIC
+  // ✨ 8. PRINT & EXPORT LOGIC WITH CUSTOMER DETAILS
   const handlePrint = () => {
     if (items.length === 0) return alert("Please add items to the bill before printing.");
     let pageCSS = ""; let containerStyle = "";
@@ -207,29 +218,83 @@ function ShopDashboard() {
     const itemsHtml = items.map((item, i) => `<tr><td style="padding: 6px 0; border-bottom: 1px dashed #ccc;">${i + 1}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; word-break: break-word;">${item.name}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; text-align: center;">${item.quantity}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; text-align: right;">${item.price.toFixed(2)}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; text-align: right; font-weight: bold;">${item.total.toFixed(2)}</td></tr>`).join('');
     const dateStr = new Date().toLocaleDateString('en-GB'); const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
+    // ✨ Generate Billed To HTML block
+    const hasCustomer = customerInfo.name || customerInfo.address || customerInfo.phone;
+    const customerHtml = hasCustomer ? `
+      <div style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background-color: #fafafa; font-size: 0.9em;">
+        <p style="margin: 0 0 5px 0; font-size: 0.8em; color: #555; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Billed To</p>
+        ${customerInfo.name ? `<p style="margin: 2px 0; font-weight: bold; font-size: 1.1em;">${customerInfo.name}</p>` : ''}
+        ${customerInfo.phone ? `<p style="margin: 2px 0; color: #333;">${customerInfo.phone}</p>` : ''}
+        ${customerInfo.address ? `<p style="margin: 2px 0; color: #333;">${customerInfo.address}</p>` : ''}
+      </div>
+      <div class="dashed-line"></div>
+    ` : '';
+
     const printWindow = window.open('', '_blank');
-    printWindow.document.write(`<html><head><title>Print Invoice</title><style>body { font-family: sans-serif; color: #000; margin: 0; padding: 0; background: #fff; } ${pageCSS} table { border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; width: 100%; } th { border-bottom: 2px solid #000; padding-bottom: 6px; text-align: left; font-size: 0.9em; text-transform: uppercase; } .text-center { text-align: center; } .text-right { text-align: right; } .dashed-line { border-top: 2px dashed #000; margin: 15px 0; } .header-info p { margin: 4px 0; color: #333; }</style></head><body><div style="${containerStyle}"><div class="text-center header-info"><h1 style="margin: 0 0 5px 0; font-size: ${pageSize === 'Thermal80' ? '18px' : '28px'}; text-transform: uppercase;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1><p>${shopInfo.address || shopInfo.location || ''}</p><p>Ph: ${shopInfo.phone || 'N/A'}</p>${shopInfo.gstin ? `<p><strong>GSTIN:</strong> ${shopInfo.gstin.toUpperCase()}</p>` : ''}</div><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; font-size: 0.9em;"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div><div class="dashed-line"></div><table><thead><tr><th style="width: 5%;">#</th><th style="width: 45%;">Item</th><th class="text-center" style="width: 15%;">Qty</th><th class="text-right" style="width: 15%;">Rate</th><th class="text-right" style="width: 20%;">Total</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: ${pageSize === 'Thermal80' ? '16px' : '20px'}; font-weight: bold;">GRAND TOTAL:</span><span style="font-size: ${pageSize === 'Thermal80' ? '18px' : '24px'}; font-weight: bold;">Rs. ${grandTotal.toFixed(2)}</span></div><div class="dashed-line"></div><div class="text-center" style="margin-top: 20px;"><p style="margin: 0; font-weight: bold;">Thank you for your business!</p><p style="margin: 4px 0; font-size: 0.8em; color: #666;">Software by CSC Empower Hub</p></div></div></body></html>`);
+    printWindow.document.write(`<html><head><title>Print Invoice</title><style>body { font-family: sans-serif; color: #000; margin: 0; padding: 0; background: #fff; } ${pageCSS} table { border-collapse: collapse; margin-top: 10px; margin-bottom: 15px; width: 100%; } th { border-bottom: 2px solid #000; padding-bottom: 6px; text-align: left; font-size: 0.9em; text-transform: uppercase; } .text-center { text-align: center; } .text-right { text-align: right; } .dashed-line { border-top: 2px dashed #000; margin: 15px 0; } .header-info p { margin: 4px 0; color: #333; }</style></head><body><div style="${containerStyle}"><div class="text-center header-info"><h1 style="margin: 0 0 5px 0; font-size: ${pageSize === 'Thermal80' ? '18px' : '28px'}; text-transform: uppercase;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1><p>${shopInfo.address || shopInfo.location || ''}</p><p>Ph: ${shopInfo.phone || 'N/A'}</p>${shopInfo.gstin ? `<p><strong>GSTIN:</strong> ${shopInfo.gstin.toUpperCase()}</p>` : ''}</div><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; font-size: 0.9em;"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div><div class="dashed-line"></div>${customerHtml}<table><thead><tr><th style="width: 5%;">#</th><th style="width: 45%;">Item</th><th class="text-center" style="width: 15%;">Qty</th><th class="text-right" style="width: 15%;">Rate</th><th class="text-right" style="width: 20%;">Total</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: ${pageSize === 'Thermal80' ? '16px' : '20px'}; font-weight: bold;">GRAND TOTAL:</span><span style="font-size: ${pageSize === 'Thermal80' ? '18px' : '24px'}; font-weight: bold;">Rs. ${grandTotal.toFixed(2)}</span></div><div class="dashed-line"></div><div class="text-center" style="margin-top: 20px;"><p style="margin: 0; font-weight: bold;">Thank you for your business!</p><p style="margin: 4px 0; font-size: 0.8em; color: #666;">Software by CSC Empower Hub</p></div></div></body></html>`);
     printWindow.document.close(); printWindow.focus(); setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
   };
 
   const exportToExcel = () => {
     if (items.length === 0) return alert("Please add items before exporting.");
     const exportData = items.map((item, index) => ({ 'S.No': index + 1, 'Product Name': item.name, 'Quantity': item.quantity, 'Unit Price (₹)': item.price, 'Total Amount (₹)': item.total }));
-    const worksheet = XLSX.utils.json_to_sheet(exportData, { origin: 'A8' });
-    worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }, { s: { r: 5, c: 0 }, e: { r: 5, c: 4 } }];
+    
+    // ✨ Adjust layout to accommodate Customer Details
     const dateStr = new Date().toLocaleDateString('en-GB'); 
-    const headerData = [ [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : 'RETAIL INVOICE'], [shopInfo.address ? shopInfo.address : `Location: ${shopInfo.location || 'N/A'}`], [`Contact: ${shopInfo.phone || 'N/A'}`, '', '', '', `Date: ${dateStr}`], [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : '', '', '', '', ''], [], ['TAX INVOICE / BILL OF SUPPLY'], [] ];
-    XLSX.utils.sheet_add_aoa(worksheet, headerData, { origin: 'A1' }); XLSX.utils.sheet_add_aoa(worksheet, [['', '', '', 'GRAND TOTAL', `₹${grandTotal.toFixed(2)}`]], { origin: -1 });
-    if (worksheet['A1']) worksheet['A1'].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }; if (worksheet['A2']) worksheet['A2'].s = { font: { sz: 10 }, alignment: { horizontal: 'center' } }; if (worksheet['A3']) worksheet['A3'].s = { font: { sz: 11 }, alignment: { horizontal: 'left' } }; if (worksheet['E3']) worksheet['E3'].s = { font: { sz: 11 }, alignment: { horizontal: 'right' } }; if (worksheet['A4']) worksheet['A4'].s = { font: { sz: 11 }, alignment: { horizontal: 'left' } }; if (worksheet['A6']) worksheet['A6'].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
-    const headers = ['A8', 'B8', 'C8', 'D8', 'E8']; headers.forEach(cell => { if (worksheet[cell]) worksheet[cell].s = { font: { bold: true }, border: { bottom: { style: 'thin', color: { rgb: "000000" } } } }; });
+    const headerData = [ 
+      [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : 'RETAIL INVOICE'], 
+      [shopInfo.address ? shopInfo.address : `Location: ${shopInfo.location || 'N/A'}`], 
+      [`Contact: ${shopInfo.phone || 'N/A'}`, '', '', '', `Date: ${dateStr}`], 
+      [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : '', '', '', '', ''], 
+      [], 
+      ['TAX INVOICE / BILL OF SUPPLY'], 
+      [],
+      ['BILLED TO:', customerInfo.name || 'Walk-in Customer', '', '', ''],
+      ['Phone:', customerInfo.phone || 'N/A', '', '', ''],
+      ['Address:', customerInfo.address || 'N/A', '', '', ''],
+      []
+    ];
+
+    // Data starts at row 13 now
+    const worksheet = XLSX.utils.json_to_sheet(exportData, { origin: 'A13' });
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, 
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }, 
+      { s: { r: 5, c: 0 }, e: { r: 5, c: 4 } },
+      { s: { r: 7, c: 0 }, e: { r: 7, c: 4 } }
+    ];
+    
+    XLSX.utils.sheet_add_aoa(worksheet, headerData, { origin: 'A1' }); 
+    XLSX.utils.sheet_add_aoa(worksheet, [['', '', '', 'GRAND TOTAL', `₹${grandTotal.toFixed(2)}`]], { origin: -1 });
+    
+    // Formatting
+    if (worksheet['A1']) worksheet['A1'].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }; 
+    if (worksheet['A2']) worksheet['A2'].s = { font: { sz: 10 }, alignment: { horizontal: 'center' } }; 
+    if (worksheet['A3']) worksheet['A3'].s = { font: { sz: 11 }, alignment: { horizontal: 'left' } }; 
+    if (worksheet['E3']) worksheet['E3'].s = { font: { sz: 11 }, alignment: { horizontal: 'right' } }; 
+    if (worksheet['A4']) worksheet['A4'].s = { font: { sz: 11 }, alignment: { horizontal: 'left' } }; 
+    if (worksheet['A6']) worksheet['A6'].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
+    
+    // Billed To formatting
+    if (worksheet['A8']) worksheet['A8'].s = { font: { bold: true, sz: 11 }, alignment: { horizontal: 'left' } };
+    if (worksheet['A9']) worksheet['A9'].s = { font: { bold: true } };
+    if (worksheet['A10']) worksheet['A10'].s = { font: { bold: true } };
+    if (worksheet['A11']) worksheet['A11'].s = { font: { bold: true } };
+
+    const headers = ['A13', 'B13', 'C13', 'D13', 'E13']; 
+    headers.forEach(cell => { if (worksheet[cell]) worksheet[cell].s = { font: { bold: true }, border: { bottom: { style: 'thin', color: { rgb: "000000" } } } }; });
+    
     const range = XLSX.utils.decode_range(worksheet['!ref']); const lastRow = range.e.r + 1; 
-    if (worksheet[`D${lastRow}`]) worksheet[`D${lastRow}`].s = { font: { bold: true } }; if (worksheet[`E${lastRow}`]) worksheet[`E${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`D${lastRow}`]) worksheet[`D${lastRow}`].s = { font: { bold: true } }; 
+    if (worksheet[`E${lastRow}`]) worksheet[`E${lastRow}`].s = { font: { bold: true } };
+    
     worksheet['!cols'] = [{ wch: 8 }, { wch: 45 }, { wch: 10 }, { wch: 15 }, { wch: 20 }];
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, "Invoice");
-    XLSX.writeFile(workbook, `${shopInfo.shop_name ? shopInfo.shop_name.replace(/\s+/g, '_') : 'Invoice'}_${dateStr.replace(/\//g, '-')}.xlsx`);
+    
+    const custNameStr = customerInfo.name ? `_${customerInfo.name.replace(/\s+/g, '_')}` : '';
+    XLSX.writeFile(workbook, `Invoice${custNameStr}_${dateStr.replace(/\//g, '-')}.xlsx`);
   };
 
-  // Helper for dates
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -323,14 +388,48 @@ function ShopDashboard() {
         {/* TAB 1: BILLING SYSTEM */}
         {activeTab === 'billing' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 animate-in fade-in duration-300">
-            <div className="lg:col-span-1">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:sticky top-24">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-4">
-                  <Plus size={20} className="text-emerald-600" /> Add Product
+            
+            {/* LEFT COLUMN: FORMS */}
+            <div className="lg:col-span-1 flex flex-col gap-6">
+              
+              {/* ✨ CUSTOMER DETAILS BLOCK */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
+                  <User size={18} className="text-blue-500" /> Customer Details
                 </h3>
-                <form onSubmit={handleAddItem} className="space-y-5" noValidate>
+                <div className="space-y-3">
+                  <input 
+                    type="text" 
+                    placeholder="Customer Name" 
+                    value={customerInfo.name}
+                    onChange={e => setCustomerInfo({...customerInfo, name: e.target.value})}
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all bg-slate-50 focus:bg-white"
+                  />
+                  <input 
+                    type="tel" 
+                    placeholder="Phone Number (Optional)" 
+                    value={customerInfo.phone}
+                    onChange={e => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all bg-slate-50 focus:bg-white"
+                  />
+                  <textarea 
+                    rows="2" 
+                    placeholder="Customer Address (Optional)" 
+                    value={customerInfo.address}
+                    onChange={e => setCustomerInfo({...customerInfo, address: e.target.value})}
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all bg-slate-50 focus:bg-white resize-none"
+                  ></textarea>
+                </div>
+              </div>
+
+              {/* PRODUCT ENTRY BLOCK */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:sticky top-6">
+                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
+                  <Plus size={18} className="text-emerald-600" /> Add Product
+                </h3>
+                <form onSubmit={handleAddItem} className="space-y-4" noValidate>
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Product Name</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Product Name *</label>
                     <input 
                       type="text" 
                       value={itemName}
@@ -338,43 +437,50 @@ function ShopDashboard() {
                       placeholder="e.g. A4 Paper Rim"
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.itemName ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white'}`}
                     />
-                    {billErrors.itemName && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Product Name is required</p>}
+                    {billErrors.itemName && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Required</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quantity</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Qty *</label>
                       <input 
                         type="number" min="1" value={quantity}
                         onChange={e => { setQuantity(e.target.value); if(billErrors.quantity) setBillErrors({...billErrors, quantity: false}); }}
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.quantity ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white'}`}
                       />
-                      {billErrors.quantity && <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 flex items-center gap-1">* Invalid Qty</p>}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Price (₹)</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Price (₹) *</label>
                       <input 
                         type="number" min="0" step="0.01" value={price}
                         onChange={e => { setPrice(e.target.value); if(billErrors.price) setBillErrors({...billErrors, price: false}); }}
                         placeholder="0.00"
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.price ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300' : 'border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white'}`}
                       />
-                      {billErrors.price && <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 flex items-center gap-1">* Required</p>}
                     </div>
                   </div>
-                  <button type="submit" className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 mt-2">
-                    <Plus size={18} /> Add to Bill
+                  <button type="submit" className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 mt-2 shadow-sm">
+                    Add to Bill
                   </button>
                 </form>
               </div>
             </div>
 
+            {/* RIGHT COLUMN: INVOICE TABLE */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <Receipt size={18} className="text-emerald-600" /> Current Invoice
-                  </h3>
-                  {items.length > 0 && <button onClick={clearAll} className="text-xs font-bold text-red-500 hover:text-red-700 underline underline-offset-4 transition">Clear All</button>}
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Receipt size={18} className="text-emerald-600" /> Current Invoice
+                    </h3>
+                    {/* Visual indicator that a customer is attached */}
+                    {customerInfo.name && (
+                      <p className="text-[11px] font-bold text-blue-600 mt-1 ml-6 flex items-center gap-1">
+                        Billed to: {customerInfo.name}
+                      </p>
+                    )}
+                  </div>
+                  {(items.length > 0 || customerInfo.name) && <button onClick={clearAll} className="text-xs font-bold text-red-500 hover:text-red-700 underline underline-offset-4 transition">Clear All</button>}
                 </div>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-left border-collapse min-w-[500px]">
@@ -560,7 +666,6 @@ function ShopDashboard() {
                   )}
                 </div>
 
-                {/* ✨ NEW: BILLING HISTORY LEDGER IN SHOP DASHBOARD */}
                 {renewalHistory.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-slate-200">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
