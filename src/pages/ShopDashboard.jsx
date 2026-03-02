@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx-js-style'; 
 import { supabase } from '../supabaseClient';
 import { useDeviceTracker } from '../hooks/useDeviceTracker';
-import { Plus, Trash2, Download, Store, Receipt, IndianRupee, Settings, Save, MapPin, Phone, User, FileText, Printer, AlertCircle, BadgeCheck, CalendarDays, Laptop, LifeBuoy, History } from 'lucide-react';
+import { Plus, Trash2, Download, Store, Receipt, IndianRupee, Settings, Save, MapPin, Phone, User, FileText, Printer, AlertCircle, BadgeCheck, CalendarDays, Laptop, LifeBuoy, History, CheckCircle } from 'lucide-react';
 
 function ShopDashboard() {
   useDeviceTracker();
@@ -36,7 +36,7 @@ function ShopDashboard() {
     phone: false
   });
 
-  // ✨ 2. STATE: Customer Details (Syncs with Local Storage)
+  // 2. STATE: Customer Details (Syncs with Local Storage for safety)
   const [customerInfo, setCustomerInfo] = useState(() => {
     const saved = localStorage.getItem('shop_billing_customer');
     return saved ? JSON.parse(saved) : { name: '', phone: '', address: '' };
@@ -58,7 +58,11 @@ function ShopDashboard() {
     price: false
   });
 
-  // 4. FETCH SHOP DETAILS ON LOAD
+  // ✨ 4. STATE: Live DB Invoice Sequence (Formatted to 0001, 0002, etc.)
+  const [invoiceSeq, setInvoiceSeq] = useState(1);
+  const currentInvoiceId = String(invoiceSeq).padStart(4, '0');
+
+  // 5. FETCH SHOP DETAILS ON LOAD
   useEffect(() => {
     const fetchShopData = async () => {
       try {
@@ -93,6 +97,9 @@ function ShopDashboard() {
               device_limit: data.device_limit || 1,
               active_devices: deviceCount || 0
             });
+
+            // Set the next invoice sequence based on the database
+            setInvoiceSeq((data.last_invoice_number || 0) + 1);
             
             const { data: history } = await supabase
               .from('license_renewals')
@@ -109,10 +116,10 @@ function ShopDashboard() {
     fetchShopData();
   }, []);
 
-  // 5. SYNC WITH LOCAL STORAGE
+  // 6. SYNC CURRENT CART WITH LOCAL STORAGE
   useEffect(() => {
     localStorage.setItem('shop_billing_items', JSON.stringify(items));
-    localStorage.setItem('shop_billing_customer', JSON.stringify(customerInfo)); // ✨ Sync customer info
+    localStorage.setItem('shop_billing_customer', JSON.stringify(customerInfo)); 
   }, [items, customerInfo]);
 
   // HANDLE RENEWAL REQUEST
@@ -133,7 +140,7 @@ function ShopDashboard() {
     }
   };
 
-  // 6. BILLING LOGIC
+  // 7. BILLING LOGIC
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
 
   const handleAddItem = (e) => {
@@ -163,15 +170,40 @@ function ShopDashboard() {
 
   const handleRemoveItem = (id) => setItems(items.filter(item => item.id !== id));
   
-  // ✨ CLEARS BILL AND CUSTOMER
-  const clearAll = () => { 
-    if(window.confirm("Are you sure you want to clear the current bill and customer details?")) {
-      setItems([]); 
-      setCustomerInfo({ name: '', phone: '', address: '' });
-    } 
-  }
+  // COMPLETES BILL & PULLS NEXT NUMBER FROM DB
+  const handleCompleteBill = async () => { 
+    if(window.confirm("Complete this sale and start the next bill?")) {
+      try {
+        const { data: newDbCount, error } = await supabase.rpc('increment_shop_invoice', { 
+          target_shop_id: userId 
+        });
 
-  // 7. PROFILE UPDATE LOGIC
+        if (error) throw error;
+
+        // Clear UI for next customer
+        setItems([]); 
+        setCustomerInfo({ name: '', phone: '', address: '' });
+        
+        // Update UI sequence (If DB is now at 1, the next pending bill is 2)
+        if (newDbCount !== null) {
+          setInvoiceSeq(newDbCount + 1);
+        }
+
+      } catch (err) {
+        console.error("Failed to increment sequence:", err);
+        alert("Error generating next invoice number. Please check connection.");
+      }
+    } 
+  };
+
+  const clearCartOnly = () => {
+    if(window.confirm("Empty cart items without changing the invoice number?")) {
+      setItems([]);
+      setCustomerInfo({ name: '', phone: '', address: '' });
+    }
+  };
+
+  // 8. PROFILE UPDATE LOGIC
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     const newErrors = {
@@ -207,7 +239,7 @@ function ShopDashboard() {
     }
   };
 
-  // ✨ 8. PRINT & EXPORT LOGIC WITH CUSTOMER DETAILS
+  // 9. PRINT LOGIC (Uses live currentInvoiceId)
   const handlePrint = () => {
     if (items.length === 0) return alert("Please add items to the bill before printing.");
     let pageCSS = ""; let containerStyle = "";
@@ -218,7 +250,6 @@ function ShopDashboard() {
     const itemsHtml = items.map((item, i) => `<tr><td style="padding: 6px 0; border-bottom: 1px dashed #ccc;">${i + 1}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; word-break: break-word;">${item.name}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; text-align: center;">${item.quantity}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; text-align: right;">${item.price.toFixed(2)}</td><td style="padding: 6px 0; border-bottom: 1px dashed #ccc; text-align: right; font-weight: bold;">${item.total.toFixed(2)}</td></tr>`).join('');
     const dateStr = new Date().toLocaleDateString('en-GB'); const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-    // ✨ Generate Billed To HTML block
     const hasCustomer = customerInfo.name || customerInfo.address || customerInfo.phone;
     const customerHtml = hasCustomer ? `
       <div style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background-color: #fafafa; font-size: 0.9em;">
@@ -231,21 +262,21 @@ function ShopDashboard() {
     ` : '';
 
     const printWindow = window.open('', '_blank');
-    printWindow.document.write(`<html><head><title>Print Invoice</title><style>body { font-family: sans-serif; color: #000; margin: 0; padding: 0; background: #fff; } ${pageCSS} table { border-collapse: collapse; margin-top: 10px; margin-bottom: 15px; width: 100%; } th { border-bottom: 2px solid #000; padding-bottom: 6px; text-align: left; font-size: 0.9em; text-transform: uppercase; } .text-center { text-align: center; } .text-right { text-align: right; } .dashed-line { border-top: 2px dashed #000; margin: 15px 0; } .header-info p { margin: 4px 0; color: #333; }</style></head><body><div style="${containerStyle}"><div class="text-center header-info"><h1 style="margin: 0 0 5px 0; font-size: ${pageSize === 'Thermal80' ? '18px' : '28px'}; text-transform: uppercase;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1><p>${shopInfo.address || shopInfo.location || ''}</p><p>Ph: ${shopInfo.phone || 'N/A'}</p>${shopInfo.gstin ? `<p><strong>GSTIN:</strong> ${shopInfo.gstin.toUpperCase()}</p>` : ''}</div><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; font-size: 0.9em;"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div><div class="dashed-line"></div>${customerHtml}<table><thead><tr><th style="width: 5%;">#</th><th style="width: 45%;">Item</th><th class="text-center" style="width: 15%;">Qty</th><th class="text-right" style="width: 15%;">Rate</th><th class="text-right" style="width: 20%;">Total</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: ${pageSize === 'Thermal80' ? '16px' : '20px'}; font-weight: bold;">GRAND TOTAL:</span><span style="font-size: ${pageSize === 'Thermal80' ? '18px' : '24px'}; font-weight: bold;">Rs. ${grandTotal.toFixed(2)}</span></div><div class="dashed-line"></div><div class="text-center" style="margin-top: 20px;"><p style="margin: 0; font-weight: bold;">Thank you for your business!</p><p style="margin: 4px 0; font-size: 0.8em; color: #666;">Software by CSC Empower Hub</p></div></div></body></html>`);
+    printWindow.document.write(`<html><head><title>Print Invoice</title><style>body { font-family: sans-serif; color: #000; margin: 0; padding: 0; background: #fff; } ${pageCSS} table { border-collapse: collapse; margin-top: 10px; margin-bottom: 15px; width: 100%; } th { border-bottom: 2px solid #000; padding-bottom: 6px; text-align: left; font-size: 0.9em; text-transform: uppercase; } .text-center { text-align: center; } .text-right { text-align: right; } .dashed-line { border-top: 2px dashed #000; margin: 15px 0; } .header-info p { margin: 4px 0; color: #333; }</style></head><body><div style="${containerStyle}"><div class="text-center header-info"><h1 style="margin: 0 0 5px 0; font-size: ${pageSize === 'Thermal80' ? '18px' : '28px'}; text-transform: uppercase;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1><p>${shopInfo.address || shopInfo.location || ''}</p><p>Ph: ${shopInfo.phone || 'N/A'}</p>${shopInfo.gstin ? `<p><strong>GSTIN:</strong> ${shopInfo.gstin.toUpperCase()}</p>` : ''}</div><div class="dashed-line"></div><div style="font-size: 0.9em;"><p style="margin: 0 0 4px 0;"><strong>Invoice No:</strong> ${currentInvoiceId}</p><div style="display: flex; justify-content: space-between;"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div></div><div class="dashed-line"></div>${customerHtml}<table><thead><tr><th style="width: 5%;">#</th><th style="width: 45%;">Item</th><th class="text-center" style="width: 15%;">Qty</th><th class="text-right" style="width: 15%;">Rate</th><th class="text-right" style="width: 20%;">Total</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="dashed-line"></div><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: ${pageSize === 'Thermal80' ? '16px' : '20px'}; font-weight: bold;">GRAND TOTAL:</span><span style="font-size: ${pageSize === 'Thermal80' ? '18px' : '24px'}; font-weight: bold;">Rs. ${grandTotal.toFixed(2)}</span></div><div class="dashed-line"></div><div class="text-center" style="margin-top: 20px;"><p style="margin: 0; font-weight: bold;">Thank you for your business!</p><p style="margin: 4px 0; font-size: 0.8em; color: #666;">Software by CSC Empower Hub</p></div></div></body></html>`);
     printWindow.document.close(); printWindow.focus(); setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
   };
 
+  // 10. EXPORT LOGIC (Uses live currentInvoiceId)
   const exportToExcel = () => {
     if (items.length === 0) return alert("Please add items before exporting.");
     const exportData = items.map((item, index) => ({ 'S.No': index + 1, 'Product Name': item.name, 'Quantity': item.quantity, 'Unit Price (₹)': item.price, 'Total Amount (₹)': item.total }));
     
-    // ✨ Adjust layout to accommodate Customer Details
     const dateStr = new Date().toLocaleDateString('en-GB'); 
     const headerData = [ 
       [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : 'RETAIL INVOICE'], 
       [shopInfo.address ? shopInfo.address : `Location: ${shopInfo.location || 'N/A'}`], 
       [`Contact: ${shopInfo.phone || 'N/A'}`, '', '', '', `Date: ${dateStr}`], 
-      [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : '', '', '', '', ''], 
+      [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : '', '', '', '', `Invoice No: ${currentInvoiceId}`], 
       [], 
       ['TAX INVOICE / BILL OF SUPPLY'], 
       [],
@@ -255,7 +286,6 @@ function ShopDashboard() {
       []
     ];
 
-    // Data starts at row 13 now
     const worksheet = XLSX.utils.json_to_sheet(exportData, { origin: 'A13' });
     worksheet['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, 
@@ -267,15 +297,14 @@ function ShopDashboard() {
     XLSX.utils.sheet_add_aoa(worksheet, headerData, { origin: 'A1' }); 
     XLSX.utils.sheet_add_aoa(worksheet, [['', '', '', 'GRAND TOTAL', `₹${grandTotal.toFixed(2)}`]], { origin: -1 });
     
-    // Formatting
     if (worksheet['A1']) worksheet['A1'].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }; 
     if (worksheet['A2']) worksheet['A2'].s = { font: { sz: 10 }, alignment: { horizontal: 'center' } }; 
     if (worksheet['A3']) worksheet['A3'].s = { font: { sz: 11 }, alignment: { horizontal: 'left' } }; 
     if (worksheet['E3']) worksheet['E3'].s = { font: { sz: 11 }, alignment: { horizontal: 'right' } }; 
     if (worksheet['A4']) worksheet['A4'].s = { font: { sz: 11 }, alignment: { horizontal: 'left' } }; 
+    if (worksheet['E4']) worksheet['E4'].s = { font: { sz: 11, bold: true }, alignment: { horizontal: 'right' } }; 
     if (worksheet['A6']) worksheet['A6'].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
     
-    // Billed To formatting
     if (worksheet['A8']) worksheet['A8'].s = { font: { bold: true, sz: 11 }, alignment: { horizontal: 'left' } };
     if (worksheet['A9']) worksheet['A9'].s = { font: { bold: true } };
     if (worksheet['A10']) worksheet['A10'].s = { font: { bold: true } };
@@ -291,8 +320,7 @@ function ShopDashboard() {
     worksheet['!cols'] = [{ wch: 8 }, { wch: 45 }, { wch: 10 }, { wch: 15 }, { wch: 20 }];
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, "Invoice");
     
-    const custNameStr = customerInfo.name ? `_${customerInfo.name.replace(/\s+/g, '_')}` : '';
-    XLSX.writeFile(workbook, `Invoice${custNameStr}_${dateStr.replace(/\//g, '-')}.xlsx`);
+    XLSX.writeFile(workbook, `INV_${currentInvoiceId}_${dateStr.replace(/\//g, '-')}.xlsx`);
   };
 
   const formatDate = (dateString) => {
@@ -392,32 +420,44 @@ function ShopDashboard() {
             {/* LEFT COLUMN: FORMS */}
             <div className="lg:col-span-1 flex flex-col gap-6">
               
-              {/* ✨ CUSTOMER DETAILS BLOCK */}
+              {/* ✨ CUSTOMER DETAILS BLOCK WITH CLEAR BUTTON */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
-                  <User size={18} className="text-emerald-600" /> Customer Details
-                </h3>
+                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <User size={18} className="text-emerald-600" /> Customer Details
+                  </h3>
+                  {/* CLEAR CUSTOMER BUTTON */}
+                  {(customerInfo.name || customerInfo.phone || customerInfo.address) && (
+                    <button 
+                      onClick={() => setCustomerInfo({ name: '', phone: '', address: '' })}
+                      className="text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-wider transition flex items-center gap-1 bg-red-50 px-2 py-1 rounded-md"
+                      type="button"
+                    >
+                      <Trash2 size={12} /> Clear
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-3">
                   <input 
                     type="text" 
                     placeholder="Customer Name" 
                     value={customerInfo.name}
                     onChange={e => setCustomerInfo({...customerInfo, name: e.target.value})}
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all bg-slate-50 focus:bg-white"
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-emerald-500 transition-all bg-slate-50 focus:bg-white"
                   />
                   <input 
                     type="tel" 
                     placeholder="Phone Number (Optional)" 
                     value={customerInfo.phone}
                     onChange={e => setCustomerInfo({...customerInfo, phone: e.target.value})}
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all bg-slate-50 focus:bg-white"
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-emerald-500 transition-all bg-slate-50 focus:bg-white"
                   />
                   <textarea 
                     rows="2" 
                     placeholder="Customer Address (Optional)" 
                     value={customerInfo.address}
                     onChange={e => setCustomerInfo({...customerInfo, address: e.target.value})}
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all bg-slate-50 focus:bg-white resize-none"
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-emerald-500 transition-all bg-slate-50 focus:bg-white resize-none"
                   ></textarea>
                 </div>
               </div>
@@ -468,19 +508,36 @@ function ShopDashboard() {
             {/* RIGHT COLUMN: INVOICE TABLE */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
-                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
                   <div>
                     <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                       <Receipt size={18} className="text-emerald-600" /> Current Invoice
+                      <span className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md font-mono border border-slate-200 ml-2 shadow-sm font-bold">
+                        {currentInvoiceId}
+                      </span>
                     </h3>
-                    {/* Visual indicator that a customer is attached */}
                     {customerInfo.name && (
-                      <p className="text-[11px] font-bold text-blue-600 mt-1 ml-6 flex items-center gap-1">
-                        Billed to: {customerInfo.name}
+                      <p className="text-[11px] font-bold text-slate-600 mt-1 ml-6 flex items-center gap-1">
+                        Billed to: <span className="text-emerald-700">{customerInfo.name}</span>
                       </p>
                     )}
                   </div>
-                  {(items.length > 0 || customerInfo.name) && <button onClick={clearAll} className="text-xs font-bold text-red-500 hover:text-red-700 underline underline-offset-4 transition">Clear All</button>}
+                  
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    {(items.length > 0 || customerInfo.name) && (
+                      <button onClick={clearCartOnly} className="text-xs font-bold text-red-500 hover:text-red-700 underline underline-offset-4 transition px-2">
+                        Empty Cart
+                      </button>
+                    )}
+                    {/* COMPLETE SALE BUTTON */}
+                    <button 
+                      onClick={handleCompleteBill} 
+                      className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-sm transition flex items-center gap-2 w-full sm:w-auto justify-center"
+                    >
+                      <CheckCircle size={14} /> Complete Sale & Next Bill
+                    </button>
+                  </div>
+
                 </div>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-left border-collapse min-w-[500px]">

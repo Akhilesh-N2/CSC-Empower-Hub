@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Label } from 'recharts';
-import { Users, Briefcase, Activity, ChevronLeft, MousePointer2, Clock } from 'lucide-react';
+import { Users, Briefcase, Activity, ChevronLeft, MousePointer2, Clock, Map } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 function DevStats() {
@@ -9,6 +9,7 @@ function DevStats() {
   const [visitData, setVisitData] = useState([]);
   const [userGrowth, setUserGrowth] = useState([]);
   const [jobGrowth, setJobGrowth] = useState([]);
+  const [topPages, setTopPages] = useState([]); // ✨ NEW: State for top pages
   const [stats, setStats] = useState({ totalUsers: 0, totalJobs: 0, pendingApprovals: 0, totalVisits: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +17,6 @@ function DevStats() {
 
   const fetchAnalytics = async () => {
     try {
-      // 1. Fetch exact total counts (bypasses row limits)
       const [users, jobs, pending, visits] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('jobs').select('id', { count: 'exact', head: true }),
@@ -24,19 +24,23 @@ function DevStats() {
         supabase.from('traffic_logs').select('id', { count: 'exact', head: true })
       ]);
 
-      // 2. Fetch the pre-calculated graph data using our fast SQL RPCs
-      const [ { data: dailyVisits }, { data: dailySignups }, { data: dailyJobs } ] = await Promise.all([
+      const [ 
+        { data: dailyVisits }, 
+        { data: dailySignups }, 
+        { data: dailyJobs },
+        { data: pagesData } // ✨ NEW: Fetch top pages
+      ] = await Promise.all([
         supabase.rpc('get_daily_visits'),
         supabase.rpc('get_daily_signups'),
-        supabase.rpc('get_daily_jobs') // ✨ NEW: Fetching the job timeline!
+        supabase.rpc('get_daily_jobs'),
+        supabase.rpc('get_top_pages') 
       ]);
 
-      // 3. Process the pre-counted data for the Recharts components
       setVisitData(formatAggregatedData(dailyVisits, timeRange, 'visit_date', 'visit_count'));
       setUserGrowth(formatAggregatedData(dailySignups, timeRange, 'signup_date', 'signup_count'));
-      setJobGrowth(formatAggregatedData(dailyJobs, timeRange, 'job_date', 'job_count')); // ✨ NEW: Setting Job Growth
+      setJobGrowth(formatAggregatedData(dailyJobs, timeRange, 'job_date', 'job_count'));
+      setTopPages(pagesData || []); // ✨ Set top pages state
       
-      // Update totals in the stat boxes
       setStats({
         totalUsers: users.count || 0,
         totalJobs: jobs.count || 0,
@@ -51,7 +55,6 @@ function DevStats() {
     }
   };
 
-  // HELPER: Formats the pre-counted SQL data for Recharts based on Time Range
   const formatAggregatedData = (data, range, dateKey, countKey) => {
     if (!data || data.length === 0) return [];
     
@@ -62,7 +65,6 @@ function DevStats() {
       }));
     }
 
-    // Grouping by Month or Year
     const grouped = data.reduce((acc, row) => {
       const d = new Date(row[dateKey]);
       let displayKey = range === 'yearly' 
@@ -81,10 +83,12 @@ function DevStats() {
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-cyan-400 font-mono tracking-tighter">INITIALIZING ENGINE ROOM...</div>;
 
+  // Calculate the highest page visit count to properly scale the progress bars
+  const maxPageVisits = topPages.length > 0 ? Math.max(...topPages.map(p => Number(p.visit_count))) : 1;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-10 font-sans">
       
-      {/* HEADER SECTION */}
       <div className="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <Link to="/admin" className="text-slate-500 hover:text-cyan-400 flex items-center gap-2 mb-2 text-[10px] font-black uppercase tracking-[0.2em]">
@@ -108,16 +112,14 @@ function DevStats() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8 pb-10">
         
-        {/* TOP ROW: SUMMARY CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatBox icon={<Users className="text-blue-400"/>} label="Registered Base" value={stats.totalUsers} subtext="Total accounts" />
           <StatBox icon={<Briefcase className="text-purple-400"/>} label="Platform Utility" value={stats.totalJobs} subtext="Live job posts" />
           <StatBox icon={<Clock className="text-orange-400"/>} label="Pending Review" value={stats.pendingApprovals} subtext="Awaiting validation" alert={stats.pendingApprovals > 0} />
         </div>
 
-        {/* MAIN VISITS GRAPH */}
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity duration-700">
             <MousePointer2 size={160} />
@@ -131,12 +133,8 @@ function DevStats() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={visitData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="date" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} dy={10}>
-                  <Label value="Time Period" offset={-10} position="insideBottom" fill="#475569" style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }} />
-                </XAxis>
-                <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false}>
-                  <Label value="Visit Count" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fill: '#475569', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }} />
-                </YAxis>
+                <XAxis dataKey="date" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip cursor={{fill: '#1e293b', opacity: 0.4}} content={<CustomTooltip labelText="Visits" />} />
                 <Bar dataKey="count" fill="#06b6d4" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -144,8 +142,43 @@ function DevStats() {
           </div>
         </div>
 
-        {/* BOTTOM GROWTH GRIDS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10">
+        {/* ✨ NEW: TOP VISITED PAGES LIST */}
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl">
+          <h3 className="font-bold text-white flex items-center gap-3 uppercase text-xs tracking-widest mb-6">
+            <Map size={18} className="text-emerald-400"/> Top Visited Pages (All Time)
+          </h3>
+          
+          {topPages.length === 0 ? (
+            <p className="text-slate-500 text-sm">No page data recorded yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {topPages.map((page, index) => {
+                const count = Number(page.visit_count);
+                const percentage = Math.max((count / maxPageVisits) * 100, 2); // Minimum 2% width so it's visible
+                
+                return (
+                  <div key={index} className="relative">
+                    <div className="flex justify-between items-center mb-1 relative z-10 px-2">
+                      <span className="text-slate-300 font-mono text-sm">
+                        {page.page_path === '/' ? '/ (Home)' : page.page_path}
+                      </span>
+                      <span className="text-emerald-400 font-bold text-sm">{count}</span>
+                    </div>
+                    {/* Background Progress Bar */}
+                    <div className="w-full bg-slate-800 rounded-lg h-8 absolute top-0 left-0 overflow-hidden">
+                      <div 
+                        className="bg-slate-700/50 h-full rounded-lg transition-all duration-1000 ease-out border-l-2 border-emerald-500" 
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <GrowthCard title="Signups Over Time" data={userGrowth} color="#3b82f6" icon={<Users size={18} className="text-blue-400"/>} yLabel="Users" />
           <GrowthCard title="Job Activity Over Time" data={jobGrowth} color="#a855f7" icon={<Briefcase size={18} className="text-purple-400"/>} yLabel="Jobs" type="step" />
         </div>
@@ -153,8 +186,6 @@ function DevStats() {
     </div>
   );
 }
-
-/* --- REUSABLE COMPONENTS --- */
 
 const CustomTooltip = ({ active, payload, label, labelText }) => {
   if (active && payload && payload.length) {
