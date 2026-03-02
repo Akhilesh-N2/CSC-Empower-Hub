@@ -1,85 +1,202 @@
-export const downloadWatermarkedPoster = async (posterUrl, shopDetails, posterTitle) => {
-    try {
-        // 1. Fetch the image as a Blob to bypass CORS (Cross-Origin) canvas restrictions
-        const response = await fetch(posterUrl);
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
+// src/utils/watermark.js
 
-        const img = new Image();
-        img.src = objectUrl;
+export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
+  try {
+    // ✨ 1. THE FONT INJECTOR
+    await new Promise((resolve) => {
+      const fontId = 'premium-watermark-font-v2'; 
+      if (document.getElementById(fontId)) {
+        document.fonts.load('700 24px "Montserrat"').then(() => setTimeout(resolve, 100)).catch(resolve);
+        return;
+      }
+      
+      const link = document.createElement('link');
+      link.id = fontId;
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap';
+      
+      link.onload = () => {
+        Promise.all([
+          document.fonts.load('700 24px "Montserrat"'),
+          document.fonts.load('600 24px "Montserrat"'),
+          document.fonts.load('500 24px "Montserrat"')
+        ]).then(() => {
+          setTimeout(resolve, 150); 
+        }).catch(resolve);
+      };
+      link.onerror = resolve; 
+      document.head.appendChild(link);
+    });
 
-        img.onload = () => {
-            // Calculate banner dimensions based on the original image size
-            // Makes the strip exactly 12% of the image height, but ensures it's at least 100px
-            const bannerHeight = Math.max(img.height * 0.12, 100); 
+    // ✨ 2. THE BULLETPROOF CORS BYPASS
+    const response = await fetch(`${imageUrl}${imageUrl.includes('?') ? '&' : '?'}cb=${Date.now()}`);
+    const blob = await response.blob();
+    const safeLocalUrl = URL.createObjectURL(blob);
 
-            // 2. EXTEND THE CANVAS HEIGHT (Original Image + New Bottom Strip)
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height + bannerHeight; 
-            const ctx = canvas.getContext("2d");
+    return new Promise((resolve, reject) => {
+      const img = new Image();
 
-            // 3. Draw the original poster EXACTLY as it is, starting at the very top (0,0)
-            ctx.drawImage(img, 0, 0, img.width, img.height);
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
 
-            // 4. Create a clean, solid white banner at the very bottom
-            const bannerY = img.height; // Starts exactly where the image ends
-            ctx.fillStyle = "#ffffff"; // Solid white background
-            ctx.fillRect(0, bannerY, canvas.width, bannerHeight);
+        const imgWidth = img.width;
+        const imgHeight = img.height;
 
-            // Optional: Draw a very thin subtle grey line to separate the poster from the banner
-            ctx.fillStyle = "#f1f5f9"; 
-            ctx.fillRect(0, bannerY, canvas.width, 4);
+        const bannerHeight = Math.max(160, imgHeight * 0.16); 
 
-            // 5. Setup Typography sizing so it looks "just right"
-            const titleFontSize = Math.floor(bannerHeight * 0.30); // Clean, bold size
-            const addressFontSize = Math.floor(bannerHeight * 0.18); // Smaller, subtle size
+        canvas.width = imgWidth;
+        canvas.height = imgHeight + bannerHeight;
 
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
+        ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
-            // 6. Draw the Shop Name (Just the name, dark slate color)
-            ctx.fillStyle = "#0f172a"; // Slate-900
-            ctx.font = `900 ${titleFontSize}px Arial, sans-serif`;
-            const shopName = shopDetails?.shop_name 
-                ? shopDetails.shop_name.toUpperCase() 
-                : "AUTHORIZED PARTNER";
-                
-            ctx.fillText(shopName, canvas.width / 2, bannerY + (bannerHeight * 0.40));
+        // Premium Deep Navy-to-Midnight Gradient
+        const bgGradient = ctx.createLinearGradient(0, imgHeight, 0, imgHeight + bannerHeight);
+        bgGradient.addColorStop(0, "#0b172a"); 
+        bgGradient.addColorStop(1, "#020617"); 
+        ctx.fillStyle = bgGradient; 
+        ctx.fillRect(0, imgHeight, imgWidth, bannerHeight);
 
-            // 7. Draw the Address & Phone (Slate grey color)
-            ctx.fillStyle = "#64748b"; // Slate-500
-            ctx.font = `600 ${addressFontSize}px Arial, sans-serif`;
-            
-            let subText = [];
-            if (shopDetails?.address) subText.push(shopDetails.address);
-            if (shopDetails?.phone) subText.push(`Ph: ${shopDetails.phone}`);
-            
-            ctx.fillText(subText.join("  •  "), canvas.width / 2, bannerY + (bannerHeight * 0.72));
+        // Bright Blue Accent Line
+        const accentHeight = Math.max(8, bannerHeight * 0.04);
+        ctx.fillStyle = "#2563eb"; 
+        ctx.fillRect(0, imgHeight, imgWidth, accentHeight);
 
-            // 8. Convert Canvas to a downloadable image file
-            const finalImageUrl = canvas.toDataURL("image/jpeg", 0.95); // High quality JPEG
-            
-            // Trigger the download
+        // Global Text Shadows for 3D Depth
+        ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 3;
+
+        const topRowY = imgHeight + (bannerHeight * 0.42);
+        const bottomRowY = imgHeight + (bannerHeight * 0.78);
+        const paddingX = imgWidth * 0.04; 
+
+        ctx.textBaseline = "alphabetic";
+
+        // ==========================================
+        // ROW 1: SHOP NAME (Left) & "CONTACT" (Right)
+        // ==========================================
+
+        const shopName = shopInfo?.shop_name ? shopInfo.shop_name.toUpperCase() : "TESTNAME";
+        const maxNameWidth = imgWidth * 0.60;
+        let nameSize = Math.floor(bannerHeight * 0.35);
+
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "5px";
+
+        ctx.font = `700 ${nameSize}px "Montserrat", sans-serif`;
+        while (ctx.measureText(shopName).width > maxNameWidth && nameSize > 20) {
+          nameSize -= 2; 
+          ctx.font = `700 ${nameSize}px "Montserrat", sans-serif`;
+        }
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#f8fafc"; 
+        
+        ctx.fillText(shopName, paddingX, topRowY);
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "0px"; 
+
+        // Right: "CONTACT" Label
+        ctx.shadowColor = "transparent"; 
+        const contactSize = Math.floor(bannerHeight * 0.16);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#60a5fa"; 
+        ctx.font = `600 ${contactSize}px "Montserrat", sans-serif`;
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "2px";
+        ctx.fillText("CONTACT", imgWidth - paddingX, topRowY - (bannerHeight * 0.02));
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "0px";
+
+        // ==========================================
+        // ROW 2: ADDRESS (Left) & PHONE (Right)
+        // ==========================================
+
+        // ✨ UPDATE: Only draw the address and pin if the address actually exists!
+        if (shopInfo?.address && shopInfo.address.trim() !== "") {
+          let addressSize = Math.floor(bannerHeight * 0.17);
+          const addressText = shopInfo.address;
+          const maxAddressWidth = imgWidth * 0.50;
+
+          ctx.font = `500 ${addressSize}px "Montserrat", sans-serif`;
+          
+          while (ctx.measureText(`📍 ${addressText}`).width > maxAddressWidth && addressSize > 12) {
+            addressSize -= 1;
+            ctx.font = `500 ${addressSize}px "Montserrat", sans-serif`;
+          }
+
+          ctx.textAlign = "left";
+          
+          // Red Pin
+          ctx.fillStyle = "#ef4444"; 
+          ctx.fillText("📍", paddingX, bottomRowY);
+          const pinWidth = ctx.measureText("📍 ").width;
+          
+          // Slate Text
+          ctx.fillStyle = "#cbd5e1"; 
+          ctx.fillText(addressText, paddingX + pinWidth, bottomRowY);
+        }
+
+        // Right: Phone Block (Draws independently of the address)
+        let phoneSize = Math.floor(bannerHeight * 0.42);
+        const phoneStr = shopInfo?.phone || "N/A";
+        
+        ctx.font = `700 ${phoneSize}px "Montserrat", sans-serif`;
+        
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "2px"; 
+        while (ctx.measureText(`📞 ${phoneStr}`).width > (imgWidth * 0.40) && phoneSize > 20) {
+          phoneSize -= 2;
+          ctx.font = `700 ${phoneSize}px "Montserrat", sans-serif`;
+        }
+
+        ctx.textAlign = "right";
+        const phoneWidth = ctx.measureText(phoneStr).width;
+        
+        // White Number
+        ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(phoneStr, imgWidth - paddingX, bottomRowY);
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "0px";
+        
+        // Red Phone Icon
+        ctx.shadowColor = "transparent";
+        ctx.fillStyle = "#ef4444";
+        const iconOffset = imgWidth - paddingX - phoneWidth - (phoneSize * 0.3);
+        ctx.fillText("📞", iconOffset, bottomRowY);
+
+        // --- EXPORT TO HIGH QUALITY JPG ---
+        canvas.toBlob(
+          (finalBlob) => {
+            if (!finalBlob) {
+              reject(new Error("Canvas creation failed"));
+              return;
+            }
             const link = document.createElement("a");
-            const cleanTitle = (posterTitle || "Poster").replace(/\s+/g, "_");
-            link.download = `${cleanTitle}_${shopDetails?.shop_name?.replace(/\s+/g, '_') || "Shop"}.jpg`;
-            link.href = finalImageUrl;
+            link.href = URL.createObjectURL(finalBlob);
+            link.download = `${title.replace(/\s+/g, '_')}_Branded.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
+            setTimeout(() => {
+              URL.revokeObjectURL(link.href);
+              URL.revokeObjectURL(safeLocalUrl);
+            }, 100);
+            
+            resolve();
+          },
+          "image/jpeg",
+          1.0
+        );
+      };
 
-            // Clean up memory
-            URL.revokeObjectURL(objectUrl);
-        };
+      img.onerror = () => {
+        URL.revokeObjectURL(safeLocalUrl);
+        reject(new Error("Could not process image data."));
+      };
 
-        img.onerror = () => {
-            throw new Error("Failed to load image onto canvas.");
-        };
+      img.src = safeLocalUrl; 
+    });
 
-    } catch (error) {
-        console.error("Watermark generation failed:", error);
-        // Fallback: If canvas manipulation fails, just download the raw image normally
-        window.open(posterUrl, '_blank');
-    }
+  } catch (error) {
+    console.error("Watermarking failed:", error);
+    window.open(imageUrl, '_blank');
+  }
 };
