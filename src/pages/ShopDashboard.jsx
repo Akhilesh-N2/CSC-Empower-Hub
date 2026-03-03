@@ -154,7 +154,7 @@ function ShopDashboard() {
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
-  // ✨ CLOUDINARY LOGO UPLOAD HANDLER
+  // ✨ CLOUDINARY LOGO UPLOAD HANDLER (WITH AUTO-SAVE) ✨
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -187,8 +187,10 @@ function ShopDashboard() {
       const data = await res.json();
 
       if (data.secure_url) {
+        // 1. Update the screen immediately
         setShopInfo((prev) => ({ ...prev, logo_url: data.secure_url }));
 
+        // ✨ 2. AUTO-SAVE TO SUPABASE IMMEDIATELY ✨
         const { error: updateError } = await supabase
           .from("shop_profiles")
           .update({ logo_url: data.secure_url })
@@ -314,6 +316,7 @@ function ShopDashboard() {
           shop_name: shopInfo.shop_name,
           full_name: shopInfo.full_name,
           phone: shopInfo.phone,
+          // ✨ EXCLUDED EMAIL FROM DB UPDATE SO IT CAN'T BE OVERWRITTEN
           location: shopInfo.location,
           address: shopInfo.address,
           gstin: shopInfo.gstin,
@@ -330,7 +333,7 @@ function ShopDashboard() {
     }
   };
 
-  // 9. ✨ PREMIUM PRINT LOGIC (GRID OVERLAY WATERMARK FIX) ✨
+  // 9. ✨ PREMIUM PRINT LOGIC (DYNAMIC WATERMARK, LOGO, & EMAIL) ✨
   const handlePrint = () => {
     if (items.length === 0) return alert("Please add items to the bill before printing.");
     
@@ -354,20 +357,20 @@ function ShopDashboard() {
     const dateStr = new Date().toLocaleDateString('en-GB'); 
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" style="margin: 0 auto 10px auto; display: block; max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain;" />` : '';
+    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" />` : '';
 
     const headerHtml = isThermal ? `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; width: 100%;">
+      <div class="text-center header-info">
         ${logoHtml}
-        <h1 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-align: center; width: 100%; word-break: break-word;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
-        <p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">${shopInfo.address || shopInfo.location || ''}</p>
-        <p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">Ph: ${shopInfo.phone || 'N/A'}</p>
-        ${shopInfo.email ? `<p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">Email: ${shopInfo.email}</p>` : ''}
-        ${shopInfo.gstin ? `<p style="margin: 4px 0 0 0; font-weight: 700; font-size: 12px; text-align: center; width: 100%;">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
+        <h1 class="shop-title">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
+        <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
+        <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
+        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
+        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
       </div>
       <div class="divider"></div>
-      <div style="text-align: center; width: 100%;">
-        <p style="margin: 0;"><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
+      <div class="inv-meta text-center">
+        <p><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
       </div>
     ` : `
       <div class="flex-between" style="align-items: flex-start;">
@@ -391,19 +394,19 @@ function ShopDashboard() {
       <div class="customer-box">
         <p class="section-label">Billed To:</p>
         ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ''}
-        ${customerInfo.phone ? `<p class="text-muted">${customerInfo.phone}</p>` : ''}
+        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ''}
         ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ''}
       </div>
     ` : '';
 
     const watermarkText = shopInfo.shop_name || 'RETAIL INVOICE';
-    const nameLen = watermarkText.length;
     
-    // Adjusted sizing for Thermal width so long names fit without breaking into bad pieces
-    let watermarkFontSize = '45px'; 
+    // ✨ DYNAMIC WATERMARK SIZING ✨
+    const nameLen = watermarkText.length;
+    let watermarkFontSize = '55px'; 
     if (isThermal) {
-      if (nameLen > 20) watermarkFontSize = '14px'; 
-      else if (nameLen > 12) watermarkFontSize = '18px'; 
+      if (nameLen > 25) watermarkFontSize = '12px'; 
+      else if (nameLen > 15) watermarkFontSize = '16px'; 
       else watermarkFontSize = '24px'; 
     } else {
       if (nameLen > 25) watermarkFontSize = '28px'; 
@@ -422,44 +425,17 @@ function ShopDashboard() {
         * { box-sizing: border-box; }
         html, body { 
           font-family: 'Inter', sans-serif; color: #111827; margin: 0; padding: 0; background: #fff; 
+          width: 100%; height: 100%; 
         } 
         ${pageCSS} 
         
-        /* ✨ CSS GRID OVERLAY: Mathematically centers watermark to content height ✨ */
-        .print-container { 
-          display: grid;
+        .main-container { 
+          position: relative; 
+          z-index: 1; 
           ${containerStyle} 
-          overflow-x: hidden; 
+          ${premiumSideBar}
         }
         
-        .watermark {
-          grid-area: 1 / 1;
-          align-self: center;
-          justify-self: center;
-          transform: rotate(-35deg);
-          font-size: ${watermarkFontSize};
-          color: rgba(0, 0, 0, 0.05); 
-          z-index: 0;
-          text-align: center !important;
-          width: 100%;
-          line-height: 1.2;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-          pointer-events: none;
-          white-space: pre-wrap;
-          word-break: keep-all; 
-          overflow-wrap: break-word;
-        }
-
-        .content-layer {
-          grid-area: 1 / 1;
-          position: relative;
-          z-index: 1; /* Content sits on top of watermark */
-          ${premiumSideBar}
-          padding-bottom: 20px;
-        }
-
         .text-center { text-align: center !important; } 
         .text-right { text-align: right; } 
         .text-muted { color: #6b7280; font-size: 0.9em; }
@@ -468,9 +444,11 @@ function ShopDashboard() {
         
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
         
+        .print-logo { max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain; margin-bottom: 10px; }
         .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? '18px' : '26px'}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; }
+        .header-info p { margin: 2px 0; }
         
-        .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; width: 100%; }
+        .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; }
         .divider-thick { border-top: 2px solid #111827; margin: 15px 0; }
         
         .customer-box { background: #f9fafb; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; }
@@ -485,50 +463,67 @@ function ShopDashboard() {
         .total-label { font-size: ${isThermal ? '14px' : '18px'}; font-weight: 900; text-transform: uppercase; }
         .total-amount { font-size: ${isThermal ? '18px' : '24px'}; font-weight: 900; color: #111827; }
         
+        /* ✨ UPDATED WATERMARK STYLING ✨ */
+        .watermark {
+          position: absolute; /* absolute dynamically calculates from the invoice text height */
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-40deg);
+          font-size: ${watermarkFontSize};
+          color: rgba(0, 0, 0, 0.06); 
+          z-index: 10; /* Pulled to the front so it overlays the Customer Box background */
+          white-space: pre-wrap; 
+          word-break: break-word;
+          text-align: center !important;
+          width: 100%; 
+          max-width: 100%;
+          line-height: 1.2;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          pointer-events: none; /* Text beneath it is still 100% clickable/selectable */
+        }
       </style>
       </head><body>
       
-      <div class="print-container">
+      <div class="main-container">
         <div class="watermark">${watermarkText}</div>
         
-        <div class="content-layer">
-          ${headerHtml}
-          
-          ${isThermal ? '' : '<div class="divider"></div>'}
-          
-          ${customerHtml}
-          
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 5%;">#</th>
-                <th style="width: 45%;">Item Description</th>
-                <th class="text-center" style="width: 15%;">Qty</th>
-                <th class="text-right" style="width: 15%;">Rate</th>
-                <th class="text-right" style="width: 20%;">Total</th>
-              </tr>
-            </thead>
-            <tbody>${itemsHtml}</tbody>
-          </table>
-          
-          <div class="divider-thick"></div>
-          
-          <div class="total-box">
-            <span class="total-label">Grand Total</span>
-            <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
-          </div>
-          
-          <div class="divider"></div>
-          <div style="text-align: center; margin-top: 20px; width: 100%;">
-            <p style="margin: 0; font-weight: 700; text-align: center;">Thank you for your business!</p>
-            <p style="margin: 8px 0; font-size: 0.85em; font-style: italic; color: #4b5563; text-align: center;">
-              This is a computer generated receipt, signature not required.
-            </p>
-            <p style="margin: 4px 0; font-size: 0.75em; color: #9ca3af; text-align: center;">Software by CSC Empower Hub</p>
-          </div>
+        ${headerHtml}
+        
+        ${isThermal ? '' : '<div class="divider"></div>'}
+        
+        ${customerHtml}
+        
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%;">#</th>
+              <th style="width: 45%;">Item Description</th>
+              <th class="text-center" style="width: 15%;">Qty</th>
+              <th class="text-right" style="width: 15%;">Rate</th>
+              <th class="text-right" style="width: 20%;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        
+        <div class="divider-thick"></div>
+        
+        <div class="total-box">
+          <span class="total-label">Grand Total</span>
+          <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
+        </div>
+        
+        <div class="divider"></div>
+        <div class="text-center" style="margin-top: 20px;">
+          <p style="margin: 0; font-weight: 700;">Thank you for your business!</p>
+          <p style="margin: 8px 0; font-size: 0.85em; font-style: italic; color: #4b5563;">
+            This is a computer generated receipt, signature not required.
+          </p>
+          <p style="margin: 4px 0; font-size: 0.75em; color: #9ca3af;">Software by CSC Empower Hub</p>
         </div>
       </div>
-
       </body></html>
     `);
     printWindow.document.close(); 
