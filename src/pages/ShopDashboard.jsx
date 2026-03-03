@@ -44,7 +44,7 @@ function ShopDashboard() {
     shop_name: "",
     full_name: "",
     phone: "",
-    email: "", // ✨ EMAIL STATE
+    email: "", // Silent state for the bill
     location: "",
     address: "",
     gstin: "",
@@ -96,7 +96,7 @@ function ShopDashboard() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        
+
         if (user) {
           setUserId(user.id);
 
@@ -117,12 +117,12 @@ function ShopDashboard() {
               shop_name: data.shop_name || "",
               full_name: data.full_name || "",
               phone: data.phone || "",
-              // ✨ SMART LOGIC: Use saved profile email, or fallback to their Supabase login email
-              email: data.email || user.email || "", 
+              // ✨ SILENTLY GRAB LOGIN EMAIL FOR THE BILL
+              email: data.email || user.email || "",
               location: data.location || "",
               address: data.address || "",
               gstin: data.gstin || "",
-              logo_url: data.logo_url || "", 
+              logo_url: data.logo_url || "",
               created_at: data.created_at || null,
               subscription_expires_at: data.subscription_expires_at || null,
               renewal_requested: data.renewal_requested || false,
@@ -154,7 +154,7 @@ function ShopDashboard() {
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
-  // ✨ CLOUDINARY LOGO UPLOAD HANDLER ✨
+  // ✨ CLOUDINARY LOGO UPLOAD HANDLER (WITH AUTO-SAVE) ✨
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -169,10 +169,10 @@ function ShopDashboard() {
         import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
       );
 
-      const cleanShopName = shopInfo.shop_name 
-        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, '_') 
-        : `Shop_${userId?.substring(0,6)}`;
-      
+      const cleanShopName = shopInfo.shop_name
+        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
+        : `Shop_${userId?.substring(0, 6)}`;
+
       formData.append("folder", "Shoppers-Logo");
       formData.append("public_id", `${cleanShopName}_Logo`);
 
@@ -187,10 +187,18 @@ function ShopDashboard() {
       const data = await res.json();
 
       if (data.secure_url) {
+        // 1. Update the screen immediately
         setShopInfo((prev) => ({ ...prev, logo_url: data.secure_url }));
-        alert(
-          "Logo uploaded to Cloudinary! Please click 'Save Profile' below to update your shop.",
-        );
+
+        // ✨ 2. AUTO-SAVE TO SUPABASE IMMEDIATELY ✨
+        const { error: updateError } = await supabase
+          .from("shop_profiles")
+          .update({ logo_url: data.secure_url })
+          .eq("id", userId);
+
+        if (updateError) throw updateError;
+
+        alert("Logo successfully uploaded and saved!");
       } else {
         throw new Error("Failed to get secure URL from Cloudinary.");
       }
@@ -308,11 +316,11 @@ function ShopDashboard() {
           shop_name: shopInfo.shop_name,
           full_name: shopInfo.full_name,
           phone: shopInfo.phone,
-          email: shopInfo.email,
+          // ✨ EXCLUDED EMAIL FROM DB UPDATE SO IT CAN'T BE OVERWRITTEN
           location: shopInfo.location,
           address: shopInfo.address,
           gstin: shopInfo.gstin,
-          logo_url: shopInfo.logo_url, 
+          logo_url: shopInfo.logo_url,
         })
         .eq("id", userId);
 
@@ -327,16 +335,27 @@ function ShopDashboard() {
 
   // 9. ✨ PREMIUM PRINT LOGIC (WITH LOGO, WATERMARK & EMAIL) ✨
   const handlePrint = () => {
-    if (items.length === 0) return alert("Please add items to the bill before printing.");
-    
-    let pageCSS = ""; let containerStyle = "";
-    const isThermal = pageSize === 'Thermal80';
+    if (items.length === 0)
+      return alert("Please add items to the bill before printing.");
 
-    if (pageSize === "A4") { pageCSS = "@page { size: A4; margin: 15mm; }"; containerStyle = "max-width: 210mm; margin: 0 auto; font-size: 14px;"; } 
-    else if (pageSize === "A5") { pageCSS = "@page { size: A5; margin: 12mm; }"; containerStyle = "max-width: 148mm; margin: 0 auto; font-size: 12px;"; } 
-    else if (isThermal) { pageCSS = "@page { size: 80mm auto; margin: 5mm; }"; containerStyle = "max-width: 72mm; margin: 0 auto; font-size: 12px;"; }
+    let pageCSS = "";
+    let containerStyle = "";
+    const isThermal = pageSize === "Thermal80";
 
-    const itemsHtml = items.map((item, i) => `
+    if (pageSize === "A4") {
+      pageCSS = "@page { size: A4; margin: 15mm; }";
+      containerStyle = "max-width: 210mm; margin: 0 auto; font-size: 14px;";
+    } else if (pageSize === "A5") {
+      pageCSS = "@page { size: A5; margin: 12mm; }";
+      containerStyle = "max-width: 148mm; margin: 0 auto; font-size: 12px;";
+    } else if (isThermal) {
+      pageCSS = "@page { size: 80mm auto; margin: 5mm; }";
+      containerStyle = "max-width: 72mm; margin: 0 auto; font-size: 12px;";
+    }
+
+    const itemsHtml = items
+      .map(
+        (item, i) => `
       <tr>
         <td class="td-pad">${i + 1}</td>
         <td class="td-pad" style="word-break: break-word; font-weight: 500;">${item.name}</td>
@@ -344,35 +363,44 @@ function ShopDashboard() {
         <td class="td-pad text-right">${item.price.toFixed(2)}</td>
         <td class="td-pad text-right" style="font-weight: 700;">${item.total.toFixed(2)}</td>
       </tr>
-    `).join('');
+    `,
+      )
+      .join("");
 
-    const dateStr = new Date().toLocaleDateString('en-GB'); 
-    const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = new Date().toLocaleDateString("en-GB");
+    const timeStr = new Date().toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" />` : '';
+    const logoHtml = shopInfo.logo_url
+      ? `<img src="${shopInfo.logo_url}" class="print-logo" />`
+      : "";
 
-    const headerHtml = isThermal ? `
+    const headerHtml = isThermal
+      ? `
       <div class="text-center header-info">
         ${logoHtml}
-        <h1 class="shop-title">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
-        <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
-        <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
-        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
-        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
+        <h1 class="shop-title">${shopInfo.shop_name || "RETAIL INVOICE"}</h1>
+        <p class="text-muted">${shopInfo.address || shopInfo.location || ""}</p>
+        <p class="text-muted">Ph: ${shopInfo.phone || "N/A"}</p>
+        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ""}
+        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ""}
       </div>
       <div class="divider"></div>
       <div class="inv-meta text-center">
         <p><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
       </div>
-    ` : `
+    `
+      : `
       <div class="flex-between" style="align-items: flex-start;">
         <div style="flex: 1;">
           ${logoHtml}
-          <h1 class="shop-title" style="text-align: left;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
-          <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
-          <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
-          ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
-          ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
+          <h1 class="shop-title" style="text-align: left;">${shopInfo.shop_name || "RETAIL INVOICE"}</h1>
+          <p class="text-muted">${shopInfo.address || shopInfo.location || ""}</p>
+          <p class="text-muted">Ph: ${shopInfo.phone || "N/A"}</p>
+          ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ""}
+          ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ""}
         </div>
         <div style="text-align: right; padding-top: 10px;">
           <h2 style="margin:0 0 5px 0; font-size: 24px; color: #111827; text-transform: uppercase; letter-spacing: 2px;">Invoice</h2>
@@ -382,20 +410,25 @@ function ShopDashboard() {
       </div>
     `;
 
-    const customerHtml = (customerInfo.name || customerInfo.phone) ? `
+    const customerHtml =
+      customerInfo.name || customerInfo.phone
+        ? `
       <div class="customer-box">
         <p class="section-label">Billed To:</p>
-        ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ''}
-        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ''}
-        ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ''}
+        ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ""}
+        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ""}
+        ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ""}
       </div>
-    ` : '';
+    `
+        : "";
 
-    const watermarkText = shopInfo.shop_name || 'RETAIL INVOICE';
-    const watermarkFontSize = isThermal ? '32px' : '80px';
-    const premiumSideBar = isThermal ? '' : 'border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;';
+    const watermarkText = shopInfo.shop_name || "RETAIL INVOICE";
+    const watermarkFontSize = isThermal ? "32px" : "80px";
+    const premiumSideBar = isThermal
+      ? ""
+      : "border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;";
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html><head><title>Invoice #${currentInvoiceId}</title>
       <style>
@@ -423,8 +456,8 @@ function ShopDashboard() {
         
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
         
-        .print-logo { max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain; margin-bottom: 10px; }
-        .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? '18px' : '26px'}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; }
+        .print-logo { max-height: ${isThermal ? "50px" : "75px"}; object-fit: contain; margin-bottom: 10px; }
+        .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? "18px" : "26px"}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; }
         .header-info p { margin: 2px 0; }
         
         .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; }
@@ -439,8 +472,8 @@ function ShopDashboard() {
         .td-pad { padding: 10px 4px; border-bottom: 1px solid #f3f4f6; }
         
         .total-box { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
-        .total-label { font-size: ${isThermal ? '14px' : '18px'}; font-weight: 900; text-transform: uppercase; }
-        .total-amount { font-size: ${isThermal ? '18px' : '24px'}; font-weight: 900; color: #111827; }
+        .total-label { font-size: ${isThermal ? "14px" : "18px"}; font-weight: 900; text-transform: uppercase; }
+        .total-amount { font-size: ${isThermal ? "18px" : "24px"}; font-weight: 900; color: #111827; }
         
         .watermark {
           position: fixed;
@@ -464,7 +497,7 @@ function ShopDashboard() {
       <div class="main-container">
         ${headerHtml}
         
-        ${isThermal ? '' : '<div class="divider"></div>'}
+        ${isThermal ? "" : '<div class="divider"></div>'}
         
         ${customerHtml}
         
@@ -499,9 +532,12 @@ function ShopDashboard() {
       </div>
       </body></html>
     `);
-    printWindow.document.close(); 
-    printWindow.focus(); 
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 350); 
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 350);
   };
 
   // 10. EXPORT LOGIC
@@ -516,13 +552,29 @@ function ShopDashboard() {
     }));
 
     const dateStr = new Date().toLocaleDateString("en-GB");
-    const contactStr = `Contact: ${shopInfo.phone || "N/A"}` + (shopInfo.email ? ` | Email: ${shopInfo.email}` : '');
-    
+    const contactStr =
+      `Contact: ${shopInfo.phone || "N/A"}` +
+      (shopInfo.email ? ` | Email: ${shopInfo.email}` : "");
+
     const headerData = [
-      [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE"],
-      [shopInfo.address ? shopInfo.address : `Location: ${shopInfo.location || "N/A"}`],
+      [
+        shopInfo.shop_name
+          ? shopInfo.shop_name.toUpperCase()
+          : "RETAIL INVOICE",
+      ],
+      [
+        shopInfo.address
+          ? shopInfo.address
+          : `Location: ${shopInfo.location || "N/A"}`,
+      ],
       [contactStr, "", "", "", `Date: ${dateStr}`],
-      [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : "", "", "", "", `Invoice No: ${currentInvoiceId}`],
+      [
+        shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : "",
+        "",
+        "",
+        "",
+        `Invoice No: ${currentInvoiceId}`,
+      ],
       [],
       ["TAX INVOICE / BILL OF SUPPLY"],
       [],
@@ -547,15 +599,47 @@ function ShopDashboard() {
       { origin: -1 },
     );
 
-    if (worksheet["A1"]) worksheet["A1"].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: "center" } };
-    if (worksheet["A2"]) worksheet["A2"].s = { font: { sz: 10 }, alignment: { horizontal: "center" } };
-    if (worksheet["A3"]) worksheet["A3"].s = { font: { sz: 11 }, alignment: { horizontal: "left" } };
-    if (worksheet["E3"]) worksheet["E3"].s = { font: { sz: 11 }, alignment: { horizontal: "right" } };
-    if (worksheet["A4"]) worksheet["A4"].s = { font: { sz: 11 }, alignment: { horizontal: "left" } };
-    if (worksheet["E4"]) worksheet["E4"].s = { font: { sz: 11, bold: true }, alignment: { horizontal: "right" } };
-    if (worksheet["A6"]) worksheet["A6"].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: "center" } };
+    if (worksheet["A1"])
+      worksheet["A1"].s = {
+        font: { bold: true, sz: 16 },
+        alignment: { horizontal: "center" },
+      };
+    if (worksheet["A2"])
+      worksheet["A2"].s = {
+        font: { sz: 10 },
+        alignment: { horizontal: "center" },
+      };
+    if (worksheet["A3"])
+      worksheet["A3"].s = {
+        font: { sz: 11 },
+        alignment: { horizontal: "left" },
+      };
+    if (worksheet["E3"])
+      worksheet["E3"].s = {
+        font: { sz: 11 },
+        alignment: { horizontal: "right" },
+      };
+    if (worksheet["A4"])
+      worksheet["A4"].s = {
+        font: { sz: 11 },
+        alignment: { horizontal: "left" },
+      };
+    if (worksheet["E4"])
+      worksheet["E4"].s = {
+        font: { sz: 11, bold: true },
+        alignment: { horizontal: "right" },
+      };
+    if (worksheet["A6"])
+      worksheet["A6"].s = {
+        font: { bold: true, sz: 12 },
+        alignment: { horizontal: "center" },
+      };
 
-    if (worksheet["A8"]) worksheet["A8"].s = { font: { bold: true, sz: 11 }, alignment: { horizontal: "left" } };
+    if (worksheet["A8"])
+      worksheet["A8"].s = {
+        font: { bold: true, sz: 11 },
+        alignment: { horizontal: "left" },
+      };
     if (worksheet["A9"]) worksheet["A9"].s = { font: { bold: true } };
     if (worksheet["A10"]) worksheet["A10"].s = { font: { bold: true } };
     if (worksheet["A11"]) worksheet["A11"].s = { font: { bold: true } };
@@ -571,10 +655,18 @@ function ShopDashboard() {
 
     const range = XLSX.utils.decode_range(worksheet["!ref"]);
     const lastRow = range.e.r + 1;
-    if (worksheet[`D${lastRow}`]) worksheet[`D${lastRow}`].s = { font: { bold: true } };
-    if (worksheet[`E${lastRow}`]) worksheet[`E${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`D${lastRow}`])
+      worksheet[`D${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`E${lastRow}`])
+      worksheet[`E${lastRow}`].s = { font: { bold: true } };
 
-    worksheet["!cols"] = [{ wch: 8 }, { wch: 45 }, { wch: 10 }, { wch: 15 }, { wch: 20 }];
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 45 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 20 },
+    ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Invoice");
 
@@ -940,7 +1032,7 @@ function ShopDashboard() {
           </div>
         )}
 
-        {/* TAB 2: SHOP PROFILE / SETTINGS (NOW WITH LOGO UPLOAD) */}
+        {/* TAB 2: SHOP PROFILE / SETTINGS */}
         {activeTab === "profile" && (
           <div className="max-w-3xl mx-auto animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
@@ -1070,24 +1162,8 @@ function ShopDashboard() {
                       </p>
                     )}
                   </div>
-                  
-                  {/* ✨ EMAIL SETTINGS BLOCK ✨ */}
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                      <Mail size={14} /> Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={shopInfo.email}
-                      onChange={(e) =>
-                        setShopInfo({ ...shopInfo, email: e.target.value })
-                      }
-                      placeholder="shop@example.com"
-                      className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                       <FileText size={14} /> GSTIN / Tax ID (Optional)
                     </label>
