@@ -118,7 +118,7 @@ function ShopDashboard() {
               shop_name: data.shop_name || "",
               full_name: data.full_name || "",
               phone: data.phone || "",
-              email: data.email || user.email || "", // Silently grabs logic email
+              email: data.email || user.email || "", 
               location: data.location || "",
               address: data.address || "",
               gstin: data.gstin || "",
@@ -154,7 +154,7 @@ function ShopDashboard() {
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
-  // ✨ CLOUDINARY LOGO UPLOAD HANDLER (WITH AUTO-SAVE) ✨
+  // ✨ CLOUDINARY LOGO UPLOAD HANDLER
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -330,7 +330,7 @@ function ShopDashboard() {
     }
   };
 
-  // 9. ✨ PREMIUM PRINT LOGIC (DYNAMIC WATERMARK, LOGO, & EMAIL) ✨
+  // 9. ✨ PREMIUM PRINT LOGIC (GRID OVERLAY WATERMARK FIX) ✨
   const handlePrint = () => {
     if (items.length === 0) return alert("Please add items to the bill before printing.");
     
@@ -354,21 +354,20 @@ function ShopDashboard() {
     const dateStr = new Date().toLocaleDateString('en-GB'); 
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" />` : '';
+    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" style="margin: 0 auto 10px auto; display: block; max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain;" />` : '';
 
-    // ✨ BULLETPROOF CENTERING FOR THERMAL PRINTERS ✨
     const headerHtml = isThermal ? `
-      <div class="header-info">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; width: 100%;">
         ${logoHtml}
-        <h1 class="shop-title">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
-        <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
-        <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
-        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
-        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
+        <h1 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-align: center; width: 100%; word-break: break-word;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
+        <p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">${shopInfo.address || shopInfo.location || ''}</p>
+        <p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">Ph: ${shopInfo.phone || 'N/A'}</p>
+        ${shopInfo.email ? `<p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">Email: ${shopInfo.email}</p>` : ''}
+        ${shopInfo.gstin ? `<p style="margin: 4px 0 0 0; font-weight: 700; font-size: 12px; text-align: center; width: 100%;">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
       </div>
       <div class="divider"></div>
-      <div class="inv-meta text-center">
-        <p><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
+      <div style="text-align: center; width: 100%;">
+        <p style="margin: 0;"><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
       </div>
     ` : `
       <div class="flex-between" style="align-items: flex-start;">
@@ -392,24 +391,23 @@ function ShopDashboard() {
       <div class="customer-box">
         <p class="section-label">Billed To:</p>
         ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ''}
-        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ''}
+        ${customerInfo.phone ? `<p class="text-muted">${customerInfo.phone}</p>` : ''}
         ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ''}
       </div>
     ` : '';
 
     const watermarkText = shopInfo.shop_name || 'RETAIL INVOICE';
-    
-    // ✨ SMART WATERMARK SCALING BASED ON NAME LENGTH ✨
     const nameLen = watermarkText.length;
-    let watermarkFontSize = '55px'; // Standard default size
     
+    // Adjusted sizing for Thermal width so long names fit without breaking into bad pieces
+    let watermarkFontSize = '45px'; 
     if (isThermal) {
-      if (nameLen > 25) watermarkFontSize = '12px'; // Very long name
-      else if (nameLen > 15) watermarkFontSize = '16px'; // Medium long name
-      else watermarkFontSize = '22px'; // Short standard name
+      if (nameLen > 20) watermarkFontSize = '14px'; 
+      else if (nameLen > 12) watermarkFontSize = '18px'; 
+      else watermarkFontSize = '24px'; 
     } else {
-      if (nameLen > 25) watermarkFontSize = '30px'; 
-      else if (nameLen > 15) watermarkFontSize = '42px';
+      if (nameLen > 25) watermarkFontSize = '28px'; 
+      else if (nameLen > 15) watermarkFontSize = '38px';
       else watermarkFontSize = '55px'; 
     }
         
@@ -424,17 +422,44 @@ function ShopDashboard() {
         * { box-sizing: border-box; }
         html, body { 
           font-family: 'Inter', sans-serif; color: #111827; margin: 0; padding: 0; background: #fff; 
-          width: 100%; height: 100%; 
         } 
         ${pageCSS} 
         
-        .main-container { 
-          position: relative; 
-          z-index: 1; 
+        /* ✨ CSS GRID OVERLAY: Mathematically centers watermark to content height ✨ */
+        .print-container { 
+          display: grid;
           ${containerStyle} 
-          ${premiumSideBar}
+          overflow-x: hidden; 
         }
         
+        .watermark {
+          grid-area: 1 / 1;
+          align-self: center;
+          justify-self: center;
+          transform: rotate(-35deg);
+          font-size: ${watermarkFontSize};
+          color: rgba(0, 0, 0, 0.05); 
+          z-index: 0;
+          text-align: center !important;
+          width: 100%;
+          line-height: 1.2;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          pointer-events: none;
+          white-space: pre-wrap;
+          word-break: keep-all; 
+          overflow-wrap: break-word;
+        }
+
+        .content-layer {
+          grid-area: 1 / 1;
+          position: relative;
+          z-index: 1; /* Content sits on top of watermark */
+          ${premiumSideBar}
+          padding-bottom: 20px;
+        }
+
         .text-center { text-align: center !important; } 
         .text-right { text-align: right; } 
         .text-muted { color: #6b7280; font-size: 0.9em; }
@@ -443,30 +468,9 @@ function ShopDashboard() {
         
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
         
-        .print-logo { max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain; margin-bottom: 10px; }
+        .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? '18px' : '26px'}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; }
         
-        .header-info {
-           display: flex;
-           flex-direction: column;
-           align-items: center;
-           justify-content: center;
-           text-align: center !important;
-           width: 100%;
-        }
-        .header-info p { margin: 2px 0; text-align: center !important; width: 100%; }
-
-        .shop-title { 
-           margin: 0 0 4px 0; 
-           font-size: ${isThermal ? '18px' : '26px'}; 
-           font-weight: 900; 
-           text-transform: uppercase; 
-           letter-spacing: -0.5px; 
-           text-align: center !important;
-           word-wrap: break-word;
-           width: 100%;
-        }
-        
-        .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; }
+        .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; width: 100%; }
         .divider-thick { border-top: 2px solid #111827; margin: 15px 0; }
         
         .customer-box { background: #f9fafb; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; }
@@ -481,67 +485,50 @@ function ShopDashboard() {
         .total-label { font-size: ${isThermal ? '14px' : '18px'}; font-weight: 900; text-transform: uppercase; }
         .total-amount { font-size: ${isThermal ? '18px' : '24px'}; font-weight: 900; color: #111827; }
         
-        /* ✨ HIGHLY OPTIMIZED WATERMARK BOUNDARIES ✨ */
-        .watermark {
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(-35deg);
-          font-size: ${watermarkFontSize};
-          color: rgba(0, 0, 0, 0.05); 
-          z-index: 0;
-          white-space: pre-wrap; 
-          word-break: break-word; /* Forces breaks for huge words */
-          overflow-wrap: break-word;
-          text-align: center !important;
-          width: 85%; /* Strictly limits width so rotation doesn't bleed edges */
-          line-height: 1.2;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 2px; /* Reduced to fit more characters */
-          pointer-events: none;
-        }
       </style>
       </head><body>
       
-      <div class="watermark">${watermarkText}</div>
-
-      <div class="main-container">
-        ${headerHtml}
+      <div class="print-container">
+        <div class="watermark">${watermarkText}</div>
         
-        ${isThermal ? '' : '<div class="divider"></div>'}
-        
-        ${customerHtml}
-        
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 5%;">#</th>
-              <th style="width: 45%;">Item Description</th>
-              <th class="text-center" style="width: 15%;">Qty</th>
-              <th class="text-right" style="width: 15%;">Rate</th>
-              <th class="text-right" style="width: 20%;">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsHtml}</tbody>
-        </table>
-        
-        <div class="divider-thick"></div>
-        
-        <div class="total-box">
-          <span class="total-label">Grand Total</span>
-          <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
-        </div>
-        
-        <div class="divider"></div>
-        <div class="text-center" style="margin-top: 20px;">
-          <p style="margin: 0; font-weight: 700;">Thank you for your business!</p>
-          <p style="margin: 8px 0; font-size: 0.85em; font-style: italic; color: #4b5563;">
-            This is a computer generated receipt, signature not required.
-          </p>
-          <p style="margin: 4px 0; font-size: 0.75em; color: #9ca3af;">Software by CSC Empower Hub</p>
+        <div class="content-layer">
+          ${headerHtml}
+          
+          ${isThermal ? '' : '<div class="divider"></div>'}
+          
+          ${customerHtml}
+          
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 45%;">Item Description</th>
+                <th class="text-center" style="width: 15%;">Qty</th>
+                <th class="text-right" style="width: 15%;">Rate</th>
+                <th class="text-right" style="width: 20%;">Total</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+          
+          <div class="divider-thick"></div>
+          
+          <div class="total-box">
+            <span class="total-label">Grand Total</span>
+            <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
+          </div>
+          
+          <div class="divider"></div>
+          <div style="text-align: center; margin-top: 20px; width: 100%;">
+            <p style="margin: 0; font-weight: 700; text-align: center;">Thank you for your business!</p>
+            <p style="margin: 8px 0; font-size: 0.85em; font-style: italic; color: #4b5563; text-align: center;">
+              This is a computer generated receipt, signature not required.
+            </p>
+            <p style="margin: 4px 0; font-size: 0.75em; color: #9ca3af; text-align: center;">Software by CSC Empower Hub</p>
+          </div>
         </div>
       </div>
+
       </body></html>
     `);
     printWindow.document.close(); 
