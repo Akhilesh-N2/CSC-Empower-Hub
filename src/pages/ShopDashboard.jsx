@@ -26,6 +26,7 @@ import {
   ImagePlus,
   Loader2,
   Mail,
+  QrCode, // ✨ Re-imported QR icon
 } from "lucide-react";
 
 function ShopDashboard() {
@@ -35,6 +36,7 @@ function ShopDashboard() {
   const [userId, setUserId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingQr, setIsUploadingQr] = useState(false); // ✨ QR Upload State
 
   // Print Page Size State
   const [pageSize, setPageSize] = useState("Thermal80");
@@ -49,6 +51,7 @@ function ShopDashboard() {
     address: "",
     gstin: "",
     logo_url: "",
+    qr_code_url: "", // ✨ QR Code State
     created_at: null,
     subscription_expires_at: null,
     renewal_requested: false,
@@ -56,7 +59,7 @@ function ShopDashboard() {
     device_limit: 1,
     active_devices: 0,
   });
-  
+
   const [renewalHistory, setRenewalHistory] = useState([]);
   const [profileErrors, setProfileErrors] = useState({
     shop_name: false,
@@ -64,7 +67,7 @@ function ShopDashboard() {
     phone: false,
   });
 
-  // 2. STATE: Customer Details (Syncs with Local Storage for safety)
+  // 2. STATE: Customer Details
   const [customerInfo, setCustomerInfo] = useState(() => {
     const saved = localStorage.getItem("shop_billing_customer");
     return saved ? JSON.parse(saved) : { name: "", phone: "", address: "" };
@@ -123,6 +126,7 @@ function ShopDashboard() {
               address: data.address || "",
               gstin: data.gstin || "",
               logo_url: data.logo_url || "",
+              qr_code_url: data.qr_code_url || "", // ✨ FETCH QR URL
               created_at: data.created_at || null,
               subscription_expires_at: data.subscription_expires_at || null,
               renewal_requested: data.renewal_requested || false,
@@ -154,7 +158,7 @@ function ShopDashboard() {
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
-  // ✨ CLOUDINARY LOGO UPLOAD HANDLER (WITH AUTO-SAVE) ✨
+  // ✨ CLOUDINARY LOGO UPLOAD HANDLER (WITH FOLDER ORGANIZATION) ✨
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -163,49 +167,80 @@ function ShopDashboard() {
       const file = e.target.files[0];
       const formData = new FormData();
       formData.append("file", file);
-
-      formData.append(
-        "upload_preset",
-        import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
-      );
+      formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
 
       const cleanShopName = shopInfo.shop_name
         ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
         : `Shop_${userId?.substring(0, 6)}`;
 
-      formData.append("folder", "Shoppers-Logo");
-      formData.append("public_id", `${cleanShopName}_Logo`);
+      // ✨ UPDATED: Puts the file inside a specific Shop Folder
+      formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
+      formData.append("public_id", "Logo");
 
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        {
-          method: "POST",
-          body: formData,
-        },
+        { method: "POST", body: formData }
       );
 
       const data = await res.json();
 
       if (data.secure_url) {
-        // 1. Update the screen immediately
         setShopInfo((prev) => ({ ...prev, logo_url: data.secure_url }));
-
-        // ✨ 2. AUTO-SAVE TO SUPABASE IMMEDIATELY ✨
         const { error: updateError } = await supabase
           .from("shop_profiles")
           .update({ logo_url: data.secure_url })
           .eq("id", userId);
 
         if (updateError) throw updateError;
-
         alert("Logo successfully uploaded and saved!");
-      } else {
-        throw new Error("Failed to get secure URL from Cloudinary.");
-      }
+      } else throw new Error("Failed to get secure URL from Cloudinary.");
     } catch (error) {
       alert("Error uploading logo: " + error.message);
     } finally {
       setIsUploadingLogo(false);
+    }
+  };
+
+  // ✨ CLOUDINARY QR CODE UPLOAD HANDLER ✨
+  const handleQrUpload = async (e) => {
+    try {
+      if (!e.target.files || e.target.files.length === 0) return;
+      setIsUploadingQr(true);
+
+      const file = e.target.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+
+      const cleanShopName = shopInfo.shop_name
+        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
+        : `Shop_${userId?.substring(0, 6)}`;
+
+      // ✨ UPDATED: Joins the Logo in the specific Shop Folder
+      formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
+      formData.append("public_id", "QR_Code");
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: "POST", body: formData }
+      );
+
+      const data = await res.json();
+
+      if (data.secure_url) {
+        setShopInfo((prev) => ({ ...prev, qr_code_url: data.secure_url }));
+        const { error: updateError } = await supabase
+          .from("shop_profiles")
+          .update({ qr_code_url: data.secure_url })
+          .eq("id", userId);
+
+        if (updateError) throw updateError;
+        alert("QR Code successfully uploaded and saved!");
+      } else throw new Error("Failed to get secure URL from Cloudinary.");
+    } catch (error) {
+      alert("Error uploading QR: " + error.message);
+    } finally {
+      setIsUploadingQr(false);
     }
   };
 
@@ -219,10 +254,7 @@ function ShopDashboard() {
         .eq("id", userId);
 
       if (error) throw error;
-
-      alert(
-        "Renewal request sent successfully! An admin will review your account shortly.",
-      );
+      alert("Renewal request sent successfully! An admin will review your account shortly.");
       setShopInfo((prev) => ({ ...prev, renewal_requested: true }));
     } catch (err) {
       alert("Failed to send request: " + err.message);
@@ -260,25 +292,18 @@ function ShopDashboard() {
   const handleRemoveItem = (id) =>
     setItems((prev) => prev.filter((item) => item.id !== id));
 
-  // COMPLETES BILL & PULLS NEXT NUMBER FROM DB
+  // COMPLETES BILL
   const handleCompleteBill = async () => {
     if (window.confirm("Complete this sale and start the next bill?")) {
       try {
         const { data: newDbCount, error } = await supabase.rpc(
           "increment_shop_invoice",
-          {
-            target_shop_id: userId,
-          },
+          { target_shop_id: userId }
         );
-
         if (error) throw error;
-
         setItems([]);
         setCustomerInfo({ name: "", phone: "", address: "" });
-
-        if (newDbCount !== null) {
-          setInvoiceSeq(newDbCount + 1);
-        }
+        if (newDbCount !== null) setInvoiceSeq(newDbCount + 1);
       } catch (err) {
         console.error("Failed to increment sequence:", err);
         alert("Error generating next invoice number. Please check connection.");
@@ -287,9 +312,7 @@ function ShopDashboard() {
   };
 
   const clearCartOnly = () => {
-    if (
-      window.confirm("Empty cart items without changing the invoice number?")
-    ) {
+    if (window.confirm("Empty cart items without changing the invoice number?")) {
       setItems([]);
       setCustomerInfo({ name: "", phone: "", address: "" });
     }
@@ -316,11 +339,10 @@ function ShopDashboard() {
           shop_name: shopInfo.shop_name,
           full_name: shopInfo.full_name,
           phone: shopInfo.phone,
-          // ✨ EXCLUDED EMAIL FROM DB UPDATE SO IT CAN'T BE OVERWRITTEN
           location: shopInfo.location,
           address: shopInfo.address,
           gstin: shopInfo.gstin,
-          logo_url: shopInfo.logo_url,
+          // DB updates intentionally exclude email, logo, and qr to protect states
         })
         .eq("id", userId);
 
@@ -333,7 +355,7 @@ function ShopDashboard() {
     }
   };
 
-  // 9. ✨ PREMIUM PRINT LOGIC (DYNAMIC WATERMARK, LOGO, & EMAIL) ✨
+  // 9. ✨ PREMIUM PRINT LOGIC (WATERMARK VISIBILITY & QR CODE) ✨
   const handlePrint = () => {
     if (items.length === 0) return alert("Please add items to the bill before printing.");
     
@@ -357,10 +379,18 @@ function ShopDashboard() {
     const dateStr = new Date().toLocaleDateString('en-GB'); 
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" />` : '';
+    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" style="margin: 0 auto 10px auto; display: block; max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain;" />` : '';
+
+    // ✨ INJECT QR CODE ✨
+    const qrHtml = shopInfo.qr_code_url 
+      ? `<div style="text-align: center; margin: 20px 0 10px 0; position: relative; z-index: 15;">
+           <img src="${shopInfo.qr_code_url}" style="width: ${isThermal ? '80px' : '110px'}; height: auto; border-radius: 8px; border: 1px solid #e5e7eb; padding: 4px;" />
+           <p style="margin: 4px 0 0 0; font-size: 0.8em; color: #4b5563; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Scan to Pay</p>
+         </div>` 
+      : '';
 
     const headerHtml = isThermal ? `
-      <div class="text-center header-info">
+      <div class="header-info">
         ${logoHtml}
         <h1 class="shop-title">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
         <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
@@ -400,13 +430,12 @@ function ShopDashboard() {
     ` : '';
 
     const watermarkText = shopInfo.shop_name || 'RETAIL INVOICE';
-    
-    // ✨ DYNAMIC WATERMARK SIZING ✨
     const nameLen = watermarkText.length;
-    let watermarkFontSize = '55px'; 
+    
+    let watermarkFontSize = '45px'; 
     if (isThermal) {
-      if (nameLen > 25) watermarkFontSize = '12px'; 
-      else if (nameLen > 15) watermarkFontSize = '16px'; 
+      if (nameLen > 20) watermarkFontSize = '14px'; 
+      else if (nameLen > 12) watermarkFontSize = '18px'; 
       else watermarkFontSize = '24px'; 
     } else {
       if (nameLen > 25) watermarkFontSize = '28px'; 
@@ -425,17 +454,44 @@ function ShopDashboard() {
         * { box-sizing: border-box; }
         html, body { 
           font-family: 'Inter', sans-serif; color: #111827; margin: 0; padding: 0; background: #fff; 
-          width: 100%; height: 100%; 
         } 
         ${pageCSS} 
         
-        .main-container { 
-          position: relative; 
-          z-index: 1; 
+        .print-container { 
+          display: grid;
           ${containerStyle} 
-          ${premiumSideBar}
+          overflow-x: hidden; 
         }
         
+        .content-layer {
+          grid-area: 1 / 1;
+          position: relative;
+          z-index: 1;
+          ${premiumSideBar}
+          padding-bottom: 20px;
+        }
+
+        /* ✨ A4 VISIBILITY FIX: Z-index 10 pulls it over backgrounds, opacity keeps it readable */
+        .watermark {
+          grid-area: 1 / 1;
+          align-self: center;
+          justify-self: center;
+          transform: rotate(-35deg);
+          font-size: ${watermarkFontSize};
+          color: rgba(0, 0, 0, 0.06); 
+          z-index: 10; 
+          text-align: center !important;
+          width: 100%;
+          line-height: 1.2;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          pointer-events: none;
+          white-space: pre-wrap;
+          word-break: keep-all; 
+          overflow-wrap: break-word;
+        }
+
         .text-center { text-align: center !important; } 
         .text-right { text-align: right; } 
         .text-muted { color: #6b7280; font-size: 0.9em; }
@@ -444,14 +500,22 @@ function ShopDashboard() {
         
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
         
-        .print-logo { max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain; margin-bottom: 10px; }
-        .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? '18px' : '26px'}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; }
-        .header-info p { margin: 2px 0; }
+        .header-info {
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           justify-content: center;
+           text-align: center !important;
+           width: 100%;
+        }
+        .header-info p { margin: 2px 0; text-align: center !important; width: 100%; }
+
+        .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? '18px' : '26px'}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-align: center !important; word-wrap: break-word; width: 100%;}
         
-        .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; }
+        .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; width: 100%; }
         .divider-thick { border-top: 2px solid #111827; margin: 15px 0; }
         
-        .customer-box { background: #f9fafb; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; }
+        .customer-box { background: #f9fafb; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; position: relative; z-index: 1;}
         .section-label { margin: 0 0 4px 0; font-size: 0.75em; color: #6b7280; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }
         .cust-name { margin: 0 0 2px 0; font-weight: 700; font-size: 1.1em; }
         
@@ -463,67 +527,52 @@ function ShopDashboard() {
         .total-label { font-size: ${isThermal ? '14px' : '18px'}; font-weight: 900; text-transform: uppercase; }
         .total-amount { font-size: ${isThermal ? '18px' : '24px'}; font-weight: 900; color: #111827; }
         
-        /* ✨ UPDATED WATERMARK STYLING ✨ */
-        .watermark {
-          position: absolute; /* absolute dynamically calculates from the invoice text height */
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(-40deg);
-          font-size: ${watermarkFontSize};
-          color: rgba(0, 0, 0, 0.06); 
-          z-index: 10; /* Pulled to the front so it overlays the Customer Box background */
-          white-space: pre-wrap; 
-          word-break: break-word;
-          text-align: center !important;
-          width: 100%; 
-          max-width: 100%;
-          line-height: 1.2;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-          pointer-events: none; /* Text beneath it is still 100% clickable/selectable */
-        }
       </style>
       </head><body>
       
-      <div class="main-container">
+      <div class="print-container">
         <div class="watermark">${watermarkText}</div>
         
-        ${headerHtml}
-        
-        ${isThermal ? '' : '<div class="divider"></div>'}
-        
-        ${customerHtml}
-        
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 5%;">#</th>
-              <th style="width: 45%;">Item Description</th>
-              <th class="text-center" style="width: 15%;">Qty</th>
-              <th class="text-right" style="width: 15%;">Rate</th>
-              <th class="text-right" style="width: 20%;">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsHtml}</tbody>
-        </table>
-        
-        <div class="divider-thick"></div>
-        
-        <div class="total-box">
-          <span class="total-label">Grand Total</span>
-          <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
-        </div>
-        
-        <div class="divider"></div>
-        <div class="text-center" style="margin-top: 20px;">
-          <p style="margin: 0; font-weight: 700;">Thank you for your business!</p>
-          <p style="margin: 8px 0; font-size: 0.85em; font-style: italic; color: #4b5563;">
-            This is a computer generated receipt, signature not required.
-          </p>
-          <p style="margin: 4px 0; font-size: 0.75em; color: #9ca3af;">Software by CSC Empower Hub</p>
+        <div class="content-layer">
+          ${headerHtml}
+          
+          ${isThermal ? '' : '<div class="divider"></div>'}
+          
+          ${customerHtml}
+          
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 45%;">Item Description</th>
+                <th class="text-center" style="width: 15%;">Qty</th>
+                <th class="text-right" style="width: 15%;">Rate</th>
+                <th class="text-right" style="width: 20%;">Total</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+          
+          <div class="divider-thick"></div>
+          
+          <div class="total-box">
+            <span class="total-label">Grand Total</span>
+            <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
+          </div>
+          
+          ${qrHtml}
+          
+          <div class="divider"></div>
+          <div style="text-align: center; margin-top: 20px; width: 100%;">
+            <p style="margin: 0; font-weight: 700; text-align: center;">Thank you for your business!</p>
+            <p style="margin: 8px 0; font-size: 0.85em; font-style: italic; color: #4b5563; text-align: center;">
+              This is a computer generated receipt, signature not required.
+            </p>
+            <p style="margin: 4px 0; font-size: 0.75em; color: #9ca3af; text-align: center;">Software by CSC Empower Hub</p>
+          </div>
         </div>
       </div>
+
       </body></html>
     `);
     printWindow.document.close(); 
@@ -548,27 +597,11 @@ function ShopDashboard() {
       (shopInfo.email ? ` | Email: ${shopInfo.email}` : "");
 
     const headerData = [
-      [
-        shopInfo.shop_name
-          ? shopInfo.shop_name.toUpperCase()
-          : "RETAIL INVOICE",
-      ],
-      [
-        shopInfo.address
-          ? shopInfo.address
-          : `Location: ${shopInfo.location || "N/A"}`,
-      ],
+      [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE"],
+      [shopInfo.address ? shopInfo.address : `Location: ${shopInfo.location || "N/A"}`],
       [contactStr, "", "", "", `Date: ${dateStr}`],
-      [
-        shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : "",
-        "",
-        "",
-        "",
-        `Invoice No: ${currentInvoiceId}`,
-      ],
-      [],
-      ["TAX INVOICE / BILL OF SUPPLY"],
-      [],
+      [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : "", "", "", "", `Invoice No: ${currentInvoiceId}`],
+      [], ["TAX INVOICE / BILL OF SUPPLY"], [],
       ["BILLED TO:", customerInfo.name || "Walk-in Customer", "", "", ""],
       ["Phone:", customerInfo.phone || "N/A", "", "", ""],
       ["Address:", customerInfo.address || "N/A", "", "", ""],
@@ -584,96 +617,39 @@ function ShopDashboard() {
     ];
 
     XLSX.utils.sheet_add_aoa(worksheet, headerData, { origin: "A1" });
-    XLSX.utils.sheet_add_aoa(
-      worksheet,
-      [["", "", "", "GRAND TOTAL", `₹${grandTotal.toFixed(2)}`]],
-      { origin: -1 },
-    );
+    XLSX.utils.sheet_add_aoa(worksheet, [["", "", "", "GRAND TOTAL", `₹${grandTotal.toFixed(2)}`]], { origin: -1 });
 
-    if (worksheet["A1"])
-      worksheet["A1"].s = {
-        font: { bold: true, sz: 16 },
-        alignment: { horizontal: "center" },
-      };
-    if (worksheet["A2"])
-      worksheet["A2"].s = {
-        font: { sz: 10 },
-        alignment: { horizontal: "center" },
-      };
-    if (worksheet["A3"])
-      worksheet["A3"].s = {
-        font: { sz: 11 },
-        alignment: { horizontal: "left" },
-      };
-    if (worksheet["E3"])
-      worksheet["E3"].s = {
-        font: { sz: 11 },
-        alignment: { horizontal: "right" },
-      };
-    if (worksheet["A4"])
-      worksheet["A4"].s = {
-        font: { sz: 11 },
-        alignment: { horizontal: "left" },
-      };
-    if (worksheet["E4"])
-      worksheet["E4"].s = {
-        font: { sz: 11, bold: true },
-        alignment: { horizontal: "right" },
-      };
-    if (worksheet["A6"])
-      worksheet["A6"].s = {
-        font: { bold: true, sz: 12 },
-        alignment: { horizontal: "center" },
-      };
-
-    if (worksheet["A8"])
-      worksheet["A8"].s = {
-        font: { bold: true, sz: 11 },
-        alignment: { horizontal: "left" },
-      };
+    if (worksheet["A1"]) worksheet["A1"].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: "center" } };
+    if (worksheet["A2"]) worksheet["A2"].s = { font: { sz: 10 }, alignment: { horizontal: "center" } };
+    if (worksheet["A3"]) worksheet["A3"].s = { font: { sz: 11 }, alignment: { horizontal: "left" } };
+    if (worksheet["E3"]) worksheet["E3"].s = { font: { sz: 11 }, alignment: { horizontal: "right" } };
+    if (worksheet["A4"]) worksheet["A4"].s = { font: { sz: 11 }, alignment: { horizontal: "left" } };
+    if (worksheet["E4"]) worksheet["E4"].s = { font: { sz: 11, bold: true }, alignment: { horizontal: "right" } };
+    if (worksheet["A6"]) worksheet["A6"].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: "center" } };
+    if (worksheet["A8"]) worksheet["A8"].s = { font: { bold: true, sz: 11 }, alignment: { horizontal: "left" } };
     if (worksheet["A9"]) worksheet["A9"].s = { font: { bold: true } };
     if (worksheet["A10"]) worksheet["A10"].s = { font: { bold: true } };
     if (worksheet["A11"]) worksheet["A11"].s = { font: { bold: true } };
 
     const headers = ["A13", "B13", "C13", "D13", "E13"];
     headers.forEach((cell) => {
-      if (worksheet[cell])
-        worksheet[cell].s = {
-          font: { bold: true },
-          border: { bottom: { style: "thin", color: { rgb: "000000" } } },
-        };
+      if (worksheet[cell]) worksheet[cell].s = { font: { bold: true }, border: { bottom: { style: "thin", color: { rgb: "000000" } } } };
     });
 
     const range = XLSX.utils.decode_range(worksheet["!ref"]);
     const lastRow = range.e.r + 1;
-    if (worksheet[`D${lastRow}`])
-      worksheet[`D${lastRow}`].s = { font: { bold: true } };
-    if (worksheet[`E${lastRow}`])
-      worksheet[`E${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`D${lastRow}`]) worksheet[`D${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`E${lastRow}`]) worksheet[`E${lastRow}`].s = { font: { bold: true } };
 
-    worksheet["!cols"] = [
-      { wch: 8 },
-      { wch: 45 },
-      { wch: 10 },
-      { wch: 15 },
-      { wch: 20 },
-    ];
+    worksheet["!cols"] = [{ wch: 8 }, { wch: 45 }, { wch: 10 }, { wch: 15 }, { wch: 20 }];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Invoice");
-
-    XLSX.writeFile(
-      workbook,
-      `INV_${currentInvoiceId}_${dateStr.replace(/\//g, "-")}.xlsx`,
-    );
+    XLSX.writeFile(workbook, `INV_${currentInvoiceId}_${dateStr.replace(/\//g, "-")}.xlsx`);
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+    return new Date(dateString).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   };
 
   return (
@@ -1035,49 +1011,47 @@ function ShopDashboard() {
                 className="p-6 md:p-8 space-y-6"
                 noValidate
               >
-                {/* ✨ LOGO UPLOAD SECTION ✨ */}
-                <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col sm:flex-row items-center gap-6">
-                  <div className="w-24 h-24 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
-                    {shopInfo.logo_url ? (
-                      <img
-                        src={shopInfo.logo_url}
-                        alt="Shop Logo"
-                        className="w-full h-full object-contain p-2"
-                      />
-                    ) : (
-                      <Store size={32} className="text-slate-300" />
-                    )}
-                  </div>
-                  <div className="flex-1 text-center sm:text-left">
-                    <h3 className="font-bold text-slate-800 mb-1">
-                      Shop Logo (For Printed Bills)
-                    </h3>
-                    <p className="text-xs text-slate-500 mb-3">
-                      Upload a clean PNG or JPG. It will be displayed at the top
-                      of your printed invoices.
-                    </p>
-                    <label
-                      className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition ${isUploadingLogo ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}
-                    >
-                      {isUploadingLogo ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />{" "}
-                          Uploading...
-                        </>
+                {/* ✨ MEDIA UPLOAD GRID (LOGO & QR) ✨ */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* LOGO UPLOAD */}
+                  <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
+                    <div className="w-20 h-20 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
+                      {shopInfo.logo_url ? (
+                        <img src={shopInfo.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
                       ) : (
-                        <>
-                          <ImagePlus size={16} /> Choose Logo Image
-                        </>
+                        <Store size={28} className="text-slate-300" />
                       )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleLogoUpload}
-                        disabled={isUploadingLogo}
-                      />
-                    </label>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800 mb-1 text-sm">Shop Logo</h3>
+                      <p className="text-[11px] text-slate-500 mb-3">Appears at top of bill</p>
+                      <label className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingLogo ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}>
+                        {isUploadingLogo ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : <><ImagePlus size={14} /> Choose Logo</>}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={isUploadingLogo} />
+                      </label>
+                    </div>
                   </div>
+
+                  {/* QR CODE UPLOAD */}
+                  <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
+                    <div className="w-20 h-20 bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm rounded-lg">
+                      {shopInfo.qr_code_url ? (
+                        <img src={shopInfo.qr_code_url} alt="QR Code" className="w-full h-full object-contain p-1" />
+                      ) : (
+                        <QrCode size={28} className="text-slate-300" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800 mb-1 text-sm">Payment QR Code</h3>
+                      <p className="text-[11px] text-slate-500 mb-3">Appears at bottom of bill</p>
+                      <label className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingQr ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}>
+                        {isUploadingQr ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : <><QrCode size={14} /> Choose QR Image</>}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleQrUpload} disabled={isUploadingQr} />
+                      </label>
+                    </div>
+                  </div>
+
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
