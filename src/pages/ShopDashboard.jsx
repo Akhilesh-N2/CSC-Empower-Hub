@@ -56,6 +56,7 @@ function ShopDashboard() {
     device_limit: 1,
     active_devices: 0,
   });
+  
   const [renewalHistory, setRenewalHistory] = useState([]);
   const [profileErrors, setProfileErrors] = useState({
     shop_name: false,
@@ -117,8 +118,7 @@ function ShopDashboard() {
               shop_name: data.shop_name || "",
               full_name: data.full_name || "",
               phone: data.phone || "",
-              // ✨ SILENTLY GRAB LOGIN EMAIL FOR THE BILL
-              email: data.email || user.email || "",
+              email: data.email || user.email || "", // Silently grabs logic email
               location: data.location || "",
               address: data.address || "",
               gstin: data.gstin || "",
@@ -187,10 +187,8 @@ function ShopDashboard() {
       const data = await res.json();
 
       if (data.secure_url) {
-        // 1. Update the screen immediately
         setShopInfo((prev) => ({ ...prev, logo_url: data.secure_url }));
 
-        // ✨ 2. AUTO-SAVE TO SUPABASE IMMEDIATELY ✨
         const { error: updateError } = await supabase
           .from("shop_profiles")
           .update({ logo_url: data.secure_url })
@@ -251,14 +249,14 @@ function ShopDashboard() {
       price: Number(price),
       total: Number(quantity) * Number(price),
     };
-    setItems([...items, newItem]);
+    setItems((prev) => [...prev, newItem]);
     setItemName("");
     setQuantity(1);
     setPrice("");
   };
 
   const handleRemoveItem = (id) =>
-    setItems(items.filter((item) => item.id !== id));
+    setItems((prev) => prev.filter((item) => item.id !== id));
 
   // COMPLETES BILL & PULLS NEXT NUMBER FROM DB
   const handleCompleteBill = async () => {
@@ -316,7 +314,6 @@ function ShopDashboard() {
           shop_name: shopInfo.shop_name,
           full_name: shopInfo.full_name,
           phone: shopInfo.phone,
-          // ✨ EXCLUDED EMAIL FROM DB UPDATE SO IT CAN'T BE OVERWRITTEN
           location: shopInfo.location,
           address: shopInfo.address,
           gstin: shopInfo.gstin,
@@ -333,29 +330,18 @@ function ShopDashboard() {
     }
   };
 
-  // 9. ✨ PREMIUM PRINT LOGIC (WITH LOGO, WATERMARK & EMAIL) ✨
+  // 9. ✨ PREMIUM PRINT LOGIC (DYNAMIC WATERMARK, LOGO, & EMAIL) ✨
   const handlePrint = () => {
-    if (items.length === 0)
-      return alert("Please add items to the bill before printing.");
+    if (items.length === 0) return alert("Please add items to the bill before printing.");
+    
+    let pageCSS = ""; let containerStyle = "";
+    const isThermal = pageSize === 'Thermal80';
 
-    let pageCSS = "";
-    let containerStyle = "";
-    const isThermal = pageSize === "Thermal80";
+    if (pageSize === "A4") { pageCSS = "@page { size: A4; margin: 15mm; }"; containerStyle = "max-width: 210mm; margin: 0 auto; font-size: 14px;"; } 
+    else if (pageSize === "A5") { pageCSS = "@page { size: A5; margin: 12mm; }"; containerStyle = "max-width: 148mm; margin: 0 auto; font-size: 12px;"; } 
+    else if (isThermal) { pageCSS = "@page { size: 80mm auto; margin: 5mm; }"; containerStyle = "max-width: 72mm; margin: 0 auto; font-size: 12px;"; }
 
-    if (pageSize === "A4") {
-      pageCSS = "@page { size: A4; margin: 15mm; }";
-      containerStyle = "max-width: 210mm; margin: 0 auto; font-size: 14px;";
-    } else if (pageSize === "A5") {
-      pageCSS = "@page { size: A5; margin: 12mm; }";
-      containerStyle = "max-width: 148mm; margin: 0 auto; font-size: 12px;";
-    } else if (isThermal) {
-      pageCSS = "@page { size: 80mm auto; margin: 5mm; }";
-      containerStyle = "max-width: 72mm; margin: 0 auto; font-size: 12px;";
-    }
-
-    const itemsHtml = items
-      .map(
-        (item, i) => `
+    const itemsHtml = items.map((item, i) => `
       <tr>
         <td class="td-pad">${i + 1}</td>
         <td class="td-pad" style="word-break: break-word; font-weight: 500;">${item.name}</td>
@@ -363,44 +349,36 @@ function ShopDashboard() {
         <td class="td-pad text-right">${item.price.toFixed(2)}</td>
         <td class="td-pad text-right" style="font-weight: 700;">${item.total.toFixed(2)}</td>
       </tr>
-    `,
-      )
-      .join("");
+    `).join('');
 
-    const dateStr = new Date().toLocaleDateString("en-GB");
-    const timeStr = new Date().toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const dateStr = new Date().toLocaleDateString('en-GB'); 
+    const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-    const logoHtml = shopInfo.logo_url
-      ? `<img src="${shopInfo.logo_url}" class="print-logo" />`
-      : "";
+    const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" />` : '';
 
-    const headerHtml = isThermal
-      ? `
-      <div class="text-center header-info">
+    // ✨ BULLETPROOF CENTERING FOR THERMAL PRINTERS ✨
+    const headerHtml = isThermal ? `
+      <div class="header-info">
         ${logoHtml}
-        <h1 class="shop-title">${shopInfo.shop_name || "RETAIL INVOICE"}</h1>
-        <p class="text-muted">${shopInfo.address || shopInfo.location || ""}</p>
-        <p class="text-muted">Ph: ${shopInfo.phone || "N/A"}</p>
-        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ""}
-        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ""}
+        <h1 class="shop-title">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
+        <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
+        <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
+        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
+        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
       </div>
       <div class="divider"></div>
       <div class="inv-meta text-center">
         <p><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
       </div>
-    `
-      : `
+    ` : `
       <div class="flex-between" style="align-items: flex-start;">
         <div style="flex: 1;">
           ${logoHtml}
-          <h1 class="shop-title" style="text-align: left;">${shopInfo.shop_name || "RETAIL INVOICE"}</h1>
-          <p class="text-muted">${shopInfo.address || shopInfo.location || ""}</p>
-          <p class="text-muted">Ph: ${shopInfo.phone || "N/A"}</p>
-          ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ""}
-          ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ""}
+          <h1 class="shop-title" style="text-align: left !important;">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
+          <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
+          <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
+          ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
+          ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
         </div>
         <div style="text-align: right; padding-top: 10px;">
           <h2 style="margin:0 0 5px 0; font-size: 24px; color: #111827; text-transform: uppercase; letter-spacing: 2px;">Invoice</h2>
@@ -410,25 +388,34 @@ function ShopDashboard() {
       </div>
     `;
 
-    const customerHtml =
-      customerInfo.name || customerInfo.phone
-        ? `
+    const customerHtml = (customerInfo.name || customerInfo.phone) ? `
       <div class="customer-box">
         <p class="section-label">Billed To:</p>
-        ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ""}
-        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ""}
-        ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ""}
+        ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ''}
+        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ''}
+        ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ''}
       </div>
-    `
-        : "";
+    ` : '';
 
-    const watermarkText = shopInfo.shop_name || "RETAIL INVOICE";
-    const watermarkFontSize = isThermal ? "32px" : "80px";
-    const premiumSideBar = isThermal
-      ? ""
-      : "border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;";
+    const watermarkText = shopInfo.shop_name || 'RETAIL INVOICE';
+    
+    // ✨ SMART WATERMARK SCALING BASED ON NAME LENGTH ✨
+    const nameLen = watermarkText.length;
+    let watermarkFontSize = '55px'; // Standard default size
+    
+    if (isThermal) {
+      if (nameLen > 25) watermarkFontSize = '12px'; // Very long name
+      else if (nameLen > 15) watermarkFontSize = '16px'; // Medium long name
+      else watermarkFontSize = '22px'; // Short standard name
+    } else {
+      if (nameLen > 25) watermarkFontSize = '30px'; 
+      else if (nameLen > 15) watermarkFontSize = '42px';
+      else watermarkFontSize = '55px'; 
+    }
+        
+    const premiumSideBar = isThermal ? '' : 'border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;';
 
-    const printWindow = window.open("", "_blank");
+    const printWindow = window.open('', '_blank');
     printWindow.document.write(`
       <html><head><title>Invoice #${currentInvoiceId}</title>
       <style>
@@ -448,7 +435,7 @@ function ShopDashboard() {
           ${premiumSideBar}
         }
         
-        .text-center { text-align: center; } 
+        .text-center { text-align: center !important; } 
         .text-right { text-align: right; } 
         .text-muted { color: #6b7280; font-size: 0.9em; }
         .text-bold { font-weight: 700; }
@@ -456,9 +443,28 @@ function ShopDashboard() {
         
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
         
-        .print-logo { max-height: ${isThermal ? "50px" : "75px"}; object-fit: contain; margin-bottom: 10px; }
-        .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? "18px" : "26px"}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; }
-        .header-info p { margin: 2px 0; }
+        .print-logo { max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain; margin-bottom: 10px; }
+        
+        .header-info {
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           justify-content: center;
+           text-align: center !important;
+           width: 100%;
+        }
+        .header-info p { margin: 2px 0; text-align: center !important; width: 100%; }
+
+        .shop-title { 
+           margin: 0 0 4px 0; 
+           font-size: ${isThermal ? '18px' : '26px'}; 
+           font-weight: 900; 
+           text-transform: uppercase; 
+           letter-spacing: -0.5px; 
+           text-align: center !important;
+           word-wrap: break-word;
+           width: 100%;
+        }
         
         .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; }
         .divider-thick { border-top: 2px solid #111827; margin: 15px 0; }
@@ -472,21 +478,27 @@ function ShopDashboard() {
         .td-pad { padding: 10px 4px; border-bottom: 1px solid #f3f4f6; }
         
         .total-box { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
-        .total-label { font-size: ${isThermal ? "14px" : "18px"}; font-weight: 900; text-transform: uppercase; }
-        .total-amount { font-size: ${isThermal ? "18px" : "24px"}; font-weight: 900; color: #111827; }
+        .total-label { font-size: ${isThermal ? '14px' : '18px'}; font-weight: 900; text-transform: uppercase; }
+        .total-amount { font-size: ${isThermal ? '18px' : '24px'}; font-weight: 900; color: #111827; }
         
+        /* ✨ HIGHLY OPTIMIZED WATERMARK BOUNDARIES ✨ */
         .watermark {
           position: fixed;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%) rotate(-35deg);
           font-size: ${watermarkFontSize};
-          color: rgba(0, 0, 0, 0.04);
+          color: rgba(0, 0, 0, 0.05); 
           z-index: 0;
-          white-space: nowrap;
+          white-space: pre-wrap; 
+          word-break: break-word; /* Forces breaks for huge words */
+          overflow-wrap: break-word;
+          text-align: center !important;
+          width: 85%; /* Strictly limits width so rotation doesn't bleed edges */
+          line-height: 1.2;
           font-weight: 900;
           text-transform: uppercase;
-          letter-spacing: 8px;
+          letter-spacing: 2px; /* Reduced to fit more characters */
           pointer-events: none;
         }
       </style>
@@ -497,7 +509,7 @@ function ShopDashboard() {
       <div class="main-container">
         ${headerHtml}
         
-        ${isThermal ? "" : '<div class="divider"></div>'}
+        ${isThermal ? '' : '<div class="divider"></div>'}
         
         ${customerHtml}
         
@@ -532,12 +544,9 @@ function ShopDashboard() {
       </div>
       </body></html>
     `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 350);
+    printWindow.document.close(); 
+    printWindow.focus(); 
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 350); 
   };
 
   // 10. EXPORT LOGIC
@@ -809,7 +818,7 @@ function ShopDashboard() {
                     placeholder="Customer Name"
                     value={customerInfo.name}
                     onChange={(e) =>
-                      setCustomerInfo({ ...customerInfo, name: e.target.value })
+                      setCustomerInfo((prev) => ({ ...prev, name: e.target.value }))
                     }
                     className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-emerald-500 transition-all bg-slate-50 focus:bg-white"
                   />
@@ -818,10 +827,7 @@ function ShopDashboard() {
                     placeholder="Phone Number (Optional)"
                     value={customerInfo.phone}
                     onChange={(e) =>
-                      setCustomerInfo({
-                        ...customerInfo,
-                        phone: e.target.value,
-                      })
+                      setCustomerInfo((prev) => ({ ...prev, phone: e.target.value }))
                     }
                     className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-emerald-500 transition-all bg-slate-50 focus:bg-white"
                   />
@@ -830,10 +836,7 @@ function ShopDashboard() {
                     placeholder="Customer Address (Optional)"
                     value={customerInfo.address}
                     onChange={(e) =>
-                      setCustomerInfo({
-                        ...customerInfo,
-                        address: e.target.value,
-                      })
+                      setCustomerInfo((prev) => ({ ...prev, address: e.target.value }))
                     }
                     className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-emerald-500 transition-all bg-slate-50 focus:bg-white resize-none"
                   ></textarea>
@@ -856,7 +859,7 @@ function ShopDashboard() {
                       onChange={(e) => {
                         setItemName(e.target.value);
                         if (billErrors.itemName)
-                          setBillErrors({ ...billErrors, itemName: false });
+                          setBillErrors((prev) => ({ ...prev, itemName: false }));
                       }}
                       placeholder="e.g. A4 Paper Rim"
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.itemName ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300" : "border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white"}`}
@@ -879,7 +882,7 @@ function ShopDashboard() {
                         onChange={(e) => {
                           setQuantity(e.target.value);
                           if (billErrors.quantity)
-                            setBillErrors({ ...billErrors, quantity: false });
+                            setBillErrors((prev) => ({ ...prev, quantity: false }));
                         }}
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.quantity ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white"}`}
                       />
@@ -896,7 +899,7 @@ function ShopDashboard() {
                         onChange={(e) => {
                           setPrice(e.target.value);
                           if (billErrors.price)
-                            setBillErrors({ ...billErrors, price: false });
+                            setBillErrors((prev) => ({ ...prev, price: false }));
                         }}
                         placeholder="0.00"
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.price ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300" : "border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white"}`}
@@ -1104,12 +1107,11 @@ function ShopDashboard() {
                       type="text"
                       value={shopInfo.shop_name}
                       onChange={(e) => {
-                        setShopInfo({ ...shopInfo, shop_name: e.target.value });
-                        if (profileErrors.shop_name)
-                          setProfileErrors({
-                            ...profileErrors,
-                            shop_name: false,
-                          });
+                        const val = e.target.value;
+                        setShopInfo((prev) => ({ ...prev, shop_name: val }));
+                        if (profileErrors.shop_name) {
+                          setProfileErrors((prev) => ({ ...prev, shop_name: false }));
+                        }
                       }}
                       className={`w-full p-3.5 border rounded-xl outline-none font-bold text-slate-800 transition-all ${profileErrors.shop_name ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
@@ -1127,12 +1129,11 @@ function ShopDashboard() {
                       type="text"
                       value={shopInfo.full_name}
                       onChange={(e) => {
-                        setShopInfo({ ...shopInfo, full_name: e.target.value });
-                        if (profileErrors.full_name)
-                          setProfileErrors({
-                            ...profileErrors,
-                            full_name: false,
-                          });
+                        const val = e.target.value;
+                        setShopInfo((prev) => ({ ...prev, full_name: val }));
+                        if (profileErrors.full_name) {
+                          setProfileErrors((prev) => ({ ...prev, full_name: false }));
+                        }
                       }}
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.full_name ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
@@ -1150,9 +1151,11 @@ function ShopDashboard() {
                       type="tel"
                       value={shopInfo.phone}
                       onChange={(e) => {
-                        setShopInfo({ ...shopInfo, phone: e.target.value });
-                        if (profileErrors.phone)
-                          setProfileErrors({ ...profileErrors, phone: false });
+                        const val = e.target.value;
+                        setShopInfo((prev) => ({ ...prev, phone: val }));
+                        if (profileErrors.phone) {
+                          setProfileErrors((prev) => ({ ...prev, phone: false }));
+                        }
                       }}
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.phone ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
@@ -1171,7 +1174,7 @@ function ShopDashboard() {
                       type="text"
                       value={shopInfo.gstin}
                       onChange={(e) =>
-                        setShopInfo({ ...shopInfo, gstin: e.target.value })
+                        setShopInfo((prev) => ({ ...prev, gstin: e.target.value }))
                       }
                       placeholder="e.g. 32XXXXX1234X1Z5"
                       className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm uppercase"
@@ -1186,7 +1189,7 @@ function ShopDashboard() {
                       rows="3"
                       value={shopInfo.address}
                       onChange={(e) =>
-                        setShopInfo({ ...shopInfo, address: e.target.value })
+                        setShopInfo((prev) => ({ ...prev, address: e.target.value }))
                       }
                       placeholder="Street, City, Landmark, PIN Code"
                       className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm leading-relaxed"
