@@ -26,7 +26,7 @@ import {
   ImagePlus,
   Loader2,
   Mail,
-  QrCode, // ✨ Re-imported QR icon
+  QrCode,
 } from "lucide-react";
 
 function ShopDashboard() {
@@ -36,7 +36,7 @@ function ShopDashboard() {
   const [userId, setUserId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [isUploadingQr, setIsUploadingQr] = useState(false); // ✨ QR Upload State
+  const [isUploadingQr, setIsUploadingQr] = useState(false); 
 
   // Print Page Size State
   const [pageSize, setPageSize] = useState("Thermal80");
@@ -46,12 +46,12 @@ function ShopDashboard() {
     shop_name: "",
     full_name: "",
     phone: "",
-    email: "", // Silent state for the bill
+    email: "", 
     location: "",
     address: "",
     gstin: "",
     logo_url: "",
-    qr_code_url: "", // ✨ QR Code State
+    qr_code_url: "", 
     created_at: null,
     subscription_expires_at: null,
     renewal_requested: false,
@@ -67,7 +67,7 @@ function ShopDashboard() {
     phone: false,
   });
 
-  // 2. STATE: Customer Details
+  // 2. STATE: Customer Details 
   const [customerInfo, setCustomerInfo] = useState(() => {
     const saved = localStorage.getItem("shop_billing_customer");
     return saved ? JSON.parse(saved) : { name: "", phone: "", address: "" };
@@ -126,7 +126,7 @@ function ShopDashboard() {
               address: data.address || "",
               gstin: data.gstin || "",
               logo_url: data.logo_url || "",
-              qr_code_url: data.qr_code_url || "", // ✨ FETCH QR URL
+              qr_code_url: data.qr_code_url || "", 
               created_at: data.created_at || null,
               subscription_expires_at: data.subscription_expires_at || null,
               renewal_requested: data.renewal_requested || false,
@@ -152,13 +152,12 @@ function ShopDashboard() {
     fetchShopData();
   }, []);
 
-  // 6. SYNC CURRENT CART WITH LOCAL STORAGE
   useEffect(() => {
     localStorage.setItem("shop_billing_items", JSON.stringify(items));
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
-  // ✨ CLOUDINARY LOGO UPLOAD HANDLER (WITH FOLDER ORGANIZATION) ✨
+  // LOGO UPLOAD HANDLER
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -169,28 +168,16 @@ function ShopDashboard() {
       formData.append("file", file);
       formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
 
-      const cleanShopName = shopInfo.shop_name
-        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
-        : `Shop_${userId?.substring(0, 6)}`;
-
-      // ✨ UPDATED: Puts the file inside a specific Shop Folder
+      const cleanShopName = shopInfo.shop_name ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_") : `Shop_${userId?.substring(0, 6)}`;
       formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
       formData.append("public_id", "Logo");
 
-      const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData }
-      );
-
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
       const data = await res.json();
 
       if (data.secure_url) {
         setShopInfo((prev) => ({ ...prev, logo_url: data.secure_url }));
-        const { error: updateError } = await supabase
-          .from("shop_profiles")
-          .update({ logo_url: data.secure_url })
-          .eq("id", userId);
-
+        const { error: updateError } = await supabase.from("shop_profiles").update({ logo_url: data.secure_url }).eq("id", userId);
         if (updateError) throw updateError;
         alert("Logo successfully uploaded and saved!");
       } else throw new Error("Failed to get secure URL from Cloudinary.");
@@ -201,7 +188,7 @@ function ShopDashboard() {
     }
   };
 
-  // ✨ CLOUDINARY QR CODE UPLOAD HANDLER ✨
+  // ✨ CLOUDINARY QR CODE UPLOAD (NORTH CROP & GRAYSCALE EFFECT) ✨
   const handleQrUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -212,30 +199,21 @@ function ShopDashboard() {
       formData.append("file", file);
       formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
 
-      const cleanShopName = shopInfo.shop_name
-        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
-        : `Shop_${userId?.substring(0, 6)}`;
-
-      // ✨ UPDATED: Joins the Logo in the specific Shop Folder
+      const cleanShopName = shopInfo.shop_name ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_") : `Shop_${userId?.substring(0, 6)}`;
       formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
       formData.append("public_id", "QR_Code");
 
-      const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData }
-      );
-
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
       const data = await res.json();
 
       if (data.secure_url) {
-        setShopInfo((prev) => ({ ...prev, qr_code_url: data.secure_url }));
-        const { error: updateError } = await supabase
-          .from("shop_profiles")
-          .update({ qr_code_url: data.secure_url })
-          .eq("id", userId);
-
+        // g_north anchors the crop to the top (cutting off bottom text). e_grayscale/contrast forces the bg to pure white.
+        const smartCropUrl = data.secure_url.replace('/upload/', '/upload/c_fill,g_north,w_500,h_500/e_grayscale/e_brightness:20/e_contrast:50/');
+        
+        setShopInfo((prev) => ({ ...prev, qr_code_url: smartCropUrl }));
+        const { error: updateError } = await supabase.from("shop_profiles").update({ qr_code_url: smartCropUrl }).eq("id", userId);
         if (updateError) throw updateError;
-        alert("QR Code successfully uploaded and saved!");
+        alert("QR Code formatted and saved!");
       } else throw new Error("Failed to get secure URL from Cloudinary.");
     } catch (error) {
       alert("Error uploading QR: " + error.message);
@@ -244,15 +222,10 @@ function ShopDashboard() {
     }
   };
 
-  // HANDLE RENEWAL REQUEST
   const handleRequestRenewal = async () => {
     if (!userId) return;
     try {
-      const { error } = await supabase
-        .from("shop_profiles")
-        .update({ renewal_requested: true })
-        .eq("id", userId);
-
+      const { error } = await supabase.from("shop_profiles").update({ renewal_requested: true }).eq("id", userId);
       if (error) throw error;
       alert("Renewal request sent successfully! An admin will review your account shortly.");
       setShopInfo((prev) => ({ ...prev, renewal_requested: true }));
@@ -261,90 +234,53 @@ function ShopDashboard() {
     }
   };
 
-  // 7. BILLING LOGIC
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
 
   const handleAddItem = (e) => {
     e.preventDefault();
-    const newErrors = {
-      itemName: !itemName.trim(),
-      quantity: !quantity || Number(quantity) < 1,
-      price: !price || Number(price) <= 0,
-    };
-    if (newErrors.itemName || newErrors.quantity || newErrors.price) {
-      setBillErrors(newErrors);
-      return;
-    }
+    const newErrors = { itemName: !itemName.trim(), quantity: !quantity || Number(quantity) < 1, price: !price || Number(price) <= 0 };
+    if (newErrors.itemName || newErrors.quantity || newErrors.price) return setBillErrors(newErrors);
+    
     setBillErrors({ itemName: false, quantity: false, price: false });
-    const newItem = {
-      id: Date.now().toString(),
-      name: itemName,
-      quantity: Number(quantity),
-      price: Number(price),
-      total: Number(quantity) * Number(price),
-    };
+    const newItem = { id: Date.now().toString(), name: itemName, quantity: Number(quantity), price: Number(price), total: Number(quantity) * Number(price) };
     setItems((prev) => [...prev, newItem]);
-    setItemName("");
-    setQuantity(1);
-    setPrice("");
+    setItemName(""); setQuantity(1); setPrice("");
   };
 
-  const handleRemoveItem = (id) =>
-    setItems((prev) => prev.filter((item) => item.id !== id));
+  const handleRemoveItem = (id) => setItems((prev) => prev.filter((item) => item.id !== id));
 
-  // COMPLETES BILL
   const handleCompleteBill = async () => {
     if (window.confirm("Complete this sale and start the next bill?")) {
       try {
-        const { data: newDbCount, error } = await supabase.rpc(
-          "increment_shop_invoice",
-          { target_shop_id: userId }
-        );
+        const { data: newDbCount, error } = await supabase.rpc("increment_shop_invoice", { target_shop_id: userId });
         if (error) throw error;
-        setItems([]);
-        setCustomerInfo({ name: "", phone: "", address: "" });
+        setItems([]); setCustomerInfo({ name: "", phone: "", address: "" });
         if (newDbCount !== null) setInvoiceSeq(newDbCount + 1);
       } catch (err) {
         console.error("Failed to increment sequence:", err);
-        alert("Error generating next invoice number. Please check connection.");
+        alert("Error generating next invoice number.");
       }
     }
   };
 
   const clearCartOnly = () => {
     if (window.confirm("Empty cart items without changing the invoice number?")) {
-      setItems([]);
-      setCustomerInfo({ name: "", phone: "", address: "" });
+      setItems([]); setCustomerInfo({ name: "", phone: "", address: "" });
     }
   };
 
-  // 8. PROFILE UPDATE LOGIC
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    const newErrors = {
-      shop_name: !shopInfo.shop_name.trim(),
-      full_name: !shopInfo.full_name.trim(),
-      phone: !shopInfo.phone.trim(),
-    };
-    if (newErrors.shop_name || newErrors.full_name || newErrors.phone) {
-      setProfileErrors(newErrors);
-      return;
-    }
+    const newErrors = { shop_name: !shopInfo.shop_name.trim(), full_name: !shopInfo.full_name.trim(), phone: !shopInfo.phone.trim() };
+    if (newErrors.shop_name || newErrors.full_name || newErrors.phone) return setProfileErrors(newErrors);
+    
     setProfileErrors({ shop_name: false, full_name: false, phone: false });
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from("shop_profiles")
-        .update({
-          shop_name: shopInfo.shop_name,
-          full_name: shopInfo.full_name,
-          phone: shopInfo.phone,
-          location: shopInfo.location,
-          address: shopInfo.address,
-          gstin: shopInfo.gstin,
-          // DB updates intentionally exclude email, logo, and qr to protect states
-        })
-        .eq("id", userId);
+      const { error } = await supabase.from("shop_profiles").update({
+          shop_name: shopInfo.shop_name, full_name: shopInfo.full_name, phone: shopInfo.phone,
+          location: shopInfo.location, address: shopInfo.address, gstin: shopInfo.gstin
+        }).eq("id", userId);
 
       if (error) throw error;
       alert("Shop Profile Updated Successfully!");
@@ -355,7 +291,7 @@ function ShopDashboard() {
     }
   };
 
-  // 9. ✨ PREMIUM PRINT LOGIC (WATERMARK VISIBILITY & QR CODE) ✨
+  // 9. ✨ PREMIUM PRINT LOGIC ✨
   const handlePrint = () => {
     if (items.length === 0) return alert("Please add items to the bill before printing.");
     
@@ -381,26 +317,35 @@ function ShopDashboard() {
 
     const logoHtml = shopInfo.logo_url ? `<img src="${shopInfo.logo_url}" class="print-logo" style="margin: 0 auto 10px auto; display: block; max-height: ${isThermal ? '50px' : '75px'}; object-fit: contain;" />` : '';
 
-    // ✨ INJECT QR CODE ✨
-    const qrHtml = shopInfo.qr_code_url 
-      ? `<div style="text-align: center; margin: 20px 0 10px 0; position: relative; z-index: 15;">
-           <img src="${shopInfo.qr_code_url}" style="width: ${isThermal ? '80px' : '110px'}; height: auto; border-radius: 8px; border: 1px solid #e5e7eb; padding: 4px;" />
-           <p style="margin: 4px 0 0 0; font-size: 0.8em; color: #4b5563; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Scan to Pay</p>
+    // ✨ SAFETY FALLBACK: Converts old DB URLs to the new top-crop & grayscale format automatically
+    let printQrUrl = shopInfo.qr_code_url;
+    if (printQrUrl) {
+      // Clear out any old crop parameters safely before applying the new exact ones
+      printQrUrl = printQrUrl.replace(/\/upload\/(?:c_[^/]+\/)?(?:e_[^/]+\/)?v\d+/, '/upload/c_fill,g_north,w_500,h_500/e_grayscale/e_brightness:20/e_contrast:50/v1');
+    }
+
+    // ✨ BULLETPROOF INLINE BLOCK CENTERING ✨
+    const qrHtml = printQrUrl 
+      ? `<div style="width: 100%; text-align: center; margin: 20px 0 10px 0; position: relative; z-index: 15;">
+           <div style="display: inline-block; background: #ffffff; padding: 8px; border-radius: 8px; border: 1px dashed #94a3b8; text-align: center;">
+             <img src="${printQrUrl}" style="width: ${isThermal ? '120px' : '150px'}; height: ${isThermal ? '120px' : '150px'}; object-fit: cover; object-position: top center; display: block; margin: 0 auto;" />
+             <p style="margin: 6px 0 0 0; font-size: 11px; color: #000000; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; text-align: center;">Scan to Pay</p>
+           </div>
          </div>` 
       : '';
 
     const headerHtml = isThermal ? `
-      <div class="header-info">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; width: 100%;">
         ${logoHtml}
         <h1 class="shop-title">${shopInfo.shop_name || 'RETAIL INVOICE'}</h1>
-        <p class="text-muted">${shopInfo.address || shopInfo.location || ''}</p>
-        <p class="text-muted">Ph: ${shopInfo.phone || 'N/A'}</p>
-        ${shopInfo.email ? `<p class="text-muted">Email: ${shopInfo.email}</p>` : ''}
-        ${shopInfo.gstin ? `<p class="text-bold mt-1">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
+        <p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">${shopInfo.address || shopInfo.location || ''}</p>
+        <p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">Ph: ${shopInfo.phone || 'N/A'}</p>
+        ${shopInfo.email ? `<p style="margin: 2px 0; color: #4b5563; font-size: 12px; text-align: center; width: 100%;">Email: ${shopInfo.email}</p>` : ''}
+        ${shopInfo.gstin ? `<p style="margin: 4px 0 0 0; font-weight: 700; font-size: 12px; text-align: center; width: 100%;">GSTIN: ${shopInfo.gstin.toUpperCase()}</p>` : ''}
       </div>
       <div class="divider"></div>
-      <div class="inv-meta text-center">
-        <p><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
+      <div style="text-align: center; width: 100%;">
+        <p style="margin: 0;"><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
       </div>
     ` : `
       <div class="flex-between" style="align-items: flex-start;">
@@ -424,7 +369,7 @@ function ShopDashboard() {
       <div class="customer-box">
         <p class="section-label">Billed To:</p>
         ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ''}
-        ${customerInfo.phone ? `<p class="text-muted">📞 ${customerInfo.phone}</p>` : ''}
+        ${customerInfo.phone ? `<p class="text-muted">${customerInfo.phone}</p>` : ''}
         ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ''}
       </div>
     ` : '';
@@ -471,14 +416,13 @@ function ShopDashboard() {
           padding-bottom: 20px;
         }
 
-        /* ✨ A4 VISIBILITY FIX: Z-index 10 pulls it over backgrounds, opacity keeps it readable */
         .watermark {
           grid-area: 1 / 1;
           align-self: center;
           justify-self: center;
           transform: rotate(-35deg);
           font-size: ${watermarkFontSize};
-          color: rgba(0, 0, 0, 0.06); 
+          color: rgba(0, 0, 0, 0.05); 
           z-index: 10; 
           text-align: center !important;
           width: 100%;
@@ -499,23 +443,13 @@ function ShopDashboard() {
         .mt-1 { margin-top: 5px; }
         
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
-        
-        .header-info {
-           display: flex;
-           flex-direction: column;
-           align-items: center;
-           justify-content: center;
-           text-align: center !important;
-           width: 100%;
-        }
-        .header-info p { margin: 2px 0; text-align: center !important; width: 100%; }
 
         .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? '18px' : '26px'}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-align: center !important; word-wrap: break-word; width: 100%;}
         
         .divider { border-top: 1px solid #e5e7eb; margin: 15px 0; width: 100%; }
         .divider-thick { border-top: 2px solid #111827; margin: 15px 0; }
         
-        .customer-box { background: #f9fafb; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; position: relative; z-index: 1;}
+        .customer-box { background: transparent; padding: 12px; border-radius: 8px; margin: 15px 0; border: 1px dashed #cbd5e1; position: relative; z-index: 1;}
         .section-label { margin: 0 0 4px 0; font-size: 0.75em; color: #6b7280; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }
         .cust-name { margin: 0 0 2px 0; font-weight: 700; font-size: 1.1em; }
         
@@ -592,9 +526,7 @@ function ShopDashboard() {
     }));
 
     const dateStr = new Date().toLocaleDateString("en-GB");
-    const contactStr =
-      `Contact: ${shopInfo.phone || "N/A"}` +
-      (shopInfo.email ? ` | Email: ${shopInfo.email}` : "");
+    const contactStr = `Contact: ${shopInfo.phone || "N/A"}` + (shopInfo.email ? ` | Email: ${shopInfo.email}` : "");
 
     const headerData = [
       [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE"],
@@ -1016,7 +948,7 @@ function ShopDashboard() {
                   
                   {/* LOGO UPLOAD */}
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
-                    <div className="w-20 h-20 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
+                    <div className="w-20 h-20 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
                       {shopInfo.logo_url ? (
                         <img src={shopInfo.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
                       ) : (
