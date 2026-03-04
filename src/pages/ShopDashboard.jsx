@@ -4,7 +4,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { supabase } from "../supabaseClient";
 import { useDeviceTracker } from "../hooks/useDeviceTracker";
-import InventoryManager from "../components/InventoryManager"; 
+import InventoryManager from "../components/InventoryManager";
 import {
   Plus,
   Trash2,
@@ -33,7 +33,7 @@ import {
   Package,
   Search,
   ScrollText,
-  ChevronDown 
+  ChevronDown,
 } from "lucide-react";
 
 function ShopDashboard() {
@@ -46,7 +46,7 @@ function ShopDashboard() {
   const [isUploadingQr, setIsUploadingQr] = useState(false);
 
   const [pageSize, setPageSize] = useState("Thermal80");
-  const [showExportMenu, setShowExportMenu] = useState(false); 
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [shopInfo, setShopInfo] = useState({
     shop_name: "",
@@ -87,11 +87,11 @@ function ShopDashboard() {
   const [itemName, setItemName] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [price, setPrice] = useState("");
-  
+
   const [inventoryList, setInventoryList] = useState([]);
   const [inventorySearch, setInventorySearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedInvId, setSelectedInvId] = useState(null); 
+  const [selectedInvId, setSelectedInvId] = useState(null);
 
   const [billErrors, setBillErrors] = useState({
     itemName: false,
@@ -109,7 +109,9 @@ function ShopDashboard() {
   useEffect(() => {
     const fetchShopData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
         if (user) {
           setUserId(user.id);
@@ -208,22 +210,35 @@ function ShopDashboard() {
       const file = e.target.files[0];
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      formData.append(
+        "upload_preset",
+        import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
+      );
 
-      const cleanShopName = shopInfo.shop_name ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_") : `Shop_${userId?.substring(0, 6)}`;
+      const cleanShopName = shopInfo.shop_name
+        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
+        : `Shop_${userId?.substring(0, 6)}`;
       formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
-      
-      // By appending Date.now(), we guarantee a new URL every time.
+
+      // ✨ FIX: Generate a completely unique file name every time.
+      // Cloudinary will treat this as a brand new file, bypassing the overwrite block!
       formData.append("public_id", `Logo_${Date.now()}`);
 
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: "POST", body: formData },
+      );
       const data = await res.json();
 
       if (data.secure_url) {
+        // Save the brand new unique URL directly to Supabase
         setShopInfo((prev) => ({ ...prev, logo_url: data.secure_url }));
-        const { error: updateError } = await supabase.from("shop_profiles").update({ logo_url: data.secure_url }).eq("id", userId);
+        const { error: updateError } = await supabase
+          .from("shop_profiles")
+          .update({ logo_url: data.secure_url })
+          .eq("id", userId);
         if (updateError) throw updateError;
-        alert("Logo successfully uploaded and saved!");
+        alert("Logo successfully updated!");
       } else throw new Error("Failed to get secure URL from Cloudinary.");
     } catch (error) {
       alert("Error uploading logo: " + error.message);
@@ -240,23 +255,37 @@ function ShopDashboard() {
       const file = e.target.files[0];
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      formData.append(
+        "upload_preset",
+        import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
+      );
 
-      const cleanShopName = shopInfo.shop_name ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_") : `Shop_${userId?.substring(0, 6)}`;
+      const cleanShopName = shopInfo.shop_name
+        ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_")
+        : `Shop_${userId?.substring(0, 6)}`;
       formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
-      
-      // Make QR code unique too
+
+      // ✨ FIX: Unique file name for the QR code as well.
       formData.append("public_id", `QR_Code_${Date.now()}`);
 
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: "POST", body: formData },
+      );
       const data = await res.json();
 
       if (data.secure_url) {
-        const smartCropUrl = data.secure_url.replace("/upload/", "/upload/c_fill,g_north,w_500,h_500,z_1.05/");
+        const smartCropUrl = data.secure_url.replace(
+          "/upload/",
+          "/upload/c_fill,g_north,w_500,h_500,z_1.05/",
+        );
         setShopInfo((prev) => ({ ...prev, qr_code_url: smartCropUrl }));
-        const { error: updateError } = await supabase.from("shop_profiles").update({ qr_code_url: smartCropUrl }).eq("id", userId);
+        const { error: updateError } = await supabase
+          .from("shop_profiles")
+          .update({ qr_code_url: smartCropUrl })
+          .eq("id", userId);
         if (updateError) throw updateError;
-        alert("QR Code formatted and saved!");
+        alert("QR Code successfully updated!");
       } else throw new Error("Failed to get secure URL from Cloudinary.");
     } catch (error) {
       alert("Error uploading QR: " + error.message);
@@ -268,16 +297,23 @@ function ShopDashboard() {
   const handleRequestRenewal = async () => {
     if (!userId) return;
     try {
-      const { error } = await supabase.from("shop_profiles").update({ renewal_requested: true }).eq("id", userId);
+      const { error } = await supabase
+        .from("shop_profiles")
+        .update({ renewal_requested: true })
+        .eq("id", userId);
       if (error) throw error;
-      
-      await supabase.from("license_renewals").insert([{
-        shop_id: userId,
-        action_type: "Renewal Requested (Pending Payment)",
-        new_expiry: shopInfo.subscription_expires_at 
-      }]);
 
-      alert("Renewal request sent successfully! An admin will review your account shortly.");
+      await supabase.from("license_renewals").insert([
+        {
+          shop_id: userId,
+          action_type: "Renewal Requested (Pending Payment)",
+          new_expiry: shopInfo.subscription_expires_at,
+        },
+      ]);
+
+      alert(
+        "Renewal request sent successfully! An admin will review your account shortly.",
+      );
       setShopInfo((prev) => ({ ...prev, renewal_requested: true }));
 
       const { data: history } = await supabase
@@ -286,7 +322,6 @@ function ShopDashboard() {
         .eq("shop_id", userId)
         .order("renewed_at", { ascending: false });
       setRenewalHistory(history || []);
-
     } catch (err) {
       alert("Failed to send request: " + err.message);
     }
@@ -298,7 +333,7 @@ function ShopDashboard() {
     setItemName(item.item_name);
     setPrice(item.selling_price);
     setQuantity(1);
-    setSelectedInvId(item.id); 
+    setSelectedInvId(item.id);
     setInventorySearch("");
     setShowSuggestions(false);
   };
@@ -316,14 +351,14 @@ function ShopDashboard() {
     setBillErrors({ itemName: false, quantity: false, price: false });
     const newItem = {
       id: Date.now().toString(),
-      inv_id: selectedInvId, 
+      inv_id: selectedInvId,
       name: itemName,
       quantity: Number(quantity),
       price: Number(price),
       total: Number(quantity) * Number(price),
     };
     setItems((prev) => [...prev, newItem]);
-    
+
     setItemName("");
     setQuantity(1);
     setPrice("");
@@ -335,18 +370,20 @@ function ShopDashboard() {
 
   const handleCompleteBill = async () => {
     if (items.length === 0) return alert("Add items to the bill first!");
-    
+
     if (window.confirm("Complete this sale and start the next bill?")) {
       try {
-        const { error: billError } = await supabase.from('shop_bills').insert([{
-          shop_id: userId,
-          invoice_no: currentInvoiceId,
-          customer_name: customerInfo.name || null,
-          customer_phone: customerInfo.phone || null,
-          customer_address: customerInfo.address || null,
-          items_json: items,
-          grand_total: grandTotal
-        }]);
+        const { error: billError } = await supabase.from("shop_bills").insert([
+          {
+            shop_id: userId,
+            invoice_no: currentInvoiceId,
+            customer_name: customerInfo.name || null,
+            customer_phone: customerInfo.phone || null,
+            customer_address: customerInfo.address || null,
+            items_json: items,
+            grand_total: grandTotal,
+          },
+        ]);
 
         if (billError) throw billError;
 
@@ -359,15 +396,24 @@ function ShopDashboard() {
         if (shopInfo.has_inventory_module) {
           for (const cartItem of items) {
             if (cartItem.inv_id) {
-              const targetItem = inventoryList.find(i => i.id === cartItem.inv_id);
+              const targetItem = inventoryList.find(
+                (i) => i.id === cartItem.inv_id,
+              );
               if (targetItem) {
-                const newStock = Math.max(0, targetItem.current_stock - cartItem.quantity);
-                const newSold = (targetItem.total_sold || 0) + cartItem.quantity;
-                
-                await supabase.from('inventory_items').update({
-                  current_stock: newStock,
-                  total_sold: newSold
-                }).eq('id', cartItem.inv_id);
+                const newStock = Math.max(
+                  0,
+                  targetItem.current_stock - cartItem.quantity,
+                );
+                const newSold =
+                  (targetItem.total_sold || 0) + cartItem.quantity;
+
+                await supabase
+                  .from("inventory_items")
+                  .update({
+                    current_stock: newStock,
+                    total_sold: newSold,
+                  })
+                  .eq("id", cartItem.inv_id);
 
                 targetItem.current_stock = newStock;
                 targetItem.total_sold = newSold;
@@ -379,7 +425,6 @@ function ShopDashboard() {
         setItems([]);
         setCustomerInfo({ name: "", phone: "", address: "" });
         if (newDbCount !== null) setInvoiceSeq(newDbCount + 1);
-
       } catch (err) {
         console.error("Failed to process sale:", err);
         alert("Error saving bill. Please check your connection.");
@@ -388,7 +433,9 @@ function ShopDashboard() {
   };
 
   const clearCartOnly = () => {
-    if (window.confirm("Empty cart items without changing the invoice number?")) {
+    if (
+      window.confirm("Empty cart items without changing the invoice number?")
+    ) {
       setItems([]);
       setCustomerInfo({ name: "", phone: "", address: "" });
     }
@@ -428,7 +475,14 @@ function ShopDashboard() {
     }
   };
 
-  const triggerPrint = (printItems, printCustomer, printInvoiceId, printDateStr, printTimeStr, printTotal) => {
+  const triggerPrint = (
+    printItems,
+    printCustomer,
+    printInvoiceId,
+    printDateStr,
+    printTimeStr,
+    printTotal,
+  ) => {
     let pageCSS = "";
     let containerStyle = "";
     const isThermal = pageSize === "Thermal80";
@@ -440,11 +494,14 @@ function ShopDashboard() {
       pageCSS = "@page { size: A5; margin: 12mm; }";
       containerStyle = "max-width: 148mm; margin: 0 auto; font-size: 12px;";
     } else if (isThermal) {
-      pageCSS = "@page { size: 80mm auto; margin: 0; }"; 
-      containerStyle = "width: 76mm; padding: 4mm; margin: 0 auto; font-size: 11px; box-sizing: border-box;";
+      pageCSS = "@page { size: 80mm auto; margin: 0; }";
+      containerStyle =
+        "width: 76mm; padding: 4mm; margin: 0 auto; font-size: 11px; box-sizing: border-box;";
     }
 
-    const itemsHtml = printItems.map((item, i) => `
+    const itemsHtml = printItems
+      .map(
+        (item, i) => `
       <tr>
         <td class="td-pad" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${i + 1}</td>
         <td class="td-pad" style="width: 100%; word-break: break-word; white-space: normal; font-weight: 500; line-height: 1.2; vertical-align: top; padding-right: 4px;">${item.name}</td>
@@ -452,7 +509,9 @@ function ShopDashboard() {
         <td class="td-pad text-right" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${Number(item.price).toFixed(2)}</td>
         <td class="td-pad text-right" style="font-weight: 700; white-space: nowrap; vertical-align: top;">${Number(item.total).toFixed(2)}</td>
       </tr>
-    `).join("");
+    `,
+      )
+      .join("");
 
     const logoHtml = shopInfo.logo_url
       ? `<img src="${shopInfo.logo_url}" class="print-logo" style="margin: 0 auto 10px auto; display: block; max-height: ${isThermal ? "45px" : "75px"}; object-fit: contain;" />`
@@ -460,7 +519,10 @@ function ShopDashboard() {
 
     let printQrUrl = shopInfo.qr_code_url;
     if (printQrUrl) {
-      printQrUrl = printQrUrl.replace(/\/upload\/(?:c_[^/]+\/)?(?:e_[^/]+\/)?v\d+/, "/upload/c_fill,g_north,w_500,h_500,z_1.05/v1");
+      printQrUrl = printQrUrl.replace(
+        /\/upload\/(?:c_[^/]+\/)?(?:e_[^/]+\/)?v\d+/,
+        "/upload/c_fill,g_north,w_500,h_500,z_1.05/v1",
+      );
     }
 
     const qrHtml = printQrUrl
@@ -531,7 +593,9 @@ function ShopDashboard() {
       else watermarkFontSize = "55px";
     }
 
-    const premiumSideBar = isThermal ? "" : "border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;";
+    const premiumSideBar = isThermal
+      ? ""
+      : "border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;";
 
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
@@ -631,59 +695,95 @@ function ShopDashboard() {
   };
 
   const handlePrintCurrentBill = () => {
-    if (items.length === 0) return alert("Please add items to the bill before printing.");
+    if (items.length === 0)
+      return alert("Please add items to the bill before printing.");
     const dateStr = new Date().toLocaleDateString("en-GB");
-    const timeStr = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    triggerPrint(items, customerInfo, currentInvoiceId, dateStr, timeStr, grandTotal);
+    const timeStr = new Date().toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    triggerPrint(
+      items,
+      customerInfo,
+      currentInvoiceId,
+      dateStr,
+      timeStr,
+      grandTotal,
+    );
   };
 
   const handleReprintPastBill = (bill) => {
     const dateObj = new Date(bill.created_at);
     const dateStr = dateObj.toLocaleDateString("en-GB");
-    const timeStr = dateObj.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    const pastCustomer = { name: bill.customer_name || "", phone: bill.customer_phone || "", address: bill.customer_address || "" };
-    
-    triggerPrint(bill.items_json, pastCustomer, bill.invoice_no, dateStr, timeStr, bill.grand_total);
+    const timeStr = dateObj.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const pastCustomer = {
+      name: bill.customer_name || "",
+      phone: bill.customer_phone || "",
+      address: bill.customer_address || "",
+    };
+
+    triggerPrint(
+      bill.items_json,
+      pastCustomer,
+      bill.invoice_no,
+      dateStr,
+      timeStr,
+      bill.grand_total,
+    );
   };
 
-  const generatePDF = (printItems, printCustomer, printInvoiceId, printDateStr, printTotal) => {
+  const generatePDF = (
+    printItems,
+    printCustomer,
+    printInvoiceId,
+    printDateStr,
+    printTotal,
+  ) => {
     const doc = new jsPDF();
-    
+
     // Header
     doc.setFontSize(22);
-    doc.setTextColor(17, 24, 39); 
-    doc.text(shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE", 14, 22);
-    
+    doc.setTextColor(17, 24, 39);
+    doc.text(
+      shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE",
+      14,
+      22,
+    );
+
     doc.setFontSize(10);
-    doc.setTextColor(107, 114, 128); 
+    doc.setTextColor(107, 114, 128);
     doc.text(shopInfo.address || shopInfo.location || "Location: N/A", 14, 30);
     doc.text(`Ph: ${shopInfo.phone || "N/A"}`, 14, 36);
-    if (shopInfo.gstin) doc.text(`GSTIN: ${shopInfo.gstin.toUpperCase()}`, 14, 42);
+    if (shopInfo.gstin)
+      doc.text(`GSTIN: ${shopInfo.gstin.toUpperCase()}`, 14, 42);
 
     // Invoice Info (Right aligned)
     doc.setFontSize(16);
     doc.setTextColor(17, 24, 39);
     doc.text("INVOICE", 196, 22, { align: "right" });
-    
+
     doc.setFontSize(10);
     doc.setTextColor(107, 114, 128);
     doc.text(`# ${printInvoiceId}`, 196, 28, { align: "right" });
     doc.text(`Date: ${printDateStr}`, 196, 34, { align: "right" });
-    
+
     // Customer Box
     if (printCustomer.name || printCustomer.phone) {
-       doc.setFontSize(9);
-       doc.setTextColor(107, 114, 128);
-       doc.text("BILLED TO:", 14, 55);
-       
-       doc.setFontSize(11);
-       doc.setTextColor(17, 24, 39);
-       doc.text(printCustomer.name || "Walk-in Customer", 14, 61);
-       
-       doc.setFontSize(10);
-       doc.setTextColor(107, 114, 128);
-       if(printCustomer.phone) doc.text(printCustomer.phone, 14, 67);
-       if(printCustomer.address) doc.text(printCustomer.address, 14, 73);
+      doc.setFontSize(9);
+      doc.setTextColor(107, 114, 128);
+      doc.text("BILLED TO:", 14, 55);
+
+      doc.setFontSize(11);
+      doc.setTextColor(17, 24, 39);
+      doc.text(printCustomer.name || "Walk-in Customer", 14, 61);
+
+      doc.setFontSize(10);
+      doc.setTextColor(107, 114, 128);
+      if (printCustomer.phone) doc.text(printCustomer.phone, 14, 67);
+      if (printCustomer.address) doc.text(printCustomer.address, 14, 73);
     }
 
     // Table
@@ -692,21 +792,25 @@ function ShopDashboard() {
       item.name,
       item.quantity,
       `Rs ${Number(item.price).toFixed(2)}`,
-      `Rs ${Number(item.total).toFixed(2)}`
+      `Rs ${Number(item.total).toFixed(2)}`,
     ]);
 
     doc.autoTable({
       startY: 85,
-      head: [['#', 'Item Description', 'Qty', 'Rate', 'Total']],
+      head: [["#", "Item Description", "Qty", "Rate", "Total"]],
       body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' }, 
+      theme: "striped",
+      headStyles: {
+        fillColor: [16, 185, 129],
+        textColor: 255,
+        fontStyle: "bold",
+      },
       styles: { fontSize: 10, cellPadding: 4 },
       columnStyles: {
         0: { cellWidth: 15 },
-        2: { halign: 'center', cellWidth: 20 },
-        3: { halign: 'right', cellWidth: 30 },
-        4: { halign: 'right', cellWidth: 35, fontStyle: 'bold' },
+        2: { halign: "center", cellWidth: 20 },
+        3: { halign: "right", cellWidth: 30 },
+        4: { halign: "right", cellWidth: 35, fontStyle: "bold" },
       },
     });
 
@@ -715,18 +819,24 @@ function ShopDashboard() {
     doc.setFontSize(12);
     doc.setTextColor(17, 24, 39);
     doc.text("GRAND TOTAL", 140, finalY + 15);
-    
+
     doc.setFontSize(16);
-    doc.setTextColor(5, 150, 105); 
-    doc.text(`Rs ${Number(printTotal).toFixed(2)}`, 196, finalY + 15, { align: "right" });
+    doc.setTextColor(5, 150, 105);
+    doc.text(`Rs ${Number(printTotal).toFixed(2)}`, 196, finalY + 15, {
+      align: "right",
+    });
 
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(156, 163, 175);
     doc.text("Thank you for your business!", 105, 280, { align: "center" });
-    doc.text("Computer generated receipt, no signature required.", 105, 285, { align: "center" });
+    doc.text("Computer generated receipt, no signature required.", 105, 285, {
+      align: "center",
+    });
 
-    doc.save(`Invoice_${printInvoiceId}_${printDateStr.replace(/\//g, "-")}.pdf`);
+    doc.save(
+      `Invoice_${printInvoiceId}_${printDateStr.replace(/\//g, "-")}.pdf`,
+    );
   };
 
   const exportToExcel = () => {
@@ -740,14 +850,32 @@ function ShopDashboard() {
     }));
 
     const dateStr = new Date().toLocaleDateString("en-GB");
-    const contactStr = `Contact: ${shopInfo.phone || "N/A"}` + (shopInfo.email ? ` | Email: ${shopInfo.email}` : "");
+    const contactStr =
+      `Contact: ${shopInfo.phone || "N/A"}` +
+      (shopInfo.email ? ` | Email: ${shopInfo.email}` : "");
 
     const headerData = [
-      [shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE"],
-      [shopInfo.address ? shopInfo.address : `Location: ${shopInfo.location || "N/A"}`],
+      [
+        shopInfo.shop_name
+          ? shopInfo.shop_name.toUpperCase()
+          : "RETAIL INVOICE",
+      ],
+      [
+        shopInfo.address
+          ? shopInfo.address
+          : `Location: ${shopInfo.location || "N/A"}`,
+      ],
       [contactStr, "", "", "", `Date: ${dateStr}`],
-      [shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : "", "", "", "", `Invoice No: ${currentInvoiceId}`],
-      [], ["TAX INVOICE / BILL OF SUPPLY"], [],
+      [
+        shopInfo.gstin ? `GSTIN: ${shopInfo.gstin.toUpperCase()}` : "",
+        "",
+        "",
+        "",
+        `Invoice No: ${currentInvoiceId}`,
+      ],
+      [],
+      ["TAX INVOICE / BILL OF SUPPLY"],
+      [],
       ["BILLED TO:", customerInfo.name || "Walk-in Customer", "", "", ""],
       ["Phone:", customerInfo.phone || "N/A", "", "", ""],
       ["Address:", customerInfo.address || "N/A", "", "", ""],
@@ -763,45 +891,103 @@ function ShopDashboard() {
     ];
 
     XLSX.utils.sheet_add_aoa(worksheet, headerData, { origin: "A1" });
-    XLSX.utils.sheet_add_aoa(worksheet, [["", "", "", "GRAND TOTAL", `₹${grandTotal.toFixed(2)}`]], { origin: -1 });
+    XLSX.utils.sheet_add_aoa(
+      worksheet,
+      [["", "", "", "GRAND TOTAL", `₹${grandTotal.toFixed(2)}`]],
+      { origin: -1 },
+    );
 
-    if (worksheet["A1"]) worksheet["A1"].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: "center" } };
-    if (worksheet["A2"]) worksheet["A2"].s = { font: { sz: 10 }, alignment: { horizontal: "center" } };
-    if (worksheet["A3"]) worksheet["A3"].s = { font: { sz: 11 }, alignment: { horizontal: "left" } };
-    if (worksheet["E3"]) worksheet["E3"].s = { font: { sz: 11 }, alignment: { horizontal: "right" } };
-    if (worksheet["A4"]) worksheet["A4"].s = { font: { sz: 11 }, alignment: { horizontal: "left" } };
-    if (worksheet["E4"]) worksheet["E4"].s = { font: { sz: 11, bold: true }, alignment: { horizontal: "right" } };
-    if (worksheet["A6"]) worksheet["A6"].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: "center" } };
-    if (worksheet["A8"]) worksheet["A8"].s = { font: { bold: true, sz: 11 }, alignment: { horizontal: "left" } };
+    if (worksheet["A1"])
+      worksheet["A1"].s = {
+        font: { bold: true, sz: 16 },
+        alignment: { horizontal: "center" },
+      };
+    if (worksheet["A2"])
+      worksheet["A2"].s = {
+        font: { sz: 10 },
+        alignment: { horizontal: "center" },
+      };
+    if (worksheet["A3"])
+      worksheet["A3"].s = {
+        font: { sz: 11 },
+        alignment: { horizontal: "left" },
+      };
+    if (worksheet["E3"])
+      worksheet["E3"].s = {
+        font: { sz: 11 },
+        alignment: { horizontal: "right" },
+      };
+    if (worksheet["A4"])
+      worksheet["A4"].s = {
+        font: { sz: 11 },
+        alignment: { horizontal: "left" },
+      };
+    if (worksheet["E4"])
+      worksheet["E4"].s = {
+        font: { sz: 11, bold: true },
+        alignment: { horizontal: "right" },
+      };
+    if (worksheet["A6"])
+      worksheet["A6"].s = {
+        font: { bold: true, sz: 12 },
+        alignment: { horizontal: "center" },
+      };
+    if (worksheet["A8"])
+      worksheet["A8"].s = {
+        font: { bold: true, sz: 11 },
+        alignment: { horizontal: "left" },
+      };
     if (worksheet["A9"]) worksheet["A9"].s = { font: { bold: true } };
     if (worksheet["A10"]) worksheet["A10"].s = { font: { bold: true } };
     if (worksheet["A11"]) worksheet["A11"].s = { font: { bold: true } };
 
     const headers = ["A13", "B13", "C13", "D13", "E13"];
     headers.forEach((cell) => {
-      if (worksheet[cell]) worksheet[cell].s = { font: { bold: true }, border: { bottom: { style: "thin", color: { rgb: "000000" } } } };
+      if (worksheet[cell])
+        worksheet[cell].s = {
+          font: { bold: true },
+          border: { bottom: { style: "thin", color: { rgb: "000000" } } },
+        };
     });
 
     const range = XLSX.utils.decode_range(worksheet["!ref"]);
     const lastRow = range.e.r + 1;
-    if (worksheet[`D${lastRow}`]) worksheet[`D${lastRow}`].s = { font: { bold: true } };
-    if (worksheet[`E${lastRow}`]) worksheet[`E${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`D${lastRow}`])
+      worksheet[`D${lastRow}`].s = { font: { bold: true } };
+    if (worksheet[`E${lastRow}`])
+      worksheet[`E${lastRow}`].s = { font: { bold: true } };
 
-    worksheet["!cols"] = [{ wch: 8 }, { wch: 45 }, { wch: 10 }, { wch: 15 }, { wch: 20 }];
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 45 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 20 },
+    ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Invoice");
-    XLSX.writeFile(workbook, `INV_${currentInvoiceId}_${dateStr.replace(/\//g, "-")}.xlsx`);
+    XLSX.writeFile(
+      workbook,
+      `INV_${currentInvoiceId}_${dateStr.replace(/\//g, "-")}.xlsx`,
+    );
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return new Date(dateString).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   };
 
-  const filteredPastBills = pastBills.filter(b => 
-    (b.invoice_no && b.invoice_no.toLowerCase().includes(billSearch.toLowerCase())) ||
-    (b.customer_name && b.customer_name.toLowerCase().includes(billSearch.toLowerCase())) ||
-    (b.customer_phone && b.customer_phone.includes(billSearch))
+  const filteredPastBills = pastBills.filter(
+    (b) =>
+      (b.invoice_no &&
+        b.invoice_no.toLowerCase().includes(billSearch.toLowerCase())) ||
+      (b.customer_name &&
+        b.customer_name.toLowerCase().includes(billSearch.toLowerCase())) ||
+      (b.customer_phone && b.customer_phone.includes(billSearch)),
   );
 
   return (
@@ -911,24 +1097,41 @@ function ShopDashboard() {
                 >
                   <Download size={18} /> Export <ChevronDown size={14} />
                 </button>
-                
+
                 {showExportMenu && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)}></div>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowExportMenu(false)}
+                    ></div>
                     <div className="absolute right-0 top-12 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                       <button
-                        onClick={() => { exportToExcel(); setShowExportMenu(false); }}
+                        onClick={() => {
+                          exportToExcel();
+                          setShowExportMenu(false);
+                        }}
                         className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition"
                       >
                         <FileText size={16} /> Excel (.xlsx)
                       </button>
                       <div className="h-px bg-slate-100 w-full"></div>
                       <button
-                        onClick={() => { 
-                          if (items.length === 0) return alert("Please add items to the bill before exporting.");
-                          const dateStr = new Date().toLocaleDateString("en-GB");
-                          generatePDF(items, customerInfo, currentInvoiceId, dateStr, grandTotal);
-                          setShowExportMenu(false); 
+                        onClick={() => {
+                          if (items.length === 0)
+                            return alert(
+                              "Please add items to the bill before exporting.",
+                            );
+                          const dateStr = new Date().toLocaleDateString(
+                            "en-GB",
+                          );
+                          generatePDF(
+                            items,
+                            customerInfo,
+                            currentInvoiceId,
+                            dateStr,
+                            grandTotal,
+                          );
+                          setShowExportMenu(false);
                         }}
                         className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition"
                       >
@@ -1017,7 +1220,10 @@ function ShopDashboard() {
                 {shopInfo.has_inventory_module && inventoryList.length > 0 && (
                   <div className="mb-5 relative">
                     <div className="relative">
-                      <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <Search
+                        size={16}
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
+                      />
                       <input
                         type="text"
                         placeholder="Scan Barcode or Search Item..."
@@ -1025,21 +1231,30 @@ function ShopDashboard() {
                         onChange={(e) => {
                           setInventorySearch(e.target.value);
                           setShowSuggestions(true);
-                          
-                          const exactMatch = inventoryList.find(i => i.barcode && i.barcode === e.target.value);
+
+                          const exactMatch = inventoryList.find(
+                            (i) => i.barcode && i.barcode === e.target.value,
+                          );
                           if (exactMatch) {
-                             handleSelectInventoryItem(exactMatch);
+                            handleSelectInventoryItem(exactMatch);
                           }
                         }}
                         onFocus={() => setShowSuggestions(true)}
                         className="w-full pl-9 pr-4 py-2.5 bg-indigo-50/50 border border-indigo-100 text-indigo-900 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none placeholder-indigo-300 transition-all"
                       />
                     </div>
-                    
+
                     {showSuggestions && inventorySearch.trim() !== "" && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                         {inventoryList
-                          .filter(i => i.item_name.toLowerCase().includes(inventorySearch.toLowerCase()) || (i.barcode && i.barcode.includes(inventorySearch)))
+                          .filter(
+                            (i) =>
+                              i.item_name
+                                .toLowerCase()
+                                .includes(inventorySearch.toLowerCase()) ||
+                              (i.barcode &&
+                                i.barcode.includes(inventorySearch)),
+                          )
                           .map((invItem) => (
                             <button
                               key={invItem.id}
@@ -1048,14 +1263,28 @@ function ShopDashboard() {
                               className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 border-b border-slate-50 last:border-0 transition-colors flex justify-between items-center"
                             >
                               <div>
-                                <p className="text-sm font-bold text-slate-800">{invItem.item_name}</p>
-                                <p className="text-[10px] font-mono text-slate-400">Stock: {invItem.current_stock}</p>
+                                <p className="text-sm font-bold text-slate-800">
+                                  {invItem.item_name}
+                                </p>
+                                <p className="text-[10px] font-mono text-slate-400">
+                                  Stock: {invItem.current_stock}
+                                </p>
                               </div>
-                              <span className="text-sm font-bold text-emerald-600">₹{invItem.selling_price}</span>
+                              <span className="text-sm font-bold text-emerald-600">
+                                ₹{invItem.selling_price}
+                              </span>
                             </button>
                           ))}
-                        {inventoryList.filter(i => i.item_name.toLowerCase().includes(inventorySearch.toLowerCase()) || (i.barcode && i.barcode.includes(inventorySearch))).length === 0 && (
-                          <div className="px-4 py-3 text-xs text-slate-400 text-center">No items found in inventory</div>
+                        {inventoryList.filter(
+                          (i) =>
+                            i.item_name
+                              .toLowerCase()
+                              .includes(inventorySearch.toLowerCase()) ||
+                            (i.barcode && i.barcode.includes(inventorySearch)),
+                        ).length === 0 && (
+                          <div className="px-4 py-3 text-xs text-slate-400 text-center">
+                            No items found in inventory
+                          </div>
                         )}
                       </div>
                     )}
@@ -1072,7 +1301,7 @@ function ShopDashboard() {
                       value={itemName}
                       onChange={(e) => {
                         setItemName(e.target.value);
-                        setSelectedInvId(null); 
+                        setSelectedInvId(null);
                         if (billErrors.itemName)
                           setBillErrors((prev) => ({
                             ...prev,
@@ -1120,7 +1349,10 @@ function ShopDashboard() {
                         onChange={(e) => {
                           setPrice(e.target.value);
                           if (billErrors.price)
-                            setBillErrors((prev) => ({ ...prev, price: false }));
+                            setBillErrors((prev) => ({
+                              ...prev,
+                              price: false,
+                            }));
                         }}
                         placeholder="0.00"
                         className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${billErrors.price ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 placeholder-red-300" : "border-slate-200 focus:ring-2 focus:ring-emerald-500 bg-slate-50 focus:bg-white"}`}
@@ -1218,7 +1450,12 @@ function ShopDashboard() {
                             >
                               {item.name}
                               {item.inv_id && (
-                                <span className="ml-2 inline-block bg-indigo-50 border border-indigo-100 text-indigo-600 text-[9px] px-1.5 py-0.5 rounded uppercase font-black tracking-wider" title="Auto-deducts from stock">Stock Linked</span>
+                                <span
+                                  className="ml-2 inline-block bg-indigo-50 border border-indigo-100 text-indigo-600 text-[9px] px-1.5 py-0.5 rounded uppercase font-black tracking-wider"
+                                  title="Auto-deducts from stock"
+                                >
+                                  Stock Linked
+                                </span>
                               )}
                             </td>
                             <td className="p-4 text-center text-sm font-medium text-slate-600">
@@ -1262,15 +1499,15 @@ function ShopDashboard() {
         {activeTab === "history" && (
           <div className="animate-in fade-in duration-300">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
-              
               <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 w-full sm:w-auto shrink-0">
-                  <ScrollText size={18} className="text-blue-600" /> Invoice History
+                  <ScrollText size={18} className="text-blue-600" /> Invoice
+                  History
                   <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-bold ml-2">
                     {pastBills.length} Bills
                   </span>
                 </h3>
-                
+
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-10 w-full sm:w-auto shrink-0 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
                     <div className="px-3 bg-slate-50 border-r border-slate-200 flex items-center justify-center text-slate-500 h-full">
@@ -1286,14 +1523,17 @@ function ShopDashboard() {
                       <option value="A5">A5 Sheet</option>
                     </select>
                   </div>
-                  
+
                   <div className="relative w-full sm:w-80">
-                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                    <input 
-                      type="text" 
-                      placeholder="Search by Invoice No or Customer..." 
+                    <Search
+                      size={16}
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search by Invoice No or Customer..."
                       value={billSearch}
-                      onChange={e => setBillSearch(e.target.value)}
+                      onChange={(e) => setBillSearch(e.target.value)}
                       className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none h-10 shadow-sm"
                     />
                   </div>
@@ -1313,21 +1553,50 @@ function ShopDashboard() {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {isLoadingBills ? (
-                      <tr><td colSpan="5" className="p-16 text-center text-slate-400"><Loader2 size={30} className="mx-auto animate-spin mb-3" /> Fetching records...</td></tr>
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="p-16 text-center text-slate-400"
+                        >
+                          <Loader2
+                            size={30}
+                            className="mx-auto animate-spin mb-3"
+                          />{" "}
+                          Fetching records...
+                        </td>
+                      </tr>
                     ) : filteredPastBills.length === 0 ? (
-                      <tr><td colSpan="5" className="p-16 text-center text-slate-400">No past bills found.</td></tr>
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="p-16 text-center text-slate-400"
+                        >
+                          No past bills found.
+                        </td>
+                      </tr>
                     ) : (
                       filteredPastBills.map((bill) => (
-                        <tr key={bill.id} className="hover:bg-slate-50/50 transition">
+                        <tr
+                          key={bill.id}
+                          className="hover:bg-slate-50/50 transition"
+                        >
                           <td className="p-4 pl-6">
-                            <p className="font-black text-slate-800 text-sm">#{bill.invoice_no}</p>
+                            <p className="font-black text-slate-800 text-sm">
+                              #{bill.invoice_no}
+                            </p>
                             <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-wider">
                               {new Date(bill.created_at).toLocaleDateString()}
                             </p>
                           </td>
                           <td className="p-4">
-                            <p className="text-sm font-bold text-slate-700">{bill.customer_name || "Walk-in Customer"}</p>
-                            {bill.customer_phone && <p className="text-[10px] text-slate-400 mt-0.5">{bill.customer_phone}</p>}
+                            <p className="text-sm font-bold text-slate-700">
+                              {bill.customer_name || "Walk-in Customer"}
+                            </p>
+                            {bill.customer_phone && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                {bill.customer_phone}
+                              </p>
+                            )}
                           </td>
                           <td className="p-4 text-center">
                             <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-bold">
@@ -1339,19 +1608,31 @@ function ShopDashboard() {
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <button 
-                                onClick={() => handleReprintPastBill(bill)} 
+                              <button
+                                onClick={() => handleReprintPastBill(bill)}
                                 className="bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
                                 title="Print this bill"
                               >
                                 <Printer size={14} /> Print
                               </button>
-                              <button 
+                              <button
                                 onClick={() => {
-                                  const dateStr = new Date(bill.created_at).toLocaleDateString("en-GB");
-                                  const pastCustomer = { name: bill.customer_name || "", phone: bill.customer_phone || "", address: bill.customer_address || "" };
-                                  generatePDF(bill.items_json, pastCustomer, bill.invoice_no, dateStr, bill.grand_total);
-                                }} 
+                                  const dateStr = new Date(
+                                    bill.created_at,
+                                  ).toLocaleDateString("en-GB");
+                                  const pastCustomer = {
+                                    name: bill.customer_name || "",
+                                    phone: bill.customer_phone || "",
+                                    address: bill.customer_address || "",
+                                  };
+                                  generatePDF(
+                                    bill.items_json,
+                                    pastCustomer,
+                                    bill.invoice_no,
+                                    dateStr,
+                                    bill.grand_total,
+                                  );
+                                }}
                                 className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
                                 title="Download as PDF"
                               >
@@ -1382,7 +1663,8 @@ function ShopDashboard() {
                   <Store className="text-emerald-400" /> Business Profile
                 </h2>
                 <p className="text-slate-400 text-sm mt-1">
-                  This information will be printed on your Excel and Paper Invoices.
+                  This information will be printed on your Excel and Paper
+                  Invoices.
                 </p>
               </div>
               <form
@@ -1394,17 +1676,42 @@ function ShopDashboard() {
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
                     <div className="w-20 h-20 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
                       {shopInfo.logo_url ? (
-                        <img src={shopInfo.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
+                        <img
+                          src={shopInfo.logo_url}
+                          alt="Logo"
+                          className="w-full h-full object-contain p-2"
+                        />
                       ) : (
                         <Store size={28} className="text-slate-300" />
                       )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800 mb-1 text-sm">Shop Logo</h3>
-                      <p className="text-[11px] text-slate-500 mb-3">Appears at top of bill</p>
-                      <label className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingLogo ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}>
-                        {isUploadingLogo ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : <><ImagePlus size={14} /> Choose Logo</>}
-                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={isUploadingLogo} />
+                      <h3 className="font-bold text-slate-800 mb-1 text-sm">
+                        Shop Logo
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mb-3">
+                        Appears at top of bill
+                      </p>
+                      <label
+                        className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingLogo ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}
+                      >
+                        {isUploadingLogo ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />{" "}
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <ImagePlus size={14} /> Choose Logo
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoUpload}
+                          disabled={isUploadingLogo}
+                        />
                       </label>
                     </div>
                   </div>
@@ -1412,17 +1719,42 @@ function ShopDashboard() {
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
                     <div className="w-20 h-20 bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm rounded-lg">
                       {shopInfo.qr_code_url ? (
-                        <img src={shopInfo.qr_code_url} alt="QR Code" className="w-full h-full object-contain p-1" />
+                        <img
+                          src={shopInfo.qr_code_url}
+                          alt="QR Code"
+                          className="w-full h-full object-contain p-1"
+                        />
                       ) : (
                         <QrCode size={28} className="text-slate-300" />
                       )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800 mb-1 text-sm">Payment QR Code</h3>
-                      <p className="text-[11px] text-slate-500 mb-3">Appears at bottom of bill</p>
-                      <label className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingQr ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}>
-                        {isUploadingQr ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : <><QrCode size={14} /> Choose QR Image</>}
-                        <input type="file" accept="image/*" className="hidden" onChange={handleQrUpload} disabled={isUploadingQr} />
+                      <h3 className="font-bold text-slate-800 mb-1 text-sm">
+                        Payment QR Code
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mb-3">
+                        Appears at bottom of bill
+                      </p>
+                      <label
+                        className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingQr ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}
+                      >
+                        {isUploadingQr ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />{" "}
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <QrCode size={14} /> Choose QR Image
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleQrUpload}
+                          disabled={isUploadingQr}
+                        />
                       </label>
                     </div>
                   </div>
@@ -1439,11 +1771,19 @@ function ShopDashboard() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setShopInfo((prev) => ({ ...prev, shop_name: val }));
-                        if (profileErrors.shop_name) setProfileErrors((prev) => ({ ...prev, shop_name: false }));
+                        if (profileErrors.shop_name)
+                          setProfileErrors((prev) => ({
+                            ...prev,
+                            shop_name: false,
+                          }));
                       }}
                       className={`w-full p-3.5 border rounded-xl outline-none font-bold text-slate-800 transition-all ${profileErrors.shop_name ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
-                    {profileErrors.shop_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Shop Name is required</p>}
+                    {profileErrors.shop_name && (
+                      <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
+                        * Shop Name is required
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -1455,11 +1795,19 @@ function ShopDashboard() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setShopInfo((prev) => ({ ...prev, full_name: val }));
-                        if (profileErrors.full_name) setProfileErrors((prev) => ({ ...prev, full_name: false }));
+                        if (profileErrors.full_name)
+                          setProfileErrors((prev) => ({
+                            ...prev,
+                            full_name: false,
+                          }));
                       }}
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.full_name ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
-                    {profileErrors.full_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Owner Name is required</p>}
+                    {profileErrors.full_name && (
+                      <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
+                        * Owner Name is required
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -1471,11 +1819,19 @@ function ShopDashboard() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setShopInfo((prev) => ({ ...prev, phone: val }));
-                        if (profileErrors.phone) setProfileErrors((prev) => ({ ...prev, phone: false }));
+                        if (profileErrors.phone)
+                          setProfileErrors((prev) => ({
+                            ...prev,
+                            phone: false,
+                          }));
                       }}
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.phone ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
-                    {profileErrors.phone && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Contact Number is required</p>}
+                    {profileErrors.phone && (
+                      <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
+                        * Contact Number is required
+                      </p>
+                    )}
                   </div>
 
                   <div className="md:col-span-2">
@@ -1485,7 +1841,12 @@ function ShopDashboard() {
                     <input
                       type="text"
                       value={shopInfo.gstin}
-                      onChange={(e) => setShopInfo((prev) => ({ ...prev, gstin: e.target.value }))}
+                      onChange={(e) =>
+                        setShopInfo((prev) => ({
+                          ...prev,
+                          gstin: e.target.value,
+                        }))
+                      }
                       placeholder="e.g. 32XXXXX1234X1Z5"
                       className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm uppercase"
                     />
@@ -1498,15 +1859,30 @@ function ShopDashboard() {
                     <textarea
                       rows="3"
                       value={shopInfo.address}
-                      onChange={(e) => setShopInfo((prev) => ({ ...prev, address: e.target.value }))}
+                      onChange={(e) =>
+                        setShopInfo((prev) => ({
+                          ...prev,
+                          address: e.target.value,
+                        }))
+                      }
                       placeholder="Street, City, Landmark, PIN Code"
                       className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm leading-relaxed"
                     ></textarea>
                   </div>
                 </div>
                 <div className="pt-6 border-t border-slate-100 mt-6 flex justify-end">
-                  <button type="submit" disabled={isSaving} className={`flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-white transition-all shadow-md ${isSaving ? "bg-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5"}`}>
-                    {isSaving ? "Saving..." : <><Save size={18} /> Save Profile</>}
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className={`flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-white transition-all shadow-md ${isSaving ? "bg-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5"}`}
+                  >
+                    {isSaving ? (
+                      "Saving..."
+                    ) : (
+                      <>
+                        <Save size={18} /> Save Profile
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -1522,14 +1898,21 @@ function ShopDashboard() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-black flex items-center gap-3">
-                      <BadgeCheck className="text-emerald-400" /> License Details
+                      <BadgeCheck className="text-emerald-400" /> License
+                      Details
                     </h2>
-                    <p className="text-slate-400 text-sm mt-1">Manage your active subscription and device allocations.</p>
+                    <p className="text-slate-400 text-sm mt-1">
+                      Manage your active subscription and device allocations.
+                    </p>
                   </div>
                   {shopInfo.member_id && (
                     <div className="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Shop ID</p>
-                      <p className="text-xl font-mono font-bold tracking-tight text-emerald-400">#{shopInfo.member_id}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                        Your Shop ID
+                      </p>
+                      <p className="text-xl font-mono font-bold tracking-tight text-emerald-400">
+                        #{shopInfo.member_id}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -1538,32 +1921,62 @@ function ShopDashboard() {
               <div className="p-6 md:p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col justify-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Subscription Status</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                      Subscription Status
+                    </span>
                     {shopInfo.subscription_expires_at ? (
                       <div>
-                        {new Date(shopInfo.subscription_expires_at) > new Date() ? (
-                          <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-emerald-200">🟢 Active License</span>
+                        {new Date(shopInfo.subscription_expires_at) >
+                        new Date() ? (
+                          <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-emerald-200">
+                            🟢 Active License
+                          </span>
                         ) : (
-                          <span className="bg-red-100 text-red-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-red-200 animate-pulse">🔴 Expired</span>
+                          <span className="bg-red-100 text-red-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-red-200 animate-pulse">
+                            🔴 Expired
+                          </span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-slate-500 font-medium text-sm">Awaiting Admin Approval</span>
+                      <span className="text-slate-500 font-medium text-sm">
+                        Awaiting Admin Approval
+                      </span>
                     )}
                   </div>
 
                   <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-slate-500"><CalendarDays size={16} /><span className="text-xs font-bold uppercase tracking-wider">Activated</span></div>
-                      <span className="text-sm font-bold text-slate-800">{formatDate(shopInfo.created_at)}</span>
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <CalendarDays size={16} />
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          Activated
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-slate-800">
+                        {formatDate(shopInfo.created_at)}
+                      </span>
                     </div>
                     <div className="h-px bg-slate-200 w-full"></div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <CalendarDays size={16} className={new Date(shopInfo.subscription_expires_at) < new Date(new Date().setDate(new Date().getDate() + 30)) ? "text-amber-500" : ""} />
-                        <span className="text-xs font-bold uppercase tracking-wider">Expires</span>
+                        <CalendarDays
+                          size={16}
+                          className={
+                            new Date(shopInfo.subscription_expires_at) <
+                            new Date(
+                              new Date().setDate(new Date().getDate() + 30),
+                            )
+                              ? "text-amber-500"
+                              : ""
+                          }
+                        />
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          Expires
+                        </span>
                       </div>
-                      <span className={`text-sm font-bold ${new Date(shopInfo.subscription_expires_at) < new Date(new Date().setDate(new Date().getDate() + 30)) ? "text-amber-600" : "text-slate-800"}`}>
+                      <span
+                        className={`text-sm font-bold ${new Date(shopInfo.subscription_expires_at) < new Date(new Date().setDate(new Date().getDate() + 30)) ? "text-amber-600" : "text-slate-800"}`}
+                      >
                         {formatDate(shopInfo.subscription_expires_at)}
                       </span>
                     </div>
@@ -1572,49 +1985,107 @@ function ShopDashboard() {
 
                 <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><Laptop size={18} className="text-emerald-600" /> Device License Limit</h3>
-                    <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-lg">{shopInfo.active_devices} / {shopInfo.device_limit} Used</span>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                      <Laptop size={18} className="text-emerald-600" /> Device
+                      License Limit
+                    </h3>
+                    <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-lg">
+                      {shopInfo.active_devices} / {shopInfo.device_limit} Used
+                    </span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden border border-slate-200 inset-shadow-sm">
-                    <div className={`h-3 rounded-full transition-all duration-1000 ${shopInfo.active_devices >= shopInfo.device_limit ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${Math.min((shopInfo.active_devices / shopInfo.device_limit) * 100, 100)}%` }}></div>
+                    <div
+                      className={`h-3 rounded-full transition-all duration-1000 ${shopInfo.active_devices >= shopInfo.device_limit ? "bg-red-500" : "bg-emerald-500"}`}
+                      style={{
+                        width: `${Math.min((shopInfo.active_devices / shopInfo.device_limit) * 100, 100)}%`,
+                      }}
+                    ></div>
                   </div>
                   <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                    Your account is limited to <strong className="text-slate-700">{shopInfo.device_limit} physical computer(s)</strong> at a time for security. To add more systems, please contact the admin team to upgrade your plan.
+                    Your account is limited to{" "}
+                    <strong className="text-slate-700">
+                      {shopInfo.device_limit} physical computer(s)
+                    </strong>{" "}
+                    at a time for security. To add more systems, please contact
+                    the admin team to upgrade your plan.
                   </p>
                 </div>
 
                 <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                  <div className="flex items-center gap-3 text-slate-500 text-sm"><LifeBuoy size={18} /><span>Need help or an upgrade? Contact Admin.</span></div>
+                  <div className="flex items-center gap-3 text-slate-500 text-sm">
+                    <LifeBuoy size={18} />
+                    <span>Need help or an upgrade? Contact Admin.</span>
+                  </div>
                   {shopInfo.renewal_requested ? (
-                    <span className="bg-amber-100 text-amber-800 border border-amber-200 px-6 py-3 rounded-xl text-sm font-bold w-full sm:w-auto text-center">⏳ Renewal Request Pending</span>
+                    <span className="bg-amber-100 text-amber-800 border border-amber-200 px-6 py-3 rounded-xl text-sm font-bold w-full sm:w-auto text-center">
+                      ⏳ Renewal Request Pending
+                    </span>
                   ) : (
-                    <button onClick={handleRequestRenewal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md transition w-full sm:w-auto text-center">Request Plan Renewal</button>
+                    <button
+                      onClick={handleRequestRenewal}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md transition w-full sm:w-auto text-center"
+                    >
+                      Request Plan Renewal
+                    </button>
                   )}
                 </div>
 
                 {renewalHistory.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-slate-200">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><History size={18} className="text-emerald-600" /> Billing History</h3>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
+                      <History size={18} className="text-emerald-600" /> Billing
+                      History
+                    </h3>
                     <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                       {renewalHistory.map((history) => {
-                        const isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled");
-                        const isPending = history.action_type?.toLowerCase().includes("pending");
-                        
+                        const isRevoke =
+                          history.action_type
+                            ?.toLowerCase()
+                            .includes("revoked") ||
+                          history.action_type
+                            ?.toLowerCase()
+                            .includes("canceled");
+                        const isPending = history.action_type
+                          ?.toLowerCase()
+                          .includes("pending");
+
                         return (
-                          <div key={history.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-200 transition-colors group">
+                          <div
+                            key={history.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-200 transition-colors group"
+                          >
                             <div>
-                              <p className={`text-sm font-bold ${isRevoke ? "text-red-600" : isPending ? "text-amber-600" : "text-slate-800 group-hover:text-emerald-700"} transition-colors`}>
-                                {history.action_type || "1-Year License Extension"}
+                              <p
+                                className={`text-sm font-bold ${isRevoke ? "text-red-600" : isPending ? "text-amber-600" : "text-slate-800 group-hover:text-emerald-700"} transition-colors`}
+                              >
+                                {history.action_type ||
+                                  "1-Year License Extension"}
                               </p>
-                              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5"><CalendarDays size={12} /> Processed on: {new Date(history.renewed_at).toLocaleDateString()}</p>
+                              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                <CalendarDays size={12} /> Processed on:{" "}
+                                {new Date(
+                                  history.renewed_at,
+                                ).toLocaleDateString()}
+                              </p>
                             </div>
                             <div className="mt-3 sm:mt-0 text-left sm:text-right">
-                              <span className={`${isRevoke ? "bg-red-100 text-red-800 border-red-200" : isPending ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"} font-bold px-3 py-1 rounded-lg text-xs border inline-block`}>
-                                {isRevoke ? "Cancelled" : isPending ? "Pending" : "Paid / Approved"}
+                              <span
+                                className={`${isRevoke ? "bg-red-100 text-red-800 border-red-200" : isPending ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"} font-bold px-3 py-1 rounded-lg text-xs border inline-block`}
+                              >
+                                {isRevoke
+                                  ? "Cancelled"
+                                  : isPending
+                                    ? "Pending"
+                                    : "Paid / Approved"}
                               </span>
-                              {!isRevoke && !isPending && history.new_expiry && (
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Valid until {new Date(history.new_expiry).getFullYear()}</p>
-                              )}
+                              {!isRevoke &&
+                                !isPending &&
+                                history.new_expiry && (
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">
+                                    Valid until{" "}
+                                    {new Date(history.new_expiry).getFullYear()}
+                                  </p>
+                                )}
                             </div>
                           </div>
                         );
