@@ -19,7 +19,7 @@ import {
   Calendar as CalendarIcon,
   X,
 } from "lucide-react";
-import UserDossier from "./UserDossier"; // ✨ IMPORTING YOUR NEW COMPONENT
+import UserDossier from "./UserDossier"; 
 
 export default function AdminUserManager({
   users,
@@ -43,16 +43,20 @@ export default function AdminUserManager({
   const [dateRange, setDateRange] = useState(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
+  const [selectedShopIds, setSelectedShopIds] = useState([]);
+
   const itemsPerPage = 10;
 
   useEffect(() => {
     setShopDetails(initialShopDetails);
   }, [initialShopDetails]);
 
+  // Reset selections when switching tabs
   useEffect(() => {
     setSearchTerm("");
     setCurrentPage(1);
     setShowRenewalRequestsOnly(false);
+    setSelectedShopIds([]); 
   }, [userSubTab]);
 
   useEffect(() => {
@@ -87,6 +91,40 @@ export default function AdminUserManager({
     fetchHistory();
   }, [selectedUser]);
 
+  // Bulk Revoke Logic
+  const handleBulkRevoke = async () => {
+    if (
+      !window.confirm(
+        `🚨 Are you sure you want to BULK REVOKE access for ${selectedShopIds.length} shop(s)?\n\nThey will immediately lose access to the platform.`
+      )
+    )
+      return;
+
+    try {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ is_approved: false })
+        .in("id", selectedShopIds);
+
+      if (profileError) throw profileError;
+
+      for (const id of selectedShopIds) {
+        await supabase.rpc("admin_log_shop_action", {
+          target_shop_id: id,
+          action_taken: "Account Revoked / Suspended (Bulk Action)",
+        });
+      }
+
+      alert(`Successfully revoked access for ${selectedShopIds.length} shop(s).`);
+      setSelectedShopIds([]); 
+      fetchData(); 
+      fetchGlobalLedger();
+    } catch (error) {
+      alert("Bulk revoke failed: " + error.message);
+    }
+  };
+
+  // Approval gives a 14-Day Free Trial
   const toggleUserApproval = async (id, currentStatus, role, email) => {
     try {
       const isApproving = !currentStatus;
@@ -108,49 +146,35 @@ export default function AdminUserManager({
             !shopData?.subscription_expires_at ||
             new Date(shopData.subscription_expires_at) < new Date()
           ) {
-            const oneYearFromNow = new Date();
-            oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+            const trialExpiryDate = new Date();
+            trialExpiryDate.setDate(trialExpiryDate.getDate() + 14); // 14 Days from today
 
             await supabase.rpc("admin_update_shop_license", {
               target_shop_id: id,
-              new_expiry: oneYearFromNow.toISOString(),
+              new_expiry: trialExpiryDate.toISOString(),
               reset_renewal: false,
-              action_taken: "Account Approved (+1 Year License)",
+              action_taken: "Account Approved (14-Day Free Trial)",
             });
 
-            // ✨ EMAIL LOGIC UPDATE
-            // ---------------------------------------------------------
-            // FUTURE: Kept commented out for when custom domain is ready
-            /*
-            await supabase.functions.invoke("shop-approval-email", {
-              body: {
-                email: email,
-                shopName: shopData?.shop_name || "Authorized Partner",
-              },
-            });
-            */
-
-            // CURRENT: EmailJS integration
             try {
               await emailjs.send(
-                "service_7bfs32k", // Replace with your EmailJS Service ID
-                "template_cok2tvd", // Replace with your EmailJS Template ID
+                "service_7bfs32k", 
+                "template_cok2tvd", 
                 {
                   to_email: email,
-                  owner_name: shopData?.full_name || "Valued Partner", // Passes the Owner's Name
+                  owner_name: shopData?.full_name || "Valued Partner",
                   shop_name: shopData?.shop_name || "your shop",
                 },
-                "LCf7B01Dm3o5RmXRv", // Replace with your EmailJS Public Key
+                "LCf7B01Dm3o5RmXRv",
               );
               console.log("Approval email sent via EmailJS!");
             } catch (emailErr) {
               console.error("Failed to send EmailJS email:", emailErr);
               alert("Shop Approved, but the welcome email failed to send.");
             }
-            // ---------------------------------------------------------
 
             alert(
-              "Shop Approved! 1-Year License activated and Welcome Email sent.",
+              "Shop Approved! A 14-Day Trial has been activated and the Welcome Email was sent.",
             );
           } else {
             await supabase.rpc("admin_log_shop_action", {
@@ -185,9 +209,62 @@ export default function AdminUserManager({
     }
   };
 
+  // ✨ Explicitly starts a 1-year license strictly from TODAY
+  const handleActivatePaidLicense = async (id) => {
+    const shopData = shopDetails.find((s) => s.id === id);
+    const targetUser = users.find((u) => u.id === id);
+    const userEmail = targetUser?.email;
+
+    const newExpiryDate = new Date();
+    newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1); // 1 Year from exactly today
+    
+    const friendlyDate = newExpiryDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    if (
+      !window.confirm(
+        `🚀 ACTIVATE PAID LICENSE?\n\nThis will start a 1-Year license from TODAY, overriding their trial.\n\nNew Expiration: 👉 ${friendlyDate}\n\nDo you want to proceed?`
+      )
+    ) return;
+
+    const { error } = await supabase.rpc("admin_update_shop_license", {
+      target_shop_id: id,
+      new_expiry: newExpiryDate.toISOString(),
+      reset_renewal: true, // Clears the pending renewal request
+      action_taken: "Paid License Activated (1 Year from Today)",
+    });
+
+    if (error) {
+      alert("Failed to activate: " + error.message);
+    } else {
+      try {
+        await emailjs.send(
+          "service_7bfs32k", 
+          "template_6oekg48", 
+          {
+            to_email: userEmail,
+            owner_name: shopData?.full_name || "Valued Partner",
+            shop_name: shopData?.shop_name || "your shop", 
+            new_expiry: friendlyDate, 
+          },
+          "LCf7B01Dm3o5RmXRv",
+        );
+        console.log("Activation email sent!");
+      } catch (emailErr) {
+        console.error("Failed to send activation email:", emailErr);
+      }
+
+      alert(`Success! Paid License activated. It will expire on ${friendlyDate}.`);
+      fetchData();
+      fetchGlobalLedger();
+    }
+  };
+
   const handleRenewSubscription = async (id) => {
     const shopData = shopDetails.find((s) => s.id === id);
-    // Find the user's email address using their ID
     const targetUser = users.find((u) => u.id === id);
     const userEmail = targetUser?.email;
 
@@ -225,25 +302,23 @@ export default function AdminUserManager({
     if (error) {
       alert("Failed to renew: " + error.message);
     } else {
-      // ✨ NEW EMAIL LOGIC FOR RENEWAL ✨
       try {
         await emailjs.send(
-          "service_7bfs32k", // Keep your same Service ID
-          "template_6oekg48", // Put your NEW Renewal Template ID here
+          "service_7bfs32k", 
+          "template_6oekg48", 
           {
             to_email: userEmail,
-            owner_name: shopData?.full_name || "Valued Partner", // Passes the Owner's Name
-            shop_name: shopData?.shop_name || "your shop", // Just in case you still use it in the body
-            new_expiry: friendlyDate, // This passes the exact date to the email!
+            owner_name: shopData?.full_name || "Valued Partner",
+            shop_name: shopData?.shop_name || "your shop", 
+            new_expiry: friendlyDate, 
           },
-          "LCf7B01Dm3o5RmXRv", // Keep your same Public Key
+          "LCf7B01Dm3o5RmXRv",
         );
         console.log("Renewal email sent via EmailJS!");
       } catch (emailErr) {
         console.error("Failed to send renewal email:", emailErr);
         alert("License renewed, but the receipt email failed to send.");
       }
-      // ---------------------------------
 
       alert(`Success! License extended to ${newExpiryDate.getFullYear()}.`);
       fetchData();
@@ -321,6 +396,7 @@ export default function AdminUserManager({
       .eq("id", id);
     fetchData();
   };
+  
   const deleteJob = async (id) => {
     if (
       !window.confirm("Are you sure you want to delete this job permanently?")
@@ -334,29 +410,36 @@ export default function AdminUserManager({
   const pendingRenewalsCount = shopDetails.filter(
     (s) => s.renewal_requested,
   ).length;
+  
   const roleMap = { seekers: "seeker", providers: "provider", shops: "shop" };
   const usersByRole = users.filter((u) => u.role === roleMap[userSubTab]);
 
   const filteredUsers = usersByRole.filter((user) => {
-    const term = searchTerm.toLowerCase();
-    const emailMatch = user.email.toLowerCase().includes(term);
-    let idMatch = false;
+    const term = searchTerm.toLowerCase().trim();
+    
     let isRenewalRequested = false;
+    let shopNameMatch = false;
+    let memberIdMatch = false;
 
     if (user.role === "shop") {
       const shopData = shopDetails.find((s) => s.id === user.id);
-      if (shopData && shopData.member_id)
-        idMatch = shopData.member_id.toString().includes(term);
-      if (shopData?.renewal_requested) isRenewalRequested = true;
+      if (shopData) {
+        if (shopData.renewal_requested) isRenewalRequested = true;
+        if (shopData.shop_name) shopNameMatch = shopData.shop_name.toLowerCase().includes(term);
+        if (shopData.member_id) memberIdMatch = shopData.member_id.toString().includes(term);
+      }
     }
 
-    if (
-      userSubTab === "shops" &&
-      showRenewalRequestsOnly &&
-      !isRenewalRequested
-    )
+    if (userSubTab === "shops" && showRenewalRequestsOnly && !isRenewalRequested) {
       return false;
-    return emailMatch || idMatch;
+    }
+
+    if (!term) return true;
+
+    const emailMatch = user.email?.toLowerCase().includes(term);
+    const systemIdMatch = user.id?.toLowerCase().includes(term); 
+
+    return emailMatch || systemIdMatch || shopNameMatch || memberIdMatch;
   });
 
   const indexOfLastUser = currentPage * itemsPerPage;
@@ -376,10 +459,14 @@ export default function AdminUserManager({
   });
 
   const filteredLedger = enrichedLedger.filter((log) => {
+    const term = searchTerm.toLowerCase().trim();
+    
     const matchesSearch =
-      log.shopName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.memberId?.toString().includes(searchTerm);
+      !term || 
+      log.shopName?.toLowerCase().includes(term) ||
+      log.email?.toLowerCase().includes(term) ||
+      log.memberId?.toString().includes(term);
+
     if (dateRange) {
       const logDate = new Date(log.renewed_at);
       const start = new Date(dateRange[0]);
@@ -397,7 +484,6 @@ export default function AdminUserManager({
   );
   const totalLedgerPages = Math.ceil(filteredLedger.length / itemsPerPage);
 
-  // Active Details for Dossier
   const activeUserDetails = selectedUser
     ? selectedUser.role === "seeker"
       ? seekerDetails.find((s) => s.id === selectedUser.id)
@@ -405,6 +491,17 @@ export default function AdminUserManager({
         ? providerDetails.find((p) => p.id === selectedUser.id)
         : shopDetails.find((s) => s.id === selectedUser.id)
     : null;
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const newSelected = new Set(selectedShopIds);
+      currentUsers.forEach(u => newSelected.add(u.id));
+      setSelectedShopIds(Array.from(newSelected));
+    } else {
+      const currentIds = currentUsers.map(u => u.id);
+      setSelectedShopIds(selectedShopIds.filter(id => !currentIds.includes(id)));
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -451,7 +548,7 @@ export default function AdminUserManager({
           </div>
 
           {/* SEARCH & FILTERS */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-between">
             <div className="relative flex-1 max-w-md">
               <Search
                 className="absolute left-4 top-3 text-slate-400"
@@ -462,7 +559,7 @@ export default function AdminUserManager({
                 placeholder={
                   userSubTab === "ledger"
                     ? "Search renewals by shop name or ID..."
-                    : `Search ${userSubTab} by email or ID...`
+                    : `Search ${userSubTab} by Name, Email, or ID...`
                 }
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -471,34 +568,45 @@ export default function AdminUserManager({
             </div>
 
             {userSubTab === "shops" && (
-              <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 h-[46px] w-full sm:w-fit">
-                <button
-                  onClick={() => setShowRenewalRequestsOnly(false)}
-                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${!showRenewalRequestsOnly ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  All Shops
-                </button>
-                <button
-                  onClick={() => setShowRenewalRequestsOnly(true)}
-                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${showRenewalRequestsOnly ? "bg-red-50 text-red-700 shadow-sm border border-red-100" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  <Bell
-                    size={14}
-                    className={
-                      pendingRenewalsCount > 0
-                        ? showRenewalRequestsOnly
-                          ? "animate-none"
-                          : "text-red-500 animate-pulse"
-                        : ""
-                    }
-                  />
-                  Requests{" "}
-                  {pendingRenewalsCount > 0 && (
-                    <span className="bg-red-500 text-white px-1.5 py-0.5 rounded-md text-[10px] leading-none">
-                      {pendingRenewalsCount}
-                    </span>
-                  )}
-                </button>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                {selectedShopIds.length > 0 && (
+                  <button
+                    onClick={handleBulkRevoke}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 animate-in zoom-in duration-200 h-[46px] w-full sm:w-auto"
+                  >
+                    <AlertCircle size={16} /> Revoke ({selectedShopIds.length})
+                  </button>
+                )}
+
+                <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 h-[46px] w-full sm:w-fit">
+                  <button
+                    onClick={() => setShowRenewalRequestsOnly(false)}
+                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${!showRenewalRequestsOnly ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    All Shops
+                  </button>
+                  <button
+                    onClick={() => setShowRenewalRequestsOnly(true)}
+                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${showRenewalRequestsOnly ? "bg-red-50 text-red-700 shadow-sm border border-red-100" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    <Bell
+                      size={14}
+                      className={
+                        pendingRenewalsCount > 0
+                          ? showRenewalRequestsOnly
+                            ? "animate-none"
+                            : "text-red-500 animate-pulse"
+                          : ""
+                      }
+                    />
+                    Requests{" "}
+                    {pendingRenewalsCount > 0 && (
+                      <span className="bg-red-500 text-white px-1.5 py-0.5 rounded-md text-[10px] leading-none">
+                        {pendingRenewalsCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -668,6 +776,19 @@ export default function AdminUserManager({
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
                       <tr>
+                        {userSubTab === "shops" && (
+                          <th className="p-4 md:p-5 w-12 text-center border-r border-slate-100">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              checked={
+                                currentUsers.length > 0 &&
+                                currentUsers.every(u => selectedShopIds.includes(u.id))
+                              }
+                              onChange={handleSelectAll}
+                            />
+                          </th>
+                        )}
                         <th className="p-4 md:p-5">Account Details</th>
                         <th className="p-4 md:p-5">Status</th>
                         <th className="p-4 md:p-5 text-right">Actions</th>
@@ -680,11 +801,29 @@ export default function AdminUserManager({
                             ? shopDetails.find((s) => s.id === user.id)
                             : null;
                         const needsRenewal = shopData?.renewal_requested;
+                        
                         return (
                           <tr
                             key={user.id}
                             className={`transition-colors group ${needsRenewal ? "bg-red-50/30 hover:bg-red-50/60" : "hover:bg-slate-50/80"}`}
                           >
+                            {userSubTab === "shops" && (
+                              <td className="p-4 md:p-5 text-center border-r border-slate-100">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                  checked={selectedShopIds.includes(user.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedShopIds([...selectedShopIds, user.id]);
+                                    } else {
+                                      setSelectedShopIds(selectedShopIds.filter(id => id !== user.id));
+                                    }
+                                  }}
+                                />
+                              </td>
+                            )}
+
                             <td className="p-4 md:p-5">
                               <div className="flex items-center gap-3 md:gap-4">
                                 <div
@@ -694,7 +833,7 @@ export default function AdminUserManager({
                                 </div>
                                 <div>
                                   <div className="font-bold text-slate-900 text-xs md:text-sm flex items-center flex-wrap gap-2">
-                                    {user.email}
+                                    {shopData?.shop_name || user.email}
                                     {user.role === "shop" &&
                                       shopData?.member_id && (
                                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider">
@@ -711,8 +850,8 @@ export default function AdminUserManager({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-[10px] md:text-[11px] text-slate-400 font-mono tracking-tight mt-0.5">
-                                    System Ref: {user.id.slice(0, 8)}
+                                  <div className="text-[10px] md:text-[11px] text-slate-500 font-mono tracking-tight mt-0.5">
+                                    {user.email} • Ref: {user.id.slice(0, 8)}
                                   </div>
                                 </div>
                               </div>
@@ -750,14 +889,14 @@ export default function AdminUserManager({
                       })}
                       {currentUsers.length === 0 && (
                         <tr>
-                          <td colSpan="3" className="p-10 text-center">
+                          <td colSpan={userSubTab === "shops" ? 4 : 3} className="p-10 text-center">
                             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-3">
                               <Search size={20} />
                             </div>
                             <h3 className="text-slate-900 font-bold text-base">
                               {showRenewalRequestsOnly
                                 ? "No Pending Renewals"
-                                : "No accounts found"}
+                                : "No accounts found matching your search."}
                             </h3>
                           </td>
                         </tr>
@@ -794,7 +933,6 @@ export default function AdminUserManager({
           )}
         </div>
       ) : (
-        /* ✨ RENDER THE NEW DOSSIER COMPONENT */
         <UserDossier
           selectedUser={selectedUser}
           setSelectedUser={setSelectedUser}
@@ -807,6 +945,7 @@ export default function AdminUserManager({
           handleDeleteUser={handleDeleteUser}
           toggleUserApproval={toggleUserApproval}
           handleRenewSubscription={handleRenewSubscription}
+          handleActivatePaidLicense={handleActivatePaidLicense} 
           toggleJobStatus={toggleJobStatus}
           deleteJob={deleteJob}
           updateDeviceLimit={updateDeviceLimit}

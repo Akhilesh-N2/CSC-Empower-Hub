@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import ShopDeviceManager from "../ShopDeviceManager";
 
-// Moved the DetailBox here since it's only used in the Dossier
 const DetailBox = ({ label, value, highlight }) => (
   <div className="flex flex-col group">
     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 group-hover:text-slate-500 transition-colors">
@@ -30,13 +29,19 @@ export default function UserDossier({
   handleDeleteUser,
   toggleUserApproval,
   handleRenewSubscription,
+  handleActivatePaidLicense, 
   toggleJobStatus,
   deleteJob,
   updateDeviceLimit
 }) {
   const [selectedJobDetails, setSelectedJobDetails] = useState(null);
 
-  if (!details) return null; // Safety fallback
+  if (!details) return null;
+
+  // ✨ MATHEMATICAL FAILSAFE: Checks if they have > 15 days left (meaning they are on a Paid plan, not a Trial)
+  const currentExpiry = details?.subscription_expires_at ? new Date(details.subscription_expires_at) : null;
+  const daysRemaining = currentExpiry ? Math.ceil((currentExpiry - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+  const hasLongTermLicense = daysRemaining > 15;
 
   return (
     <div className="animate-in slide-in-from-right duration-300">
@@ -89,13 +94,31 @@ export default function UserDossier({
                 <User size={14} /> {selectedUser.role}
               </div>
             </div>
-            <div className="border-t border-slate-100 pt-6">
+            
+            {/* ACCOUNT ACTION BUTTONS */}
+            <div className="border-t border-slate-100 pt-6 space-y-3">
               <button
                 onClick={() => toggleUserApproval(selectedUser.id, selectedUser.is_approved, selectedUser.role, selectedUser.email)}
                 className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm uppercase tracking-widest shadow-md transition-all ${selectedUser.is_approved ? "bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}
               >
-                {selectedUser.is_approved ? <><AlertCircle size={18} /> Revoke Approval</> : <><CheckCircle2 size={18} /> Approve User</>}
+                {selectedUser.is_approved ? <><AlertCircle size={18} /> Revoke Access</> : <><CheckCircle2 size={18} /> Approve Trial</>}
               </button>
+
+              {/* ✨ SAFE ACTIVATE PAID BUTTON ✨ */}
+              {selectedUser.role === "shop" && selectedUser.is_approved && (
+                <button
+                  onClick={() => !hasLongTermLicense && handleActivatePaidLicense(selectedUser.id)}
+                  disabled={hasLongTermLicense}
+                  title={hasLongTermLicense ? `Paid Plan is active (${daysRemaining} days remaining)` : "Start 1-Year Paid Plan"}
+                  className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm uppercase tracking-widest shadow-md transition-all ${
+                    hasLongTermLicense 
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none" 
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  }`}
+                >
+                  <BadgeCheck size={18} /> {hasLongTermLicense ? "Paid Plan Active" : "Activate Paid (1 Yr)"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -155,16 +178,40 @@ export default function UserDossier({
                 {dossierTab === "license" && (
                   <div className="animate-in fade-in duration-300">
                     <div className="bg-gradient-to-br from-slate-50 to-white p-5 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
                         <div>
                           <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-2 mb-1"><CheckCircle2 size={14} /> Current License Status</h4>
                           {details.subscription_expires_at ? (
                             <p className="text-sm font-bold text-slate-800">Valid Until: <span className="text-emerald-600">{new Date(details.subscription_expires_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</span></p>
                           ) : (<p className="text-sm font-bold text-slate-400 italic">No active license recorded.</p>)}
                         </div>
-                        <div className="flex items-center gap-3">
+                        
+                        <div className="flex flex-wrap items-center gap-2">
                           {details.renewal_requested && <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">Renewal Requested</span>}
-                          <button onClick={() => handleRenewSubscription(selectedUser.id)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm">Renew 1 Year</button>
+                          
+                          {/* ✨ SAFE ACTIVATE PAID BUTTON ✨ */}
+                          {selectedUser.is_approved && (
+                            <button
+                              onClick={() => !hasLongTermLicense && handleActivatePaidLicense(selectedUser.id)}
+                              disabled={hasLongTermLicense}
+                              title={hasLongTermLicense ? `Paid License Active (${daysRemaining} days left)` : "Activate Paid"}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
+                                hasLongTermLicense
+                                  ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed"
+                                  : "bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
+                              }`}
+                            >
+                              <BadgeCheck size={14} /> {hasLongTermLicense ? "Paid Active" : "Activate Paid"}
+                            </button>
+                          )}
+
+                          {/* STANDARD RENEW BUTTON */}
+                          <button 
+                            onClick={() => handleRenewSubscription(selectedUser.id)} 
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
+                          >
+                            Renew (+1 Yr)
+                          </button>
                         </div>
                       </div>
 
