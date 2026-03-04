@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {
   ChevronLeft, KeyRound, Trash2, CheckCircle2, AlertCircle,
   User, Store, GraduationCap, Briefcase, Phone, MapPin,
-  BadgeCheck, Laptop, History, ShieldAlert, ShieldCheck, Eye, EyeOff
+  BadgeCheck, Laptop, History, ShieldAlert, ShieldCheck, Eye, EyeOff, X 
 } from "lucide-react";
 import ShopDeviceManager from "../ShopDeviceManager";
 
@@ -30,6 +30,7 @@ export default function UserDossier({
   toggleUserApproval,
   handleRenewSubscription,
   handleActivatePaidLicense, 
+  handleCancelRenewalRequest, 
   toggleJobStatus,
   deleteJob,
   updateDeviceLimit
@@ -38,7 +39,6 @@ export default function UserDossier({
 
   if (!details) return null;
 
-  // ✨ MATHEMATICAL FAILSAFE: Checks if they have > 15 days left (meaning they are on a Paid plan, not a Trial)
   const currentExpiry = details?.subscription_expires_at ? new Date(details.subscription_expires_at) : null;
   const daysRemaining = currentExpiry ? Math.ceil((currentExpiry - new Date()) / (1000 * 60 * 60 * 24)) : 0;
   const hasLongTermLicense = daysRemaining > 15;
@@ -95,7 +95,6 @@ export default function UserDossier({
               </div>
             </div>
             
-            {/* ACCOUNT ACTION BUTTONS */}
             <div className="border-t border-slate-100 pt-6 space-y-3">
               <button
                 onClick={() => toggleUserApproval(selectedUser.id, selectedUser.is_approved, selectedUser.role, selectedUser.email)}
@@ -104,7 +103,6 @@ export default function UserDossier({
                 {selectedUser.is_approved ? <><AlertCircle size={18} /> Revoke Access</> : <><CheckCircle2 size={18} /> Approve Trial</>}
               </button>
 
-              {/* ✨ SAFE ACTIVATE PAID BUTTON ✨ */}
               {selectedUser.role === "shop" && selectedUser.is_approved && (
                 <button
                   onClick={() => !hasLongTermLicense && handleActivatePaidLicense(selectedUser.id)}
@@ -187,25 +185,19 @@ export default function UserDossier({
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-2">
-                          {details.renewal_requested && <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">Renewal Requested</span>}
-                          
-                          {/* ✨ SAFE ACTIVATE PAID BUTTON ✨ */}
-                          {selectedUser.is_approved && (
-                            <button
-                              onClick={() => !hasLongTermLicense && handleActivatePaidLicense(selectedUser.id)}
-                              disabled={hasLongTermLicense}
-                              title={hasLongTermLicense ? `Paid License Active (${daysRemaining} days left)` : "Activate Paid"}
-                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
-                                hasLongTermLicense
-                                  ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed"
-                                  : "bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
-                              }`}
-                            >
-                              <BadgeCheck size={14} /> {hasLongTermLicense ? "Paid Active" : "Activate Paid"}
-                            </button>
+                          {details.renewal_requested && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest animate-pulse">Renewal Requested</span>
+                              <button
+                                onClick={() => handleCancelRenewalRequest(selectedUser.id)}
+                                className="p-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors shadow-sm"
+                                title="Cancel this renewal request"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
                           )}
 
-                          {/* STANDARD RENEW BUTTON */}
                           <button 
                             onClick={() => handleRenewSubscription(selectedUser.id)} 
                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
@@ -223,19 +215,20 @@ export default function UserDossier({
                           </div>
                           <div className="space-y-3 border-l-2 border-slate-200 ml-2 pl-4">
                             {renewalHistory.map((history) => {
-                              let isRevoke = history.action_type?.toLowerCase().includes("revoked");
-                              let isApprove = history.action_type?.toLowerCase().includes("approved");
-                              let badgeColor = isRevoke ? "text-red-600 bg-red-50" : isApprove ? "text-blue-600 bg-blue-50" : "text-emerald-600 bg-emerald-50";
-                              let Icon = isRevoke ? ShieldAlert : isApprove ? BadgeCheck : CheckCircle2;
+                              // ✨ FIX: ensure the word "canceled" highlights red!
+                              let isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled");
+                              let isPending = history.action_type?.toLowerCase().includes("pending");
+                              let badgeColor = isRevoke ? "text-red-600 bg-red-50" : isPending ? "text-amber-600 bg-amber-50" : "text-emerald-600 bg-emerald-50";
+                              let Icon = isRevoke ? ShieldAlert : isPending ? History : BadgeCheck;
                               return (
                                 <div key={history.id} className="relative">
-                                  <div className={`absolute -left-[23px] top-1 w-3 h-3 rounded-full border-2 border-white ${isRevoke ? "bg-red-400" : isApprove ? "bg-blue-400" : "bg-emerald-400"}`}></div>
+                                  <div className={`absolute -left-[23px] top-1 w-3 h-3 rounded-full border-2 border-white ${isRevoke ? "bg-red-400" : isPending ? "bg-amber-400" : "bg-emerald-400"}`}></div>
                                   <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-slate-300 transition-colors">
                                     <div>
                                       <p className={`text-xs font-bold flex items-center gap-1.5 ${badgeColor} w-fit px-2 py-0.5 rounded-md`}><Icon size={12} /> {history.action_type || "License Renewed"}</p>
                                       <p className="text-[11px] text-slate-500 mt-1.5 font-medium">On {new Date(history.renewed_at).toLocaleDateString()} at {new Date(history.renewed_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                                     </div>
-                                    {!isRevoke && history.new_expiry && (
+                                    {!isRevoke && !isPending && history.new_expiry && (
                                       <div className="text-right">
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Expiration Set To</p>
                                         <p className="text-xs font-bold text-slate-800">{new Date(history.new_expiry).getFullYear()}</p>

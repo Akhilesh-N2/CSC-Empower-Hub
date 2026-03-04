@@ -91,7 +91,6 @@ export default function AdminUserManager({
     fetchHistory();
   }, [selectedUser]);
 
-  // Bulk Revoke Logic
   const handleBulkRevoke = async () => {
     if (
       !window.confirm(
@@ -124,7 +123,6 @@ export default function AdminUserManager({
     }
   };
 
-  // Approval gives a 14-Day Free Trial
   const toggleUserApproval = async (id, currentStatus, role, email) => {
     try {
       const isApproving = !currentStatus;
@@ -147,7 +145,7 @@ export default function AdminUserManager({
             new Date(shopData.subscription_expires_at) < new Date()
           ) {
             const trialExpiryDate = new Date();
-            trialExpiryDate.setDate(trialExpiryDate.getDate() + 14); // 14 Days from today
+            trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
 
             await supabase.rpc("admin_update_shop_license", {
               target_shop_id: id,
@@ -209,14 +207,13 @@ export default function AdminUserManager({
     }
   };
 
-  // ✨ Explicitly starts a 1-year license strictly from TODAY
   const handleActivatePaidLicense = async (id) => {
     const shopData = shopDetails.find((s) => s.id === id);
     const targetUser = users.find((u) => u.id === id);
     const userEmail = targetUser?.email;
 
     const newExpiryDate = new Date();
-    newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1); // 1 Year from exactly today
+    newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1); 
     
     const friendlyDate = newExpiryDate.toLocaleDateString(undefined, {
       year: "numeric",
@@ -233,13 +230,15 @@ export default function AdminUserManager({
     const { error } = await supabase.rpc("admin_update_shop_license", {
       target_shop_id: id,
       new_expiry: newExpiryDate.toISOString(),
-      reset_renewal: true, // Clears the pending renewal request
+      reset_renewal: true, 
       action_taken: "Paid License Activated (1 Year from Today)",
     });
 
     if (error) {
       alert("Failed to activate: " + error.message);
     } else {
+      await supabase.rpc("admin_clear_renewal", { target_shop_id: id });
+
       try {
         await emailjs.send(
           "service_7bfs32k", 
@@ -256,6 +255,8 @@ export default function AdminUserManager({
       } catch (emailErr) {
         console.error("Failed to send activation email:", emailErr);
       }
+
+      setShopDetails(prev => prev.map(s => s.id === id ? { ...s, subscription_expires_at: newExpiryDate.toISOString(), renewal_requested: false } : s));
 
       alert(`Success! Paid License activated. It will expire on ${friendlyDate}.`);
       fetchData();
@@ -295,13 +296,15 @@ export default function AdminUserManager({
     const { error } = await supabase.rpc("admin_update_shop_license", {
       target_shop_id: id,
       new_expiry: newExpiryDate.toISOString(),
-      reset_renewal: false,
+      reset_renewal: true,
       action_taken: "Manual License Renewal (+1 Year)",
     });
 
     if (error) {
       alert("Failed to renew: " + error.message);
     } else {
+      await supabase.rpc("admin_clear_renewal", { target_shop_id: id });
+
       try {
         await emailjs.send(
           "service_7bfs32k", 
@@ -314,11 +317,12 @@ export default function AdminUserManager({
           },
           "LCf7B01Dm3o5RmXRv",
         );
-        console.log("Renewal email sent via EmailJS!");
       } catch (emailErr) {
         console.error("Failed to send renewal email:", emailErr);
         alert("License renewed, but the receipt email failed to send.");
       }
+
+      setShopDetails(prev => prev.map(s => s.id === id ? { ...s, subscription_expires_at: newExpiryDate.toISOString(), renewal_requested: false } : s));
 
       alert(`Success! License extended to ${newExpiryDate.getFullYear()}.`);
       fetchData();
@@ -330,6 +334,42 @@ export default function AdminUserManager({
         .order("renewed_at", { ascending: false });
       setRenewalHistory(newHistory || []);
       fetchGlobalLedger();
+    }
+  };
+
+  // ✨ UPDATED: Uses the exact requested "canceled due to not paying" string
+  const handleCancelRenewalRequest = async (id) => {
+    if (!window.confirm("Are you sure you want to cancel this pending renewal request? The shop will be able to request again from their dashboard.")) return;
+    try {
+      const { error: clearError } = await supabase.rpc("admin_clear_renewal", {
+        target_shop_id: id
+      });
+      if (clearError) throw clearError;
+      
+      // Log the exact text requested
+      await supabase.rpc("admin_log_shop_action", {
+        target_shop_id: id,
+        action_taken: "Canceled due to not paying for renewal",
+      });
+      
+      setShopDetails(prev => prev.map(s => s.id === id ? { ...s, renewal_requested: false } : s));
+      
+      alert("Renewal request has been successfully cancelled.");
+      fetchData(); 
+      fetchGlobalLedger();
+      
+      // Update history in UI if they are currently viewing the Dossier
+      if (selectedUser && selectedUser.id === id) {
+        const { data: newHistory } = await supabase
+          .from("license_renewals")
+          .select("*")
+          .eq("shop_id", id)
+          .order("renewed_at", { ascending: false });
+        setRenewalHistory(newHistory || []);
+      }
+      
+    } catch (error) {
+      alert("Failed to cancel request: " + error.message);
     }
   };
 
@@ -406,7 +446,6 @@ export default function AdminUserManager({
     fetchData();
   };
 
-  // UI Calculated Data
   const pendingRenewalsCount = shopDetails.filter(
     (s) => s.renewal_requested,
   ).length;
@@ -509,7 +548,6 @@ export default function AdminUserManager({
 
       {!selectedUser ? (
         <div className="animate-in fade-in duration-500">
-          {/* HEADER TABS */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-4">
             <div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
@@ -547,7 +585,6 @@ export default function AdminUserManager({
             </div>
           </div>
 
-          {/* SEARCH & FILTERS */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-between">
             <div className="relative flex-1 max-w-md">
               <Search
@@ -647,7 +684,6 @@ export default function AdminUserManager({
             )}
           </div>
 
-          {/* LIST VIEWS */}
           {userSubTab === "ledger" ? (
             <>
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
@@ -698,9 +734,9 @@ export default function AdminUserManager({
                             </div>
                           </td>
                           <td className="p-4 md:p-5">
-                            {log.action_type?.includes("Revoked") ? (
+                            {log.action_type?.toLowerCase().includes("revoked") || log.action_type?.toLowerCase().includes("canceled") ? (
                               <span className="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-                                Account Suspended
+                                {log.action_type?.toLowerCase().includes("canceled") ? "Canceled" : "Account Suspended"}
                               </span>
                             ) : (
                               <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
@@ -945,7 +981,8 @@ export default function AdminUserManager({
           handleDeleteUser={handleDeleteUser}
           toggleUserApproval={toggleUserApproval}
           handleRenewSubscription={handleRenewSubscription}
-          handleActivatePaidLicense={handleActivatePaidLicense} 
+          handleActivatePaidLicense={handleActivatePaidLicense}
+          handleCancelRenewalRequest={handleCancelRenewalRequest} 
           toggleJobStatus={toggleJobStatus}
           deleteJob={deleteJob}
           updateDeviceLimit={updateDeviceLimit}

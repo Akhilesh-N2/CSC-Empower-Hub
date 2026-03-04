@@ -87,7 +87,7 @@ function ShopDashboard() {
   const [quantity, setQuantity] = useState(1);
   const [price, setPrice] = useState("");
   
-  // ✨ Inventory Integration States 
+  // Inventory Integration States 
   const [inventoryList, setInventoryList] = useState([]);
   const [inventorySearch, setInventorySearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -241,8 +241,23 @@ function ShopDashboard() {
     try {
       const { error } = await supabase.from("shop_profiles").update({ renewal_requested: true }).eq("id", userId);
       if (error) throw error;
-      alert("Renewal request sent successfully!");
+      
+      await supabase.from("license_renewals").insert([{
+        shop_id: userId,
+        action_type: "Renewal Requested (Pending Payment)",
+        new_expiry: shopInfo.subscription_expires_at 
+      }]);
+
+      alert("Renewal request sent successfully! An admin will review your account shortly.");
       setShopInfo((prev) => ({ ...prev, renewal_requested: true }));
+
+      const { data: history } = await supabase
+        .from("license_renewals")
+        .select("*")
+        .eq("shop_id", userId)
+        .order("renewed_at", { ascending: false });
+      setRenewalHistory(history || []);
+
     } catch (err) {
       alert("Failed to send request: " + err.message);
     }
@@ -250,7 +265,6 @@ function ShopDashboard() {
 
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
 
-  // INVENTORY AUTO-FILL LOGIC
   const handleSelectInventoryItem = (item) => {
     setItemName(item.item_name);
     setPrice(item.selling_price);
@@ -290,7 +304,6 @@ function ShopDashboard() {
   const handleRemoveItem = (id) =>
     setItems((prev) => prev.filter((item) => item.id !== id));
 
-  // AUTO-STOCK DEDUCTION ON BILL COMPLETION
   const handleCompleteBill = async () => {
     if (window.confirm("Complete this sale and start the next bill?")) {
       try {
@@ -372,7 +385,6 @@ function ShopDashboard() {
     }
   };
 
-  // 9. ✨ BULLETPROOF DYNAMIC WIDTH PRINT LOGIC ✨
   const handlePrint = () => {
     if (items.length === 0)
       return alert("Please add items to the bill before printing.");
@@ -392,8 +404,6 @@ function ShopDashboard() {
       containerStyle = "width: 76mm; padding: 4mm; margin: 0 auto; font-size: 11px; box-sizing: border-box;";
     }
 
-    // ✨ FIX 1: Removed strict widths entirely from td.
-    // white-space: nowrap forces the prices to sit on one line, and the Item name acts as a flexible spring!
     const itemsHtml = items.map((item, i) => `
       <tr>
         <td class="td-pad" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${i + 1}</td>
@@ -548,7 +558,6 @@ function ShopDashboard() {
         .section-label { margin: 0 0 4px 0; font-size: 0.75em; color: #6b7280; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }
         .cust-name { margin: 0 0 2px 0; font-weight: 700; font-size: 1.1em; }
         
-        /* ✨ FIX 2: Completely dynamic table constraints ✨ */
         table { border-collapse: collapse; margin-top: 10px; margin-bottom: 10px; width: 100%; max-width: 100%; } 
         th { border-bottom: 2px solid #111827; padding: 6px 2px; text-align: left; font-size: 0.85em; text-transform: uppercase; color: #4b5563; font-weight: 700; } 
         .td-pad { padding: 8px 2px; border-bottom: 1px solid #f3f4f6; }
@@ -730,7 +739,6 @@ function ShopDashboard() {
               <Receipt size={18} /> POS Billing
             </button>
 
-            {/* ✨ INVENTORY TAB ✨ */}
             {shopInfo.has_inventory_module && (
               <button
                 onClick={() => setActiveTab("inventory")}
@@ -857,7 +865,6 @@ function ShopDashboard() {
                   <Plus size={18} className="text-emerald-600" /> Add Product
                 </h3>
 
-                {/* ✨ SMART INVENTORY SEARCH BAR ✨ */}
                 {shopInfo.has_inventory_module && inventoryList.length > 0 && (
                   <div className="mb-5 relative">
                     <div className="relative">
@@ -880,7 +887,6 @@ function ShopDashboard() {
                       />
                     </div>
                     
-                    {/* AUTOCOMPLETE DROPDOWN */}
                     {showSuggestions && inventorySearch.trim() !== "" && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                         {inventoryList
@@ -1104,7 +1110,6 @@ function ShopDashboard() {
           </div>
         )}
 
-        {/* ✨ NEW TAB: INVENTORY SYSTEM ✨ */}
         {activeTab === "inventory" && shopInfo.has_inventory_module && (
           <InventoryManager userId={userId} />
         )}
@@ -1127,7 +1132,6 @@ function ShopDashboard() {
                 className="p-6 md:p-8 space-y-6"
                 noValidate
               >
-                {/* ✨ MEDIA UPLOAD GRID (LOGO & QR) ✨ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* LOGO UPLOAD */}
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
@@ -1496,41 +1500,49 @@ function ShopDashboard() {
                   )}
                 </div>
 
+                {/* ✨ UPDATED: Added Scrollable Classes to History Container ✨ */}
                 {renewalHistory.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-slate-200">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
                       <History size={18} className="text-emerald-600" /> Billing
                       History
                     </h3>
-                    <div className="space-y-3">
-                      {renewalHistory.map((history) => (
-                        <div
-                          key={history.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-200 transition-colors group"
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
-                              1-Year License Extension
-                            </p>
-                            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                              <CalendarDays size={12} />
-                              Processed on:{" "}
-                              {new Date(
-                                history.renewed_at,
-                              ).toLocaleDateString()}
-                            </p>
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                      {renewalHistory.map((history) => {
+                        const isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled");
+                        const isPending = history.action_type?.toLowerCase().includes("pending");
+                        
+                        return (
+                          <div
+                            key={history.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-200 transition-colors group"
+                          >
+                            <div>
+                              <p className={`text-sm font-bold ${isRevoke ? "text-red-600" : isPending ? "text-amber-600" : "text-slate-800 group-hover:text-emerald-700"} transition-colors`}>
+                                {history.action_type || "1-Year License Extension"}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                <CalendarDays size={12} />
+                                Processed on:{" "}
+                                {new Date(
+                                  history.renewed_at,
+                                ).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="mt-3 sm:mt-0 text-left sm:text-right">
+                              <span className={`${isRevoke ? "bg-red-100 text-red-800 border-red-200" : isPending ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"} font-bold px-3 py-1 rounded-lg text-xs border inline-block`}>
+                                {isRevoke ? "Cancelled" : isPending ? "Pending" : "Paid / Approved"}
+                              </span>
+                              {!isRevoke && !isPending && history.new_expiry && (
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">
+                                  Valid until{" "}
+                                  {new Date(history.new_expiry).getFullYear()}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-3 sm:mt-0 text-left sm:text-right">
-                            <span className="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-lg text-xs border border-emerald-200 inline-block">
-                              Paid / Approved
-                            </span>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">
-                              Valid until{" "}
-                              {new Date(history.new_expiry).getFullYear()}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
