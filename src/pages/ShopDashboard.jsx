@@ -29,7 +29,8 @@ import {
   Mail,
   QrCode,
   Package,
-  Search, 
+  Search,
+  ScrollText, 
 } from "lucide-react";
 
 function ShopDashboard() {
@@ -98,6 +99,11 @@ function ShopDashboard() {
     quantity: false,
     price: false,
   });
+
+  // Past Bills State
+  const [pastBills, setPastBills] = useState([]);
+  const [billSearch, setBillSearch] = useState("");
+  const [isLoadingBills, setIsLoadingBills] = useState(false);
 
   // 4. STATE: Live DB Invoice Sequence
   const [invoiceSeq, setInvoiceSeq] = useState(1);
@@ -170,11 +176,33 @@ function ShopDashboard() {
   }, []);
 
   useEffect(() => {
+    if (activeTab === "history" && userId) {
+      fetchPastBills();
+    }
+  }, [activeTab, userId]);
+
+  const fetchPastBills = async () => {
+    setIsLoadingBills(true);
+    try {
+      const { data, error } = await supabase
+        .from("shop_bills")
+        .select("*")
+        .eq("shop_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setPastBills(data || []);
+    } catch (error) {
+      console.error("Error fetching bills:", error);
+    } finally {
+      setIsLoadingBills(false);
+    }
+  };
+
+  useEffect(() => {
     localStorage.setItem("shop_billing_items", JSON.stringify(items));
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
-  // LOGO UPLOAD HANDLER
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -305,13 +333,27 @@ function ShopDashboard() {
     setItems((prev) => prev.filter((item) => item.id !== id));
 
   const handleCompleteBill = async () => {
+    if (items.length === 0) return alert("Add items to the bill first!");
+    
     if (window.confirm("Complete this sale and start the next bill?")) {
       try {
-        const { data: newDbCount, error } = await supabase.rpc(
+        const { error: billError } = await supabase.from('shop_bills').insert([{
+          shop_id: userId,
+          invoice_no: currentInvoiceId,
+          customer_name: customerInfo.name || null,
+          customer_phone: customerInfo.phone || null,
+          customer_address: customerInfo.address || null,
+          items_json: items,
+          grand_total: grandTotal
+        }]);
+
+        if (billError) throw billError;
+
+        const { data: newDbCount, error: seqError } = await supabase.rpc(
           "increment_shop_invoice",
           { target_shop_id: userId },
         );
-        if (error) throw error;
+        if (seqError) throw seqError;
 
         if (shopInfo.has_inventory_module) {
           for (const cartItem of items) {
@@ -339,7 +381,7 @@ function ShopDashboard() {
 
       } catch (err) {
         console.error("Failed to process sale:", err);
-        alert("Error generating next invoice number or updating stock.");
+        alert("Error saving bill. Please check your connection.");
       }
     }
   };
@@ -385,10 +427,7 @@ function ShopDashboard() {
     }
   };
 
-  const handlePrint = () => {
-    if (items.length === 0)
-      return alert("Please add items to the bill before printing.");
-
+  const triggerPrint = (printItems, printCustomer, printInvoiceId, printDateStr, printTimeStr, printTotal) => {
     let pageCSS = "";
     let containerStyle = "";
     const isThermal = pageSize === "Thermal80";
@@ -404,18 +443,15 @@ function ShopDashboard() {
       containerStyle = "width: 76mm; padding: 4mm; margin: 0 auto; font-size: 11px; box-sizing: border-box;";
     }
 
-    const itemsHtml = items.map((item, i) => `
+    const itemsHtml = printItems.map((item, i) => `
       <tr>
         <td class="td-pad" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${i + 1}</td>
         <td class="td-pad" style="width: 100%; word-break: break-word; white-space: normal; font-weight: 500; line-height: 1.2; vertical-align: top; padding-right: 4px;">${item.name}</td>
         <td class="td-pad text-center" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${item.quantity}</td>
-        <td class="td-pad text-right" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${item.price.toFixed(2)}</td>
-        <td class="td-pad text-right" style="font-weight: 700; white-space: nowrap; vertical-align: top;">${item.total.toFixed(2)}</td>
+        <td class="td-pad text-right" style="white-space: nowrap; vertical-align: top; padding-right: 4px;">${Number(item.price).toFixed(2)}</td>
+        <td class="td-pad text-right" style="font-weight: 700; white-space: nowrap; vertical-align: top;">${Number(item.total).toFixed(2)}</td>
       </tr>
     `).join("");
-
-    const dateStr = new Date().toLocaleDateString("en-GB");
-    const timeStr = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
     const logoHtml = shopInfo.logo_url
       ? `<img src="${shopInfo.logo_url}" class="print-logo" style="margin: 0 auto 10px auto; display: block; max-height: ${isThermal ? "45px" : "75px"}; object-fit: contain;" />`
@@ -447,7 +483,7 @@ function ShopDashboard() {
       </div>
       <div class="divider"></div>
       <div style="text-align: center; width: 100%;">
-        <p style="margin: 0; font-size: 11px;"><strong>INV:</strong> #${currentInvoiceId} | <strong>Date:</strong> ${dateStr}</p>
+        <p style="margin: 0; font-size: 11px;"><strong>INV:</strong> #${printInvoiceId} | <strong>Date:</strong> ${printDateStr}</p>
       </div>
     `
       : `
@@ -462,20 +498,20 @@ function ShopDashboard() {
         </div>
         <div style="text-align: right; padding-top: 10px;">
           <h2 style="margin:0 0 5px 0; font-size: 24px; color: #111827; text-transform: uppercase; letter-spacing: 2px;">Invoice</h2>
-          <p style="margin: 2px 0;"><strong># ${currentInvoiceId}</strong></p>
-          <p class="text-muted" style="margin: 2px 0;">${dateStr} | ${timeStr}</p>
+          <p style="margin: 2px 0;"><strong># ${printInvoiceId}</strong></p>
+          <p class="text-muted" style="margin: 2px 0;">${printDateStr} | ${printTimeStr}</p>
         </div>
       </div>
     `;
 
     const customerHtml =
-      customerInfo.name || customerInfo.phone
+      printCustomer.name || printCustomer.phone
         ? `
       <div class="customer-box">
         <p class="section-label">Billed To:</p>
-        ${customerInfo.name ? `<p class="cust-name">${customerInfo.name}</p>` : ""}
-        ${customerInfo.phone ? `<p class="text-muted">${customerInfo.phone}</p>` : ""}
-        ${customerInfo.address ? `<p class="text-muted" style="margin-top:2px;">${customerInfo.address}</p>` : ""}
+        ${printCustomer.name ? `<p class="cust-name">${printCustomer.name}</p>` : ""}
+        ${printCustomer.phone ? `<p class="text-muted">${printCustomer.phone}</p>` : ""}
+        ${printCustomer.address ? `<p class="text-muted" style="margin-top:2px;">${printCustomer.address}</p>` : ""}
       </div>
     `
         : "";
@@ -498,7 +534,7 @@ function ShopDashboard() {
 
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
-      <html><head><title>Invoice #${currentInvoiceId}</title>
+      <html><head><title>Invoice #${printInvoiceId}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
         
@@ -508,37 +544,14 @@ function ShopDashboard() {
         } 
         ${pageCSS} 
         
-        .print-container { 
-          position: relative;
-          ${containerStyle} 
-          overflow: hidden; 
-        }
+        .print-container { position: relative; ${containerStyle} overflow: hidden; }
+        .content-layer { position: relative; z-index: 1; ${premiumSideBar} padding-bottom: 20px; }
         
-        .content-layer {
-          position: relative;
-          z-index: 1;
-          ${premiumSideBar}
-          padding-bottom: 20px;
-        }
-
         .watermark {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(-35deg);
-          font-size: ${watermarkFontSize};
-          color: rgba(0, 0, 0, 0.05); 
-          z-index: 10; 
-          text-align: center !important;
-          width: 100%;
-          line-height: 1.2;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-          pointer-events: none;
-          white-space: pre-wrap;
-          word-break: keep-all; 
-          overflow-wrap: break-word;
+          position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg);
+          font-size: ${watermarkFontSize}; color: rgba(0, 0, 0, 0.05); z-index: 10; text-align: center !important;
+          width: 100%; line-height: 1.2; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;
+          pointer-events: none; white-space: pre-wrap; word-break: keep-all; overflow-wrap: break-word;
         }
 
         .text-center { text-align: center !important; } 
@@ -546,11 +559,9 @@ function ShopDashboard() {
         .text-muted { color: #6b7280; font-size: 0.9em; }
         .text-bold { font-weight: 700; }
         .mt-1 { margin-top: 5px; }
-        
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
 
         .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? "16px" : "26px"}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-align: center !important; word-wrap: break-word; width: 100%;}
-        
         .divider { border-top: 1px solid #e5e7eb; margin: 12px 0; width: 100%; }
         .divider-thick { border-top: 2px solid #111827; margin: 12px 0; }
         
@@ -571,12 +582,9 @@ function ShopDashboard() {
       
       <div class="print-container">
         <div class="watermark">${watermarkText}</div>
-        
         <div class="content-layer">
           ${headerHtml}
-          
           ${isThermal ? "" : '<div class="divider"></div>'}
-          
           ${customerHtml}
           
           <table>
@@ -593,10 +601,9 @@ function ShopDashboard() {
           </table>
           
           <div class="divider-thick"></div>
-          
           <div class="total-box">
             <span class="total-label">Grand Total</span>
-            <span class="total-amount">₹ ${grandTotal.toFixed(2)}</span>
+            <span class="total-amount">₹ ${Number(printTotal).toFixed(2)}</span>
           </div>
           
           ${qrHtml}
@@ -620,6 +627,22 @@ function ShopDashboard() {
       printWindow.print();
       printWindow.close();
     }, 350);
+  };
+
+  const handlePrintCurrentBill = () => {
+    if (items.length === 0) return alert("Please add items to the bill before printing.");
+    const dateStr = new Date().toLocaleDateString("en-GB");
+    const timeStr = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    triggerPrint(items, customerInfo, currentInvoiceId, dateStr, timeStr, grandTotal);
+  };
+
+  const handleReprintPastBill = (bill) => {
+    const dateObj = new Date(bill.created_at);
+    const dateStr = dateObj.toLocaleDateString("en-GB");
+    const timeStr = dateObj.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const pastCustomer = { name: bill.customer_name || "", phone: bill.customer_phone || "", address: bill.customer_address || "" };
+    
+    triggerPrint(bill.items_json, pastCustomer, bill.invoice_no, dateStr, timeStr, bill.grand_total);
   };
 
   const exportToExcel = () => {
@@ -691,6 +714,12 @@ function ShopDashboard() {
     return new Date(dateString).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   };
 
+  const filteredPastBills = pastBills.filter(b => 
+    (b.invoice_no && b.invoice_no.toLowerCase().includes(billSearch.toLowerCase())) ||
+    (b.customer_name && b.customer_name.toLowerCase().includes(billSearch.toLowerCase())) ||
+    (b.customer_phone && b.customer_phone.includes(billSearch))
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -739,6 +768,13 @@ function ShopDashboard() {
               <Receipt size={18} /> POS Billing
             </button>
 
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === "history" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"}`}
+            >
+              <ScrollText size={18} /> Past Bills
+            </button>
+
             {shopInfo.has_inventory_module && (
               <button
                 onClick={() => setActiveTab("inventory")}
@@ -776,7 +812,7 @@ function ShopDashboard() {
                   <option value="A5">A5 Sheet</option>
                 </select>
                 <button
-                  onClick={handlePrint}
+                  onClick={handlePrintCurrentBill}
                   className="h-full flex flex-1 items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 font-bold transition text-sm"
                 >
                   <Printer size={16} /> Print Bill
@@ -1105,6 +1141,104 @@ function ShopDashboard() {
                     {grandTotal.toFixed(2)}
                   </span>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✨ PAST BILLS (INVOICE LOG) ✨ */}
+        {activeTab === "history" && (
+          <div className="animate-in fade-in duration-300">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
+              
+              <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 w-full sm:w-auto shrink-0">
+                  <ScrollText size={18} className="text-blue-600" /> Invoice History
+                  <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-bold ml-2">
+                    {pastBills.length} Bills
+                  </span>
+                </h3>
+                
+                {/* ✨ NEW: INLINE PAGE SIZE SELECTOR ✨ */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-10 w-full sm:w-auto shrink-0 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                    <div className="px-3 bg-slate-50 border-r border-slate-200 flex items-center justify-center text-slate-500 h-full">
+                      <Printer size={14} />
+                    </div>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(e.target.value)}
+                      className="h-full px-3 text-xs font-bold text-slate-700 bg-white outline-none cursor-pointer hover:bg-slate-50 transition-colors w-full sm:w-auto"
+                    >
+                      <option value="Thermal80">Thermal (80mm)</option>
+                      <option value="A4">A4 Sheet</option>
+                      <option value="A5">A5 Sheet</option>
+                    </select>
+                  </div>
+                  
+                  <div className="relative w-full sm:w-80">
+                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Search by Invoice No or Customer..." 
+                      value={billSearch}
+                      onChange={e => setBillSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none h-10 shadow-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead className="bg-white border-b border-slate-100 text-[10px] uppercase text-slate-400 font-black tracking-widest">
+                    <tr>
+                      <th className="p-4 pl-6">Invoice details</th>
+                      <th className="p-4">Customer</th>
+                      <th className="p-4 text-center">Items</th>
+                      <th className="p-4 text-right">Total Amount</th>
+                      <th className="p-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {isLoadingBills ? (
+                      <tr><td colSpan="5" className="p-16 text-center text-slate-400"><Loader2 size={30} className="mx-auto animate-spin mb-3" /> Fetching records...</td></tr>
+                    ) : filteredPastBills.length === 0 ? (
+                      <tr><td colSpan="5" className="p-16 text-center text-slate-400">No past bills found.</td></tr>
+                    ) : (
+                      filteredPastBills.map((bill) => (
+                        <tr key={bill.id} className="hover:bg-slate-50/50 transition">
+                          <td className="p-4 pl-6">
+                            <p className="font-black text-slate-800 text-sm">#{bill.invoice_no}</p>
+                            <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-wider">
+                              {new Date(bill.created_at).toLocaleDateString()}
+                            </p>
+                          </td>
+                          <td className="p-4">
+                            <p className="text-sm font-bold text-slate-700">{bill.customer_name || "Walk-in Customer"}</p>
+                            {bill.customer_phone && <p className="text-[10px] text-slate-400 mt-0.5">{bill.customer_phone}</p>}
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-bold">
+                              {bill.items_json?.length || 0}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right text-sm font-black text-emerald-600">
+                            ₹{Number(bill.grand_total).toFixed(2)}
+                          </td>
+                          <td className="p-4 text-center">
+                            <button 
+                              onClick={() => handleReprintPastBill(bill)} 
+                              className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 mx-auto shadow-sm"
+                            >
+                              <Printer size={14} /> Reprint
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1500,7 +1634,6 @@ function ShopDashboard() {
                   )}
                 </div>
 
-                {/* ✨ UPDATED: Added Scrollable Classes to History Container ✨ */}
                 {renewalHistory.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-slate-200">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
