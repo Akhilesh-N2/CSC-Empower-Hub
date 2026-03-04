@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Download, Image as ImageIcon, Loader2, Crown } from 'lucide-react';
 import { downloadWatermarkedPoster } from '../utils/watermark';
 
 function Posters() {
@@ -8,14 +8,19 @@ function Posters() {
   const [loading, setLoading] = useState(true);
   
   const [shopInfo, setShopInfo] = useState(null);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
 
   useEffect(() => {
+    // ✨ NEW: Mark posters as "read" the moment they open this page
+    localStorage.setItem('last_viewed_posters', new Date().toISOString());
+    window.dispatchEvent(new Event('posters_viewed'));
+
     const initializePage = async () => {
       // 1. Fetch Posters
       const { data: posterData, error: posterError } = await supabase
         .from('schemes')
-        .select('id, image, title, category')
+        .select('id, image, title, category, is_premium') 
         .eq('active', true)
         .eq('category', 'Poster')
         .order('created_at', { ascending: false });
@@ -23,13 +28,12 @@ function Posters() {
       if (posterError) console.error(posterError);
       else setPosters(posterData || []);
 
-      // 2. Check if the current viewer is a Shop
+      // 2. Check if the current viewer is a Shop & verify their Subscription Status
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: shopProfile } = await supabase
           .from('shop_profiles')
-          // ✨ FIX: Added 'logo_url' to the fetch request!
-          .select('shop_name, address, phone, logo_url') 
+          .select('shop_name, address, phone, logo_url, subscription_expires_at')
           .eq('id', user.id)
           .single();
         
@@ -38,6 +42,10 @@ function Posters() {
             ...shopProfile,
             email: user.email 
           });
+
+          if (shopProfile.subscription_expires_at && new Date(shopProfile.subscription_expires_at) > new Date()) {
+            setIsPremiumUser(true);
+          }
         }
       }
 
@@ -55,7 +63,7 @@ function Posters() {
         (payload) => {
           supabase
             .from('schemes')
-            .select('id, image, title, category')
+            .select('id, image, title, category, is_premium')
             .eq('active', true)
             .eq('category', 'Poster')
             .order('created_at', { ascending: false })
@@ -93,6 +101,8 @@ function Posters() {
     }
   };
 
+  const visiblePosters = posters.filter(poster => !poster.is_premium || isPremiumUser);
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
@@ -105,9 +115,14 @@ function Posters() {
           <p className="text-gray-500 max-w-2xl mx-auto">
             Browse and download high-quality posters, notices, and awareness materials.
           </p>
+          
           {shopInfo && (
-            <div className="mt-4 inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-xs font-bold shadow-sm">
-              ✨ Auto-Branding Active: Posters will download with your shop details.
+            <div className={`mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold shadow-sm border ${isPremiumUser ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-indigo-50 border-indigo-100 text-indigo-700"}`}>
+              {isPremiumUser ? (
+                <><Crown size={16} className="text-amber-500" /> Premium Account Active: Full Gallery Unlocked & Auto-Branding ON</>
+              ) : (
+                <>✨ Auto-Branding Active (Upgrade to PRO to unlock premium posters)</>
+              )}
             </div>
           )}
         </div>
@@ -115,19 +130,23 @@ function Posters() {
         {/* Gallery Grid */}
         {loading ? (
           <div className="text-center py-20 text-gray-500">Loading gallery...</div>
-        ) : posters.length === 0 ? (
+        ) : visiblePosters.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-dashed border-gray-300">
             <ImageIcon size={48} className="mx-auto text-gray-300 mb-4"/>
-            <h3 className="text-lg font-bold text-gray-600">No posters found</h3>
-            <p className="text-gray-400">
-                Posters added via the Admin Panel will appear here.
-            </p>
+            <h3 className="text-lg font-bold text-gray-600">No posters available</h3>
+            <p className="text-gray-400">Check back later for new uploads!</p>
           </div>
         ) : (
           <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
-            {posters.map((item) => (
-              <div key={item.id} className="break-inside-avoid bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group">
+            {visiblePosters.map((item) => (
+              <div key={item.id} className="break-inside-avoid bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group relative">
                 
+                {item.is_premium && (
+                  <div className="absolute top-3 right-3 z-10 bg-amber-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-md flex items-center gap-1">
+                    <Crown size={12} /> PRO
+                  </div>
+                )}
+
                 {/* Image Container */}
                 <div className="relative overflow-hidden">
                   <img 
@@ -153,9 +172,9 @@ function Posters() {
 
                 {/* Content */}
                 <div className="p-5">
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-start mb-4 gap-2">
                     <h3 className="text-lg font-bold text-gray-900 leading-tight">{item.title}</h3>
-                    <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-md uppercase whitespace-nowrap ml-2">
+                    <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-md uppercase whitespace-nowrap shrink-0">
                       {item.category}
                     </span>
                   </div>
