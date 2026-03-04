@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx-js-style";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { supabase } from "../supabaseClient";
 import { useDeviceTracker } from "../hooks/useDeviceTracker";
 import InventoryManager from "../components/InventoryManager"; 
@@ -30,7 +32,8 @@ import {
   QrCode,
   Package,
   Search,
-  ScrollText, 
+  ScrollText,
+  ChevronDown 
 } from "lucide-react";
 
 function ShopDashboard() {
@@ -42,10 +45,9 @@ function ShopDashboard() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingQr, setIsUploadingQr] = useState(false);
 
-  // Print Page Size State
   const [pageSize, setPageSize] = useState("Thermal80");
+  const [showExportMenu, setShowExportMenu] = useState(false); 
 
-  // 1. STATE: Shop Details & Profile Errors
   const [shopInfo, setShopInfo] = useState({
     shop_name: "",
     full_name: "",
@@ -72,13 +74,11 @@ function ShopDashboard() {
     phone: false,
   });
 
-  // 2. STATE: Customer Details
   const [customerInfo, setCustomerInfo] = useState(() => {
     const saved = localStorage.getItem("shop_billing_customer");
     return saved ? JSON.parse(saved) : { name: "", phone: "", address: "" };
   });
 
-  // 3. STATE: Billing Items & Errors
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem("shop_billing_items");
     return saved ? JSON.parse(saved) : [];
@@ -88,7 +88,6 @@ function ShopDashboard() {
   const [quantity, setQuantity] = useState(1);
   const [price, setPrice] = useState("");
   
-  // Inventory Integration States 
   const [inventoryList, setInventoryList] = useState([]);
   const [inventorySearch, setInventorySearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -100,16 +99,13 @@ function ShopDashboard() {
     price: false,
   });
 
-  // Past Bills State
   const [pastBills, setPastBills] = useState([]);
   const [billSearch, setBillSearch] = useState("");
   const [isLoadingBills, setIsLoadingBills] = useState(false);
 
-  // 4. STATE: Live DB Invoice Sequence
   const [invoiceSeq, setInvoiceSeq] = useState(1);
   const currentInvoiceId = String(invoiceSeq).padStart(4, "0");
 
-  // 5. FETCH SHOP DETAILS ON LOAD
   useEffect(() => {
     const fetchShopData = async () => {
       try {
@@ -203,6 +199,7 @@ function ShopDashboard() {
     localStorage.setItem("shop_billing_customer", JSON.stringify(customerInfo));
   }, [items, customerInfo]);
 
+  // ✨ FIX: MAKE FILENAME 100% UNIQUE EVERY TIME SO CLOUDINARY NEVER CACHES
   const handleLogoUpload = async (e) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -215,7 +212,9 @@ function ShopDashboard() {
 
       const cleanShopName = shopInfo.shop_name ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_") : `Shop_${userId?.substring(0, 6)}`;
       formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
-      formData.append("public_id", "Logo");
+      
+      // By appending Date.now(), we guarantee a new URL every time.
+      formData.append("public_id", `Logo_${Date.now()}`);
 
       const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
       const data = await res.json();
@@ -245,7 +244,9 @@ function ShopDashboard() {
 
       const cleanShopName = shopInfo.shop_name ? shopInfo.shop_name.replace(/[^a-zA-Z0-9]/g, "_") : `Shop_${userId?.substring(0, 6)}`;
       formData.append("folder", `Shoppers-Logo/${cleanShopName}`);
-      formData.append("public_id", "QR_Code");
+      
+      // Make QR code unique too
+      formData.append("public_id", `QR_Code_${Date.now()}`);
 
       const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
       const data = await res.json();
@@ -645,6 +646,89 @@ function ShopDashboard() {
     triggerPrint(bill.items_json, pastCustomer, bill.invoice_no, dateStr, timeStr, bill.grand_total);
   };
 
+  const generatePDF = (printItems, printCustomer, printInvoiceId, printDateStr, printTotal) => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(17, 24, 39); 
+    doc.text(shopInfo.shop_name ? shopInfo.shop_name.toUpperCase() : "RETAIL INVOICE", 14, 22);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128); 
+    doc.text(shopInfo.address || shopInfo.location || "Location: N/A", 14, 30);
+    doc.text(`Ph: ${shopInfo.phone || "N/A"}`, 14, 36);
+    if (shopInfo.gstin) doc.text(`GSTIN: ${shopInfo.gstin.toUpperCase()}`, 14, 42);
+
+    // Invoice Info (Right aligned)
+    doc.setFontSize(16);
+    doc.setTextColor(17, 24, 39);
+    doc.text("INVOICE", 196, 22, { align: "right" });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`# ${printInvoiceId}`, 196, 28, { align: "right" });
+    doc.text(`Date: ${printDateStr}`, 196, 34, { align: "right" });
+    
+    // Customer Box
+    if (printCustomer.name || printCustomer.phone) {
+       doc.setFontSize(9);
+       doc.setTextColor(107, 114, 128);
+       doc.text("BILLED TO:", 14, 55);
+       
+       doc.setFontSize(11);
+       doc.setTextColor(17, 24, 39);
+       doc.text(printCustomer.name || "Walk-in Customer", 14, 61);
+       
+       doc.setFontSize(10);
+       doc.setTextColor(107, 114, 128);
+       if(printCustomer.phone) doc.text(printCustomer.phone, 14, 67);
+       if(printCustomer.address) doc.text(printCustomer.address, 14, 73);
+    }
+
+    // Table
+    const tableData = printItems.map((item, index) => [
+      index + 1,
+      item.name,
+      item.quantity,
+      `Rs ${Number(item.price).toFixed(2)}`,
+      `Rs ${Number(item.total).toFixed(2)}`
+    ]);
+
+    doc.autoTable({
+      startY: 85,
+      head: [['#', 'Item Description', 'Qty', 'Rate', 'Total']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' }, 
+      styles: { fontSize: 10, cellPadding: 4 },
+      columnStyles: {
+        0: { cellWidth: 15 },
+        2: { halign: 'center', cellWidth: 20 },
+        3: { halign: 'right', cellWidth: 30 },
+        4: { halign: 'right', cellWidth: 35, fontStyle: 'bold' },
+      },
+    });
+
+    // Total
+    const finalY = doc.lastAutoTable.finalY || 85;
+    doc.setFontSize(12);
+    doc.setTextColor(17, 24, 39);
+    doc.text("GRAND TOTAL", 140, finalY + 15);
+    
+    doc.setFontSize(16);
+    doc.setTextColor(5, 150, 105); 
+    doc.text(`Rs ${Number(printTotal).toFixed(2)}`, 196, finalY + 15, { align: "right" });
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.text("Thank you for your business!", 105, 280, { align: "center" });
+    doc.text("Computer generated receipt, no signature required.", 105, 285, { align: "center" });
+
+    doc.save(`Invoice_${printInvoiceId}_${printDateStr.replace(/\//g, "-")}.pdf`);
+  };
+
   const exportToExcel = () => {
     if (items.length === 0) return alert("Please add items before exporting.");
     const exportData = items.map((item, index) => ({
@@ -818,13 +902,42 @@ function ShopDashboard() {
                   <Printer size={16} /> Print Bill
                 </button>
               </div>
-              <button
-                onClick={exportToExcel}
-                className="h-11 flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-500 hover:text-emerald-700 border border-slate-200 px-4 rounded-xl font-bold transition shadow-sm"
-                title="Download Excel Backup"
-              >
-                <Download size={18} />
-              </button>
+
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="h-11 flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-500 hover:text-emerald-700 border border-slate-200 px-4 rounded-xl font-bold transition shadow-sm"
+                  title="Export Options"
+                >
+                  <Download size={18} /> Export <ChevronDown size={14} />
+                </button>
+                
+                {showExportMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)}></div>
+                    <div className="absolute right-0 top-12 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                      <button
+                        onClick={() => { exportToExcel(); setShowExportMenu(false); }}
+                        className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition"
+                      >
+                        <FileText size={16} /> Excel (.xlsx)
+                      </button>
+                      <div className="h-px bg-slate-100 w-full"></div>
+                      <button
+                        onClick={() => { 
+                          if (items.length === 0) return alert("Please add items to the bill before exporting.");
+                          const dateStr = new Date().toLocaleDateString("en-GB");
+                          generatePDF(items, customerInfo, currentInvoiceId, dateStr, grandTotal);
+                          setShowExportMenu(false); 
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition"
+                      >
+                        <Download size={16} /> PDF (.pdf)
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1055,7 +1168,6 @@ function ShopDashboard() {
                         Empty Cart
                       </button>
                     )}
-                    {/* COMPLETE SALE BUTTON */}
                     <button
                       onClick={handleCompleteBill}
                       className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-sm transition flex items-center gap-2 w-full sm:w-auto justify-center"
@@ -1159,7 +1271,6 @@ function ShopDashboard() {
                   </span>
                 </h3>
                 
-                {/* ✨ NEW: INLINE PAGE SIZE SELECTOR ✨ */}
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-10 w-full sm:w-auto shrink-0 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
                     <div className="px-3 bg-slate-50 border-r border-slate-200 flex items-center justify-center text-slate-500 h-full">
@@ -1227,12 +1338,26 @@ function ShopDashboard() {
                             ₹{Number(bill.grand_total).toFixed(2)}
                           </td>
                           <td className="p-4 text-center">
-                            <button 
-                              onClick={() => handleReprintPastBill(bill)} 
-                              className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 mx-auto shadow-sm"
-                            >
-                              <Printer size={14} /> Reprint
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button 
+                                onClick={() => handleReprintPastBill(bill)} 
+                                className="bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                                title="Print this bill"
+                              >
+                                <Printer size={14} /> Print
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const dateStr = new Date(bill.created_at).toLocaleDateString("en-GB");
+                                  const pastCustomer = { name: bill.customer_name || "", phone: bill.customer_phone || "", address: bill.customer_address || "" };
+                                  generatePDF(bill.items_json, pastCustomer, bill.invoice_no, dateStr, bill.grand_total);
+                                }} 
+                                className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                                title="Download as PDF"
+                              >
+                                <Download size={14} /> PDF
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1257,8 +1382,7 @@ function ShopDashboard() {
                   <Store className="text-emerald-400" /> Business Profile
                 </h2>
                 <p className="text-slate-400 text-sm mt-1">
-                  This information will be printed on your Excel and Paper
-                  Invoices.
+                  This information will be printed on your Excel and Paper Invoices.
                 </p>
               </div>
               <form
@@ -1267,90 +1391,38 @@ function ShopDashboard() {
                 noValidate
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* LOGO UPLOAD */}
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
                     <div className="w-20 h-20 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
                       {shopInfo.logo_url ? (
-                        <img
-                          src={shopInfo.logo_url}
-                          alt="Logo"
-                          className="w-full h-full object-contain p-2"
-                        />
+                        <img src={shopInfo.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
                       ) : (
                         <Store size={28} className="text-slate-300" />
                       )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800 mb-1 text-sm">
-                        Shop Logo
-                      </h3>
-                      <p className="text-[11px] text-slate-500 mb-3">
-                        Appears at top of bill
-                      </p>
-                      <label
-                        className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingLogo ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}
-                      >
-                        {isUploadingLogo ? (
-                          <>
-                            <Loader2 size={14} className="animate-spin" />{" "}
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <ImagePlus size={14} /> Choose Logo
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleLogoUpload}
-                          disabled={isUploadingLogo}
-                        />
+                      <h3 className="font-bold text-slate-800 mb-1 text-sm">Shop Logo</h3>
+                      <p className="text-[11px] text-slate-500 mb-3">Appears at top of bill</p>
+                      <label className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingLogo ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}>
+                        {isUploadingLogo ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : <><ImagePlus size={14} /> Choose Logo</>}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={isUploadingLogo} />
                       </label>
                     </div>
                   </div>
 
-                  {/* QR CODE UPLOAD */}
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl flex flex-col items-center gap-4 text-center">
                     <div className="w-20 h-20 bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm rounded-lg">
                       {shopInfo.qr_code_url ? (
-                        <img
-                          src={shopInfo.qr_code_url}
-                          alt="QR Code"
-                          className="w-full h-full object-contain p-1"
-                        />
+                        <img src={shopInfo.qr_code_url} alt="QR Code" className="w-full h-full object-contain p-1" />
                       ) : (
                         <QrCode size={28} className="text-slate-300" />
                       )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800 mb-1 text-sm">
-                        Payment QR Code
-                      </h3>
-                      <p className="text-[11px] text-slate-500 mb-3">
-                        Appears at bottom of bill
-                      </p>
-                      <label
-                        className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingQr ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}
-                      >
-                        {isUploadingQr ? (
-                          <>
-                            <Loader2 size={14} className="animate-spin" />{" "}
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <QrCode size={14} /> Choose QR Image
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleQrUpload}
-                          disabled={isUploadingQr}
-                        />
+                      <h3 className="font-bold text-slate-800 mb-1 text-sm">Payment QR Code</h3>
+                      <p className="text-[11px] text-slate-500 mb-3">Appears at bottom of bill</p>
+                      <label className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition w-full ${isUploadingQr ? "bg-slate-200 text-slate-500" : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-600"}`}>
+                        {isUploadingQr ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : <><QrCode size={14} /> Choose QR Image</>}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleQrUpload} disabled={isUploadingQr} />
                       </label>
                     </div>
                   </div>
@@ -1367,20 +1439,11 @@ function ShopDashboard() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setShopInfo((prev) => ({ ...prev, shop_name: val }));
-                        if (profileErrors.shop_name) {
-                          setProfileErrors((prev) => ({
-                            ...prev,
-                            shop_name: false,
-                          }));
-                        }
+                        if (profileErrors.shop_name) setProfileErrors((prev) => ({ ...prev, shop_name: false }));
                       }}
                       className={`w-full p-3.5 border rounded-xl outline-none font-bold text-slate-800 transition-all ${profileErrors.shop_name ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
-                    {profileErrors.shop_name && (
-                      <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                        * Shop Name is required
-                      </p>
-                    )}
+                    {profileErrors.shop_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Shop Name is required</p>}
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -1392,20 +1455,11 @@ function ShopDashboard() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setShopInfo((prev) => ({ ...prev, full_name: val }));
-                        if (profileErrors.full_name) {
-                          setProfileErrors((prev) => ({
-                            ...prev,
-                            full_name: false,
-                          }));
-                        }
+                        if (profileErrors.full_name) setProfileErrors((prev) => ({ ...prev, full_name: false }));
                       }}
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.full_name ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
-                    {profileErrors.full_name && (
-                      <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                        * Owner Name is required
-                      </p>
-                    )}
+                    {profileErrors.full_name && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Owner Name is required</p>}
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -1417,20 +1471,11 @@ function ShopDashboard() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setShopInfo((prev) => ({ ...prev, phone: val }));
-                        if (profileErrors.phone) {
-                          setProfileErrors((prev) => ({
-                            ...prev,
-                            phone: false,
-                          }));
-                        }
+                        if (profileErrors.phone) setProfileErrors((prev) => ({ ...prev, phone: false }));
                       }}
                       className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${profileErrors.phone ? "border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
                     />
-                    {profileErrors.phone && (
-                      <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">
-                        * Contact Number is required
-                      </p>
-                    )}
+                    {profileErrors.phone && <p className="text-red-500 text-xs font-bold mt-1.5 ml-1 flex items-center gap-1">* Contact Number is required</p>}
                   </div>
 
                   <div className="md:col-span-2">
@@ -1440,12 +1485,7 @@ function ShopDashboard() {
                     <input
                       type="text"
                       value={shopInfo.gstin}
-                      onChange={(e) =>
-                        setShopInfo((prev) => ({
-                          ...prev,
-                          gstin: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setShopInfo((prev) => ({ ...prev, gstin: e.target.value }))}
                       placeholder="e.g. 32XXXXX1234X1Z5"
                       className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm uppercase"
                     />
@@ -1458,30 +1498,15 @@ function ShopDashboard() {
                     <textarea
                       rows="3"
                       value={shopInfo.address}
-                      onChange={(e) =>
-                        setShopInfo((prev) => ({
-                          ...prev,
-                          address: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setShopInfo((prev) => ({ ...prev, address: e.target.value }))}
                       placeholder="Street, City, Landmark, PIN Code"
                       className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm leading-relaxed"
                     ></textarea>
                   </div>
                 </div>
                 <div className="pt-6 border-t border-slate-100 mt-6 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className={`flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-white transition-all shadow-md ${isSaving ? "bg-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5"}`}
-                  >
-                    {isSaving ? (
-                      "Saving..."
-                    ) : (
-                      <>
-                        <Save size={18} /> Save Profile
-                      </>
-                    )}
+                  <button type="submit" disabled={isSaving} className={`flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-white transition-all shadow-md ${isSaving ? "bg-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5"}`}>
+                    {isSaving ? "Saving..." : <><Save size={18} /> Save Profile</>}
                   </button>
                 </div>
               </form>
@@ -1497,21 +1522,14 @@ function ShopDashboard() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-black flex items-center gap-3">
-                      <BadgeCheck className="text-emerald-400" /> License
-                      Details
+                      <BadgeCheck className="text-emerald-400" /> License Details
                     </h2>
-                    <p className="text-slate-400 text-sm mt-1">
-                      Manage your active subscription and device allocations.
-                    </p>
+                    <p className="text-slate-400 text-sm mt-1">Manage your active subscription and device allocations.</p>
                   </div>
                   {shopInfo.member_id && (
                     <div className="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
-                        Your Shop ID
-                      </p>
-                      <p className="text-xl font-mono font-bold tracking-tight text-emerald-400">
-                        #{shopInfo.member_id}
-                      </p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Shop ID</p>
+                      <p className="text-xl font-mono font-bold tracking-tight text-emerald-400">#{shopInfo.member_id}</p>
                     </div>
                   )}
                 </div>
@@ -1520,62 +1538,32 @@ function ShopDashboard() {
               <div className="p-6 md:p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col justify-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      Subscription Status
-                    </span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Subscription Status</span>
                     {shopInfo.subscription_expires_at ? (
                       <div>
-                        {new Date(shopInfo.subscription_expires_at) >
-                        new Date() ? (
-                          <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-emerald-200">
-                            🟢 Active License
-                          </span>
+                        {new Date(shopInfo.subscription_expires_at) > new Date() ? (
+                          <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-emerald-200">🟢 Active License</span>
                         ) : (
-                          <span className="bg-red-100 text-red-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-red-200 animate-pulse">
-                            🔴 Expired
-                          </span>
+                          <span className="bg-red-100 text-red-700 px-4 py-1.5 rounded-lg text-sm font-bold border border-red-200 animate-pulse">🔴 Expired</span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-slate-500 font-medium text-sm">
-                        Awaiting Admin Approval
-                      </span>
+                      <span className="text-slate-500 font-medium text-sm">Awaiting Admin Approval</span>
                     )}
                   </div>
 
                   <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <CalendarDays size={16} />
-                        <span className="text-xs font-bold uppercase tracking-wider">
-                          Activated
-                        </span>
-                      </div>
-                      <span className="text-sm font-bold text-slate-800">
-                        {formatDate(shopInfo.created_at)}
-                      </span>
+                      <div className="flex items-center gap-2 text-slate-500"><CalendarDays size={16} /><span className="text-xs font-bold uppercase tracking-wider">Activated</span></div>
+                      <span className="text-sm font-bold text-slate-800">{formatDate(shopInfo.created_at)}</span>
                     </div>
                     <div className="h-px bg-slate-200 w-full"></div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <CalendarDays
-                          size={16}
-                          className={
-                            new Date(shopInfo.subscription_expires_at) <
-                            new Date(
-                              new Date().setDate(new Date().getDate() + 30),
-                            )
-                              ? "text-amber-500"
-                              : ""
-                          }
-                        />
-                        <span className="text-xs font-bold uppercase tracking-wider">
-                          Expires
-                        </span>
+                        <CalendarDays size={16} className={new Date(shopInfo.subscription_expires_at) < new Date(new Date().setDate(new Date().getDate() + 30)) ? "text-amber-500" : ""} />
+                        <span className="text-xs font-bold uppercase tracking-wider">Expires</span>
                       </div>
-                      <span
-                        className={`text-sm font-bold ${new Date(shopInfo.subscription_expires_at) < new Date(new Date().setDate(new Date().getDate() + 30)) ? "text-amber-600" : "text-slate-800"}`}
-                      >
+                      <span className={`text-sm font-bold ${new Date(shopInfo.subscription_expires_at) < new Date(new Date().setDate(new Date().getDate() + 30)) ? "text-amber-600" : "text-slate-800"}`}>
                         {formatDate(shopInfo.subscription_expires_at)}
                       </span>
                     </div>
@@ -1584,93 +1572,48 @@ function ShopDashboard() {
 
                 <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                      <Laptop size={18} className="text-emerald-600" /> Device
-                      License Limit
-                    </h3>
-                    <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-lg">
-                      {shopInfo.active_devices} / {shopInfo.device_limit} Used
-                    </span>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><Laptop size={18} className="text-emerald-600" /> Device License Limit</h3>
+                    <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-lg">{shopInfo.active_devices} / {shopInfo.device_limit} Used</span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden border border-slate-200 inset-shadow-sm">
-                    <div
-                      className={`h-3 rounded-full transition-all duration-1000 ${
-                        shopInfo.active_devices >= shopInfo.device_limit
-                          ? "bg-red-500"
-                          : "bg-emerald-500"
-                      }`}
-                      style={{
-                        width: `${Math.min((shopInfo.active_devices / shopInfo.device_limit) * 100, 100)}%`,
-                      }}
-                    ></div>
+                    <div className={`h-3 rounded-full transition-all duration-1000 ${shopInfo.active_devices >= shopInfo.device_limit ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${Math.min((shopInfo.active_devices / shopInfo.device_limit) * 100, 100)}%` }}></div>
                   </div>
                   <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                    Your account is limited to{" "}
-                    <strong className="text-slate-700">
-                      {shopInfo.device_limit} physical computer(s)
-                    </strong>{" "}
-                    at a time for security. To add more systems, please contact
-                    the admin team to upgrade your plan.
+                    Your account is limited to <strong className="text-slate-700">{shopInfo.device_limit} physical computer(s)</strong> at a time for security. To add more systems, please contact the admin team to upgrade your plan.
                   </p>
                 </div>
 
                 <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                  <div className="flex items-center gap-3 text-slate-500 text-sm">
-                    <LifeBuoy size={18} />
-                    <span>Need help or an upgrade? Contact Admin.</span>
-                  </div>
-
+                  <div className="flex items-center gap-3 text-slate-500 text-sm"><LifeBuoy size={18} /><span>Need help or an upgrade? Contact Admin.</span></div>
                   {shopInfo.renewal_requested ? (
-                    <span className="bg-amber-100 text-amber-800 border border-amber-200 px-6 py-3 rounded-xl text-sm font-bold w-full sm:w-auto text-center">
-                      ⏳ Renewal Request Pending
-                    </span>
+                    <span className="bg-amber-100 text-amber-800 border border-amber-200 px-6 py-3 rounded-xl text-sm font-bold w-full sm:w-auto text-center">⏳ Renewal Request Pending</span>
                   ) : (
-                    <button
-                      onClick={handleRequestRenewal}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md transition w-full sm:w-auto text-center"
-                    >
-                      Request Plan Renewal
-                    </button>
+                    <button onClick={handleRequestRenewal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md transition w-full sm:w-auto text-center">Request Plan Renewal</button>
                   )}
                 </div>
 
                 {renewalHistory.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-slate-200">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
-                      <History size={18} className="text-emerald-600" /> Billing
-                      History
-                    </h3>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><History size={18} className="text-emerald-600" /> Billing History</h3>
                     <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                       {renewalHistory.map((history) => {
                         const isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled");
                         const isPending = history.action_type?.toLowerCase().includes("pending");
                         
                         return (
-                          <div
-                            key={history.id}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-200 transition-colors group"
-                          >
+                          <div key={history.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-200 transition-colors group">
                             <div>
                               <p className={`text-sm font-bold ${isRevoke ? "text-red-600" : isPending ? "text-amber-600" : "text-slate-800 group-hover:text-emerald-700"} transition-colors`}>
                                 {history.action_type || "1-Year License Extension"}
                               </p>
-                              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                                <CalendarDays size={12} />
-                                Processed on:{" "}
-                                {new Date(
-                                  history.renewed_at,
-                                ).toLocaleDateString()}
-                              </p>
+                              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5"><CalendarDays size={12} /> Processed on: {new Date(history.renewed_at).toLocaleDateString()}</p>
                             </div>
                             <div className="mt-3 sm:mt-0 text-left sm:text-right">
                               <span className={`${isRevoke ? "bg-red-100 text-red-800 border-red-200" : isPending ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"} font-bold px-3 py-1 rounded-lg text-xs border inline-block`}>
                                 {isRevoke ? "Cancelled" : isPending ? "Pending" : "Paid / Approved"}
                               </span>
                               {!isRevoke && !isPending && history.new_expiry && (
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">
-                                  Valid until{" "}
-                                  {new Date(history.new_expiry).getFullYear()}
-                                </p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Valid until {new Date(history.new_expiry).getFullYear()}</p>
                               )}
                             </div>
                           </div>

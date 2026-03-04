@@ -39,6 +39,7 @@ export default function UserDossier({
 
   if (!details) return null;
 
+  // Failsafe: check if they are already actively on a paid plan
   const currentExpiry = details?.subscription_expires_at ? new Date(details.subscription_expires_at) : null;
   const daysRemaining = currentExpiry ? Math.ceil((currentExpiry - new Date()) / (1000 * 60 * 60 * 24)) : 0;
   const hasLongTermLicense = daysRemaining > 15;
@@ -215,11 +216,11 @@ export default function UserDossier({
                           </div>
                           <div className="space-y-3 border-l-2 border-slate-200 ml-2 pl-4">
                             {renewalHistory.map((history) => {
-                              // ✨ FIX: ensure the word "canceled" highlights red!
                               let isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled");
                               let isPending = history.action_type?.toLowerCase().includes("pending");
                               let badgeColor = isRevoke ? "text-red-600 bg-red-50" : isPending ? "text-amber-600 bg-amber-50" : "text-emerald-600 bg-emerald-50";
                               let Icon = isRevoke ? ShieldAlert : isPending ? History : BadgeCheck;
+                              
                               return (
                                 <div key={history.id} className="relative">
                                   <div className={`absolute -left-[23px] top-1 w-3 h-3 rounded-full border-2 border-white ${isRevoke ? "bg-red-400" : isPending ? "bg-amber-400" : "bg-emerald-400"}`}></div>

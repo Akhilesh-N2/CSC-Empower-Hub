@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { Download, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { downloadWatermarkedPoster } from '../utils/watermark'; // <-- Make sure to create this file!
+import { downloadWatermarkedPoster } from '../utils/watermark';
 
 function Posters() {
   const [posters, setPosters] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // NEW: State for Shop Details and Downloading Status
   const [shopInfo, setShopInfo] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
 
@@ -29,12 +28,16 @@ function Posters() {
       if (user) {
         const { data: shopProfile } = await supabase
           .from('shop_profiles')
-          .select('shop_name, address, phone')
+          // ✨ FIX: Added 'logo_url' to the fetch request!
+          .select('shop_name, address, phone, logo_url') 
           .eq('id', user.id)
           .single();
         
         if (shopProfile) {
-          setShopInfo(shopProfile); // Save their shop details for the watermark!
+          setShopInfo({
+            ...shopProfile,
+            email: user.email 
+          });
         }
       }
 
@@ -50,8 +53,6 @@ function Posters() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'schemes' },
         (payload) => {
-          console.log('Poster change detected!', payload);
-          // Just fetch posters again without touching shop profile
           supabase
             .from('schemes')
             .select('id, image, title, category')
@@ -68,16 +69,13 @@ function Posters() {
     };
   }, []);
 
-  // --- Smart Download Function ---
   const handleDownload = async (id, url, title) => {
-    setDownloadingId(id); // Start loading spinner
+    setDownloadingId(id); 
 
     try {
       if (shopInfo) {
-        // If they are a shop, use the watermark utility!
         await downloadWatermarkedPoster(url, shopInfo, title);
       } else {
-        // If they are a standard user, do a normal clean download
         const response = await fetch(url);
         const blob = await response.blob();
         const link = document.createElement("a");
@@ -89,10 +87,9 @@ function Posters() {
       }
     } catch (error) {
       console.error("Download failed:", error);
-      // Ultimate fallback if their browser blocks canvas/blob downloads
       window.open(url, '_blank');
     } finally {
-      setDownloadingId(null); // Stop loading spinner
+      setDownloadingId(null); 
     }
   };
 
@@ -163,7 +160,7 @@ function Posters() {
                     </span>
                   </div>
                   
-                  {/* Mobile Download Button (Always Visible) */}
+                  {/* Mobile Download Button */}
                   <button 
                     onClick={() => handleDownload(item.id, item.image, item.title)}
                     disabled={downloadingId === item.id}
