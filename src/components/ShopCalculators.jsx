@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import jsPDF from "jspdf";
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -7,7 +7,8 @@ import {
   Calculator, ArrowRightLeft, GraduationCap, Plus, Trash2, 
   ScanLine, Loader2, BookOpen, Building2, CheckCircle2, 
   FileImage, FileDown, Image as ImageIcon, X, Minimize, RefreshCw, 
-  UploadCloud, Files, Settings2, Crop, FilePlus
+  UploadCloud, Files, Settings2, Crop, FilePlus, FileArchive,
+  MoveLeft, MoveRight, Maximize2, Layout
 } from "lucide-react";
 import { supabase } from '../supabaseClient';
 
@@ -116,11 +117,24 @@ export default function ShopCalculators() {
   const [convertFiles, setConvertFiles] = useState([]);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const convertPdfInputRef = useRef(null);
+
+  // --- PDF MERGE PRO STATE (from File 1) ---
+  const [pdfSettingsOpen, setPdfSettingsOpen] = useState(false);
+  const [pdfOrientation, setPdfOrientation] = useState("p"); // 'p' or 'l'
+  const [pdfMargin, setPdfMargin] = useState(0); // 0, 10, 20
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
+  const previewCanvasRef = useRef(null);
   
   const [compressFile, setCompressFile] = useState(null);
   const [targetKB, setTargetKB] = useState(50);
   const [isCompressing, setIsCompressing] = useState(false);
   const compressInputRef = useRef(null);
+
+  // PDF Compressor State
+  const [compressPdfFile, setCompressPdfFile] = useState(null);
+  const [isCompressingPdf, setIsCompressingPdf] = useState(false);
+  const [targetPdfKB, setTargetPdfKB] = useState(200);
+  const compressPdfInputRef = useRef(null);
   
   const [formatFile, setFormatFile] = useState(null);
   const [isFormatting, setIsFormatting] = useState(false);
@@ -157,33 +171,150 @@ export default function ShopCalculators() {
     return ((calcInput * conversionRates[calcCategory][calcFromUnit]) / conversionRates[calcCategory][calcToUnit]).toFixed(4);
   };
 
-  // --- EXISTING TOOL HANDLERS ---
+  // --- PDF MERGE HANDLERS (updated from File 1) ---
   const handleAddPdfFiles = (e) => {
     const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
-    if (files.length === 0) return alert("Please select valid image files.");
-    const newFiles = files.map(file => ({ id: Date.now() + Math.random(), file, name: file.name, preview: URL.createObjectURL(file) }));
+    if (files.length === 0) return;
+    const newFiles = files.map(file => ({ 
+      id: Math.random().toString(36).substr(2, 9), 
+      file, 
+      name: file.name, 
+      preview: URL.createObjectURL(file) 
+    }));
     setConvertFiles(prev => [...prev, ...newFiles]);
+    setPdfSettingsOpen(true); // Auto-open settings when files are added
     if (convertPdfInputRef.current) convertPdfInputRef.current.value = '';
   };
-  
+
+  // Move page handler (from File 1)
+  const movePage = (index, direction) => {
+    const newFiles = [...convertFiles];
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= newFiles.length) return;
+    [newFiles[index], newFiles[newIndex]] = [newFiles[newIndex], newFiles[index]];
+    setConvertFiles(newFiles);
+  };
+
+  // --- LIVE PREVIEW RENDERER ---
+  const renderPreview = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas || convertFiles.length === 0) return;
+
+    const file = convertFiles[previewPageIndex] || convertFiles[0];
+    if (!file) return;
+
+    const img = new Image();
+    img.onload = () => {
+      // A4 dimensions ratio: 210 x 297mm (portrait) or 297 x 210mm (landscape)
+      const isLandscape = pdfOrientation === 'l';
+      const pageW = isLandscape ? 297 : 210;
+      const pageH = isLandscape ? 210 : 297;
+
+      // Scale to fit canvas display size
+      const canvasW = canvas.width;
+      const canvasH = canvas.height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvasW, canvasH);
+
+      // Page background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      // Draw margin indicator lines
+      const marginRatioX = (pdfMargin / pageW) * canvasW;
+      const marginRatioY = (pdfMargin / pageH) * canvasH;
+
+      if (pdfMargin > 0) {
+        ctx.strokeStyle = 'rgba(244, 63, 94, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(marginRatioX, marginRatioY, canvasW - marginRatioX * 2, canvasH - marginRatioY * 2);
+        ctx.setLineDash([]);
+      }
+
+      // Calculate image draw area (respecting margin)
+      const availW = canvasW - marginRatioX * 2;
+      const availH = canvasH - marginRatioY * 2;
+
+      const imgRatio = img.width / img.height;
+      const containerRatio = availW / availH;
+
+      let drawW, drawH;
+      if (imgRatio > containerRatio) {
+        drawW = availW;
+        drawH = availW / imgRatio;
+      } else {
+        drawH = availH;
+        drawW = availH * imgRatio;
+      }
+
+      const x = marginRatioX + (availW - drawW) / 2;
+      const y = marginRatioY + (availH - drawH) / 2;
+
+      ctx.drawImage(img, x, y, drawW, drawH);
+
+      // Subtle page shadow/border effect on top
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, canvasW, canvasH);
+    };
+    img.src = file.preview;
+  }, [convertFiles, previewPageIndex, pdfOrientation, pdfMargin]);
+
+  useEffect(() => {
+    if (pdfSettingsOpen) {
+      // Small timeout to ensure canvas is mounted
+      const t = setTimeout(renderPreview, 30);
+      return () => clearTimeout(t);
+    }
+  }, [pdfSettingsOpen, renderPreview]);
+
+  // Updated handleCreatePdf with orientation and margin support (from File 1)
   const handleCreatePdf = async () => {
     if (convertFiles.length === 0) return;
     setIsConvertingPdf(true);
     try {
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth(); const pageHeight = doc.internal.pageSize.getHeight();
+      const doc = new jsPDF(pdfOrientation, 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
       for (let i = 0; i < convertFiles.length; i++) {
         if (i > 0) doc.addPage();
-        const imgUrl = convertFiles[i].preview; const img = new Image(); img.src = imgUrl;
+        const imgUrl = convertFiles[i].preview;
+        const img = new Image();
+        img.src = imgUrl;
         await new Promise(resolve => { img.onload = resolve; });
-        const imgRatio = img.width / img.height; const pageRatio = pageWidth / pageHeight;
+
+        const margin = pdfMargin;
+        const availableW = pageWidth - (margin * 2);
+        const availableH = pageHeight - (margin * 2);
+
+        const imgRatio = img.width / img.height;
+        const containerRatio = availableW / availableH;
+
         let renderWidth, renderHeight;
-        if (imgRatio > pageRatio) { renderWidth = pageWidth - 20; renderHeight = renderWidth / imgRatio; } 
-        else { renderHeight = pageHeight - 20; renderWidth = renderHeight * imgRatio; }
-        doc.addImage(imgUrl, 'JPEG', (pageWidth - renderWidth) / 2, (pageHeight - renderHeight) / 2, renderWidth, renderHeight);
+        if (imgRatio > containerRatio) {
+          renderWidth = availableW;
+          renderHeight = availableW / imgRatio;
+        } else {
+          renderHeight = availableH;
+          renderWidth = availableH * imgRatio;
+        }
+
+        const x = margin + (availableW - renderWidth) / 2;
+        const y = margin + (availableH - renderHeight) / 2;
+
+        doc.addImage(imgUrl, 'JPEG', x, y, renderWidth, renderHeight);
       }
-      doc.save(`Merged_Document_${Date.now()}.pdf`); setConvertFiles([]); 
-    } catch (err) { alert("Failed to create PDF."); } finally { setIsConvertingPdf(false); }
+      doc.save(`Merged_CSC_Empower_${Date.now()}.pdf`);
+      setPdfSettingsOpen(false);
+      setConvertFiles([]);
+    } catch (err) {
+      alert("Failed to create PDF.");
+    } finally {
+      setIsConvertingPdf(false);
+    }
   };
 
   const triggerDownload = async (file, targetKb, prefix) => {
@@ -194,6 +325,84 @@ export default function ShopCalculators() {
       link.download = `${prefix}_${file.name.replace(/\.[^/.]+$/, "")}.jpg`; link.click();
     } catch (err) { alert("Action failed."); } finally {
       setIsCompressing(false); setIsFormatting(false);
+    }
+  };
+
+  // Advanced Target KB PDF Compressor
+  const handleCompressPdf = async () => {
+    if (!compressPdfFile) return alert("Please select a PDF file first.");
+    if (!targetPdfKB || targetPdfKB < 10) return alert("Please enter a valid target size in KB.");
+    
+    setIsCompressingPdf(true);
+    
+    try {
+      const arrayBuffer = await compressPdfFile.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const numPages = pdf.numPages;
+
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      const targetBytesPerPage = (targetPdfKB * 1024) / numPages;
+
+      for (let i = 1; i <= numPages; i++) {
+        const page = await pdf.getPage(i);
+        
+        let scale = 1.5;
+        let jpegQuality = 0.8;
+        let imgData = '';
+        let currentBytes = Infinity;
+
+        while (currentBytes > targetBytesPerPage && scale > 0.4) {
+          const viewport = page.getViewport({ scale: scale }); 
+          
+          const canvas = document.createElement('canvas'); 
+          const ctx = canvas.getContext('2d');
+          canvas.width = viewport.width; 
+          canvas.height = viewport.height;
+          
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          imgData = canvas.toDataURL('image/jpeg', jpegQuality);
+          
+          currentBytes = (imgData.length * 3) / 4;
+
+          if (currentBytes > targetBytesPerPage) {
+            if (jpegQuality > 0.3) {
+              jpegQuality -= 0.1;
+            } else {
+              scale -= 0.2;
+              jpegQuality = 0.7;
+            }
+          }
+        }
+
+        if (i > 1) doc.addPage();
+        
+        const imgProps = doc.getImageProperties(imgData);
+        const pdfRatio = pageWidth / pageHeight;
+        const imgRatio = imgProps.width / imgProps.height;
+        let renderW = pageWidth;
+        let renderH = pageHeight;
+        
+        if (imgRatio > pdfRatio) {
+          renderH = pageWidth / imgRatio;
+        } else {
+          renderW = pageHeight * imgRatio;
+        }
+        
+        const x = (pageWidth - renderW) / 2;
+        const y = (pageHeight - renderH) / 2;
+
+        doc.addImage(imgData, 'JPEG', x, y, renderW, renderH);
+      }
+      
+      doc.save(`Compressed_${targetPdfKB}KB_${compressPdfFile.name}`);
+    } catch(err) {
+      console.error(err);
+      alert("Failed to compress the PDF. It might be corrupted or encrypted.");
+    } finally {
+      setIsCompressingPdf(false); 
     }
   };
 
@@ -466,7 +675,9 @@ export default function ShopCalculators() {
     <div className="animate-in fade-in duration-300 max-w-6xl mx-auto space-y-6">
       
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-
+        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+          <Calculator className="text-orange-500" /> Shop Calculators & Tools
+        </h2>
         <p className="text-sm font-semibold text-slate-500 mt-1">Quickly calculate daily shop metrics, assist students, or precisely format documents.</p>
       </div>
 
@@ -478,7 +689,6 @@ export default function ShopCalculators() {
             <ArrowRightLeft size={16} className="text-blue-500" /> Unit Converter
           </h3>
           
-          {/* Changed to a clean 3-column layout on large screens to properly utilize full width */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center flex-1">
             <div className="mb-4 lg:mb-0">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Measurement Category</label>
@@ -523,11 +733,14 @@ export default function ShopCalculators() {
             <button onClick={() => setActiveToolTab('extract')} className={getTabClass('extract', 'amber')}>
               <Files size={16} /> Extract PDF
             </button>
+            <button onClick={() => setActiveToolTab('compress-pdf')} className={getTabClass('compress-pdf', 'teal')}>
+              <FileArchive size={16} /> Compress PDF
+            </button>
             
             <div className="hidden md:block w-full h-px bg-slate-200 my-2"></div>
 
             <button onClick={() => setActiveToolTab('resize')} className={getTabClass('resize', 'pink')}>
-              <Crop size={16} /> Crop/Resize
+              <Crop size={16} /> Crop/Resize Image
             </button>
             <button onClick={() => setActiveToolTab('compress')} className={getTabClass('compress', 'blue')}>
               <Minimize size={16} /> Compress Image
@@ -540,45 +753,22 @@ export default function ShopCalculators() {
           {/* Main Content Area */}
           <div className="flex-1 p-5 md:p-8 flex flex-col bg-white">
             
-            {/* TAB 1: MERGE PDF */}
+            {/* TAB 1: MERGE PDF - Updated with new centered design from File 1 */}
             {activeToolTab === 'pdf' && (
-              <div className="flex flex-col h-full animate-in fade-in duration-200">
-                <div className="mb-4">
-                  <h4 className="font-bold text-slate-800">Merge Images to PDF</h4>
-                  <p className="text-xs text-slate-500 mt-1">Combine multiple photos (like Front & Back ID) into a single A4 PDF document.</p>
+              <div className="flex flex-col h-full items-center justify-center text-center">
+                <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mb-4">
+                  <FileImage size={40} className="text-rose-500" />
                 </div>
+                <h4 className="text-lg font-black text-slate-800 mb-2">Merge Images to PDF</h4>
+                <p className="text-sm text-slate-500 mb-6 max-w-sm">Upload multiple images to arrange them, set margins, and convert into a clean PDF.</p>
                 
-                <div className="flex-1 min-h-[160px] bg-rose-50/30 border border-rose-100 rounded-xl p-4 mb-5 overflow-y-auto custom-scrollbar">
-                  {convertFiles.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                      <ImageIcon size={36} className="mb-3 opacity-20 text-rose-500" />
-                      <p className="text-sm font-bold text-slate-600">No images selected</p>
-                      <p className="text-xs mt-1 text-center px-4 max-w-xs">Upload images to begin. They will automatically be centered with margins.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {convertFiles.map((f, index) => (
-                        <div key={f.id} className="relative group bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
-                          <div className="w-12 h-12 rounded bg-slate-100 shrink-0 overflow-hidden"><img src={f.preview} className="w-full h-full object-cover" /></div>
-                          <div className="flex-1 overflow-hidden">
-                            <p className="text-xs font-bold text-slate-700 truncate">{f.name}</p>
-                            <p className="text-[10px] text-slate-400">Page {index + 1}</p>
-                          </div>
-                          <button onClick={() => setConvertFiles(prev => prev.filter(x => x.id !== f.id))} className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-0 group-hover:opacity-100 shadow-sm transition-opacity"><X size={12} strokeWidth={3} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-auto">
-                  <div>
-                    <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" multiple className="hidden" ref={convertPdfInputRef} onChange={handleAddPdfFiles} />
-                    <button onClick={() => convertPdfInputRef.current.click()} className="w-full py-3 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-sm flex justify-center items-center gap-2 transition"><Plus size={16} /> Add Images</button>
-                  </div>
-                  <button onClick={handleCreatePdf} disabled={convertFiles.length === 0 || isConvertingPdf} className={`w-full py-3 rounded-xl text-sm font-bold flex justify-center items-center gap-2 shadow-sm transition ${convertFiles.length === 0 ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700 text-white"}`}>
-                    {isConvertingPdf ? <><Loader2 size={16} className="animate-spin" /> Merging...</> : <><FileDown size={16} /> Save Final PDF</>}
-                  </button>
-                </div>
+                <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" multiple className="hidden" ref={convertPdfInputRef} onChange={handleAddPdfFiles} />
+                <button 
+                  onClick={() => convertPdfInputRef.current.click()}
+                  className="px-8 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition flex items-center gap-2"
+                >
+                  <Plus size={18} /> Select Images
+                </button>
               </div>
             )}
 
@@ -646,7 +836,50 @@ export default function ShopCalculators() {
               </div>
             )}
 
-            {/* TAB 4: RESIZE & CROP */}
+            {/* TAB: COMPRESS PDF */}
+            {activeToolTab === 'compress-pdf' && (
+              <div className="flex flex-col h-full animate-in fade-in duration-200">
+                <div className="mb-4">
+                  <h4 className="font-bold text-slate-800">Target KB PDF Compressor</h4>
+                  <p className="text-xs text-slate-500 mt-1">Shrink heavy scanned PDF files to pass strict government portal limits. <br/><span className="text-amber-600 font-medium">Note: Converts pages to images. Best for scanned documents.</span></p>
+                </div>
+
+                <div className="bg-teal-50/50 border border-teal-100 rounded-2xl p-6 text-center mb-6 flex-1 flex flex-col justify-center items-center border-dashed">
+                   {compressPdfFile ? (
+                     <div className="flex flex-col items-center">
+                       <FileArchive size={36} className="text-teal-500 mb-3" />
+                       <p className="text-sm font-bold text-slate-800 truncate max-w-[250px]">{compressPdfFile.name}</p>
+                       <span className="text-[10px] text-teal-600 font-bold bg-teal-100 px-2 py-0.5 rounded mt-2">Ready to compress</span>
+                     </div>
+                   ) : (
+                     <>
+                       <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mb-4">
+                         <UploadCloud size={28} className="text-teal-500" />
+                       </div>
+                       <p className="text-sm font-bold text-slate-700">Select a large PDF document</p>
+                     </>
+                   )}
+                </div>
+
+                <div className="flex items-center gap-4 mb-6">
+                   <div className="flex-1">
+                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Max Target Size (KB)</label>
+                     <input type="number" min="10" value={targetPdfKB} onChange={(e) => setTargetPdfKB(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl outline-none text-sm font-bold focus:ring-2 focus:ring-teal-500 bg-slate-50 focus:bg-white" />
+                   </div>
+                   <div className="flex-1">
+                     <label className="block text-[10px] font-black text-transparent mb-1.5">Action</label>
+                     <input type="file" accept="application/pdf" className="hidden" ref={compressPdfInputRef} onChange={(e) => setCompressPdfFile(e.target.files[0])} />
+                     <button onClick={() => compressPdfInputRef.current.click()} className="w-full py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:border-slate-300 hover:bg-slate-50 transition">{compressPdfFile ? "Change PDF" : "Select PDF"}</button>
+                   </div>
+                </div>
+
+                <button onClick={handleCompressPdf} disabled={!compressPdfFile || isCompressingPdf} className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-sm transition flex items-center justify-center gap-2 ${!compressPdfFile ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-teal-600 hover:bg-teal-700 text-white"}`}>
+                  {isCompressingPdf ? <><Loader2 size={16} className="animate-spin" /> Compressing & Flattening...</> : <><Minimize size={16} /> Download Compressed PDF</>}
+                </button>
+              </div>
+            )}
+
+            {/* TAB: RESIZE & CROP */}
             {activeToolTab === 'resize' && (
               <div className="flex flex-col h-full animate-in fade-in duration-200">
                 <div className="mb-4">
@@ -689,7 +922,7 @@ export default function ShopCalculators() {
               </div>
             )}
 
-            {/* TAB 5: COMPRESS */}
+            {/* TAB: COMPRESS IMAGE */}
             {activeToolTab === 'compress' && (
               <div className="flex flex-col h-full animate-in fade-in duration-200">
                 <div className="mb-4">
@@ -731,7 +964,7 @@ export default function ShopCalculators() {
               </div>
             )}
 
-            {/* TAB 6: FORMAT */}
+            {/* TAB: FORMAT TO JPG */}
             {activeToolTab === 'format' && (
               <div className="flex flex-col h-full animate-in fade-in duration-200">
                 <div className="mb-4">
@@ -892,7 +1125,152 @@ export default function ShopCalculators() {
 
       </div>
 
-      {/* ✨ VISUAL PDF INSERTER MODAL ✨ */}
+      {/* ✨ PDF MERGE PRO MODAL (from File 1) ✨ */}
+      {pdfSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="bg-rose-100 p-2 rounded-lg text-rose-600">
+                  <Layout size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800">Image to PDF Options</h3>
+                  <p className="text-xs text-slate-500">{convertFiles.length} images selected</p>
+                </div>
+              </div>
+              <button onClick={() => setPdfSettingsOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition text-slate-400">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+              {/* Preview & Reorder Area */}
+              <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+
+                {/* Live Preview Canvas */}
+                <div className="flex-1 flex items-center justify-center p-6 min-h-0">
+                  <div className={`relative shadow-2xl shadow-slate-400/30 transition-all duration-300 ${pdfOrientation === 'l' ? 'max-h-full' : 'max-w-[280px] w-full'}`}
+                    style={{ aspectRatio: pdfOrientation === 'l' ? '297/210' : '210/297' }}
+                  >
+                    <canvas
+                      ref={previewCanvasRef}
+                      width={pdfOrientation === 'l' ? 594 : 420}
+                      height={pdfOrientation === 'l' ? 420 : 594}
+                      className="w-full h-full rounded-sm"
+                      style={{ display: 'block' }}
+                    />
+                    {/* Live badge */}
+                    <div className="absolute top-2 left-2 bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse inline-block"></span>
+                      Live Preview
+                    </div>
+                    {convertFiles.length > 1 && (
+                      <div className="absolute bottom-2 right-2 text-[10px] font-black text-slate-400 bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                        Page {previewPageIndex + 1} / {convertFiles.length}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Thumbnail Strip */}
+                <div className="border-t border-slate-200 bg-white p-3 overflow-x-auto">
+                  <div className="flex gap-2 items-center min-w-max">
+                    {convertFiles.map((file, idx) => (
+                      <div
+                        key={file.id}
+                        onClick={() => { setPreviewPageIndex(idx); }}
+                        className={`group relative shrink-0 cursor-pointer rounded-xl border-2 transition-all overflow-hidden
+                          ${previewPageIndex === idx ? 'border-rose-500 shadow-md shadow-rose-200' : 'border-slate-200 hover:border-rose-300'}`}
+                        style={{ width: 64, height: 80 }}
+                      >
+                        <img src={file.preview} className="w-full h-full object-cover" alt={`Page ${idx + 1}`} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-1">
+                          <span className="text-[8px] font-black text-white leading-none">P{idx + 1}</span>
+                        </div>
+                        {/* Reorder / delete overlay on hover */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-0.5">
+                          <button onClick={(e) => { e.stopPropagation(); movePage(idx, -1); if (previewPageIndex === idx && idx > 0) setPreviewPageIndex(idx - 1); }} disabled={idx === 0} className="p-1 bg-white/80 rounded text-slate-700 disabled:opacity-30 hover:bg-white transition"><MoveLeft size={10}/></button>
+                          <button onClick={(e) => { e.stopPropagation(); setConvertFiles(prev => { const next = prev.filter(f => f.id !== file.id); if (previewPageIndex >= next.length) setPreviewPageIndex(Math.max(0, next.length - 1)); return next; }); }} className="p-1 bg-red-500 rounded text-white hover:bg-red-600 transition"><Trash2 size={10}/></button>
+                          <button onClick={(e) => { e.stopPropagation(); movePage(idx, 1); if (previewPageIndex === idx && idx < convertFiles.length - 1) setPreviewPageIndex(idx + 1); }} disabled={idx === convertFiles.length - 1} className="p-1 bg-white/80 rounded text-slate-700 disabled:opacity-30 hover:bg-white transition"><MoveRight size={10}/></button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => convertPdfInputRef.current.click()}
+                      className="shrink-0 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-rose-500 hover:border-rose-300 hover:bg-rose-50/30 transition-all"
+                      style={{ width: 64, height: 80 }}
+                    >
+                      <Plus size={18} />
+                      <span className="text-[9px] font-bold">Add</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sidebar Settings */}
+              <div className="w-full lg:w-72 border-l border-slate-100 p-6 space-y-8 bg-white">
+                {/* Orientation */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Page Orientation</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => setPdfOrientation("p")}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${pdfOrientation === 'p' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                    >
+                      <div className="w-6 h-8 border-2 border-current rounded-sm"></div>
+                      <span className="text-xs font-bold">Portrait</span>
+                    </button>
+                    <button 
+                      onClick={() => setPdfOrientation("l")}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${pdfOrientation === 'l' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                    >
+                      <div className="w-8 h-6 border-2 border-current rounded-sm"></div>
+                      <span className="text-xs font-bold">Landscape</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Margins */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Page Margin</label>
+                  <div className="flex flex-col gap-2">
+                    {[
+                      { label: "No Margin", value: 0 },
+                      { label: "Small (10mm)", value: 10 },
+                      { label: "Big (20mm)", value: 20 }
+                    ].map((m) => (
+                      <button 
+                        key={m.value}
+                        onClick={() => setPdfMargin(m.value)}
+                        className={`text-left px-4 py-3 rounded-xl border-2 text-xs font-bold transition-all ${pdfMargin === m.value ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-slate-100 text-slate-600 hover:border-slate-200'}`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Final Action */}
+                <div className="pt-4">
+                  <button 
+                    onClick={handleCreatePdf}
+                    disabled={isConvertingPdf || convertFiles.length === 0}
+                    className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-rose-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isConvertingPdf ? <><Loader2 className="animate-spin" size={18}/> Converting...</> : <><FileDown size={18}/> Convert to PDF</>}
+                  </button>
+                  <p className="text-[9px] text-slate-400 text-center mt-3 leading-tight uppercase font-black">Fast browser-side conversion</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VISUAL PDF INSERTER MODAL */}
       {insertModalOpen && (
         <div className="fixed inset-0 bg-slate-900/90 z-50 flex flex-col backdrop-blur-sm animate-in fade-in">
           
