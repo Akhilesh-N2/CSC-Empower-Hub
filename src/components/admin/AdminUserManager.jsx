@@ -25,6 +25,7 @@ import {
   Download,
   ChevronDown,
   FileText,
+  Clock // ✨ ADDED CLOCK ICON FOR TRIAL BADGE
 } from "lucide-react";
 import UserDossier from "./UserDossier";
 
@@ -56,7 +57,7 @@ export default function AdminUserManager({
   const [selectedShopIds, setSelectedShopIds] = useState([]);
   const [approvalFilter, setApprovalFilter] = useState("all");
 
-  // ✨ NEW: Dropdown state for Export Menu
+  // Dropdown state for Export Menu
   const [showVerifiedExportMenu, setShowVerifiedExportMenu] = useState(false);
 
   const itemsPerPage = 10;
@@ -468,8 +469,7 @@ export default function AdminUserManager({
     document.body.removeChild(link);
   };
 
-  // ✨ PDF EXPORT
-  // ✨ PDF EXPORT
+  // ✨ PDF EXPORT (With Owner Name)
   const handleExportVerifiedShopsPDF = () => {
     const verifiedUsers = liveUsers.filter(
       (u) => u.role === "shop" && u.is_approved,
@@ -478,7 +478,6 @@ export default function AdminUserManager({
       return alert("No verified accounts found to export.");
 
     try {
-      // Create landscape document for better table fit
       const doc = new jsPDF("landscape");
 
       doc.setFontSize(16);
@@ -502,7 +501,7 @@ export default function AdminUserManager({
         return [
           index + 1,
           shop.shop_name || "N/A",
-          shop.full_name || "N/A", // ✨ Added Owner Name here
+          shop.full_name || "N/A", 
           user.email || "N/A",
           shop.phone || "N/A",
           shop.member_id || "N/A",
@@ -524,18 +523,18 @@ export default function AdminUserManager({
             "Expiry Date",
             "Device Limit",
           ],
-        ], // ✨ Added to headers
+        ], 
         body: tableData,
         theme: "striped",
         headStyles: {
           fillColor: [15, 23, 42],
           textColor: 255,
           fontStyle: "bold",
-        }, // Slate 900
-        styles: { fontSize: 8, cellPadding: 3 }, // ✨ Slightly reduced size to fit the extra column neatly
+        }, 
+        styles: { fontSize: 8, cellPadding: 3 }, 
         columnStyles: {
           0: { cellWidth: 10 },
-          7: { halign: "center", cellWidth: 22 }, // ✨ Shifted index to 7 for Device Limit
+          7: { halign: "center", cellWidth: 22 }, 
         },
       });
 
@@ -786,6 +785,7 @@ export default function AdminUserManager({
     fetchData();
   };
 
+  // ✨ DATA CALCULATION FOR SMART STATS
   const pendingRenewalsCount = liveShopDetails.filter(
     (s) => s.renewal_requested,
   ).length;
@@ -797,6 +797,25 @@ export default function AdminUserManager({
   const verifiedAccounts = usersByRole.filter((u) => u.is_approved).length;
   const pendingAccounts = totalAccounts - verifiedAccounts;
 
+  // Shop specific detailed counts
+  let activeTrialsCount = 0;
+  let paidCount = 0;
+  let expiredCount = 0;
+
+  if (userSubTab === "shops") {
+    usersByRole.forEach(u => {
+      if (u.is_approved) {
+        const s = liveShopDetails.find(shop => shop.id === u.id);
+        const expiry = s?.subscription_expires_at ? new Date(s.subscription_expires_at) : null;
+        const daysRem = expiry ? Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+        
+        if (daysRem > 15) paidCount++;
+        else if (daysRem > 0) activeTrialsCount++;
+        else expiredCount++;
+      }
+    });
+  }
+
   const filteredUsers = usersByRole.filter((user) => {
     const term = searchTerm.toLowerCase().trim();
 
@@ -806,25 +825,35 @@ export default function AdminUserManager({
 
     if (user.role === "shop") {
       const shopData = liveShopDetails.find((s) => s.id === user.id);
+      let daysRem = 0;
+      let isExpired = false;
+
       if (shopData) {
         if (shopData.renewal_requested) isRenewalRequested = true;
-        if (shopData.shop_name)
-          shopNameMatch = shopData.shop_name.toLowerCase().includes(term);
-        if (shopData.member_id)
-          memberIdMatch = shopData.member_id.toString().includes(term);
+        if (shopData.shop_name) shopNameMatch = shopData.shop_name.toLowerCase().includes(term);
+        if (shopData.member_id) memberIdMatch = shopData.member_id.toString().includes(term);
+
+        const expiry = shopData.subscription_expires_at ? new Date(shopData.subscription_expires_at) : null;
+        daysRem = expiry ? Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+        isExpired = daysRem <= 0;
       }
+
+      // Advanced Shop Filters
+      if (approvalFilter === "verified" && !user.is_approved) return false;
+      if (approvalFilter === "pending" && user.is_approved) return false;
+      if (approvalFilter === "trial" && (!user.is_approved || daysRem > 15 || isExpired)) return false;
+      if (approvalFilter === "paid" && (!user.is_approved || daysRem <= 15 || isExpired)) return false;
+      if (approvalFilter === "expired" && (!user.is_approved || !isExpired)) return false;
+      
+    } else {
+      // Normal Filters for Seekers/Providers
+      if (approvalFilter === "verified" && !user.is_approved) return false;
+      if (approvalFilter === "pending" && user.is_approved) return false;
     }
 
-    if (
-      userSubTab === "shops" &&
-      showRenewalRequestsOnly &&
-      !isRenewalRequested
-    ) {
+    if (userSubTab === "shops" && showRenewalRequestsOnly && !isRenewalRequested) {
       return false;
     }
-
-    if (approvalFilter === "verified" && !user.is_approved) return false;
-    if (approvalFilter === "pending" && user.is_approved) return false;
 
     if (!term) return true;
 
@@ -834,10 +863,26 @@ export default function AdminUserManager({
     return emailMatch || systemIdMatch || shopNameMatch || memberIdMatch;
   });
 
+  // ✨ SMART SORTING LOGIC
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (userSubTab !== "shops") return 0;
+    
+    const shopA = liveShopDetails.find((s) => s.id === a.id);
+    const shopB = liveShopDetails.find((s) => s.id === b.id);
+    
+    const expiryA = shopA?.subscription_expires_at ? new Date(shopA.subscription_expires_at).getTime() : 0;
+    const expiryB = shopB?.subscription_expires_at ? new Date(shopB.subscription_expires_at).getTime() : 0;
+
+    if (expiryA === 0) return 1; 
+    if (expiryB === 0) return -1;
+    
+    return expiryA - expiryB; 
+  });
+
   const indexOfLastUser = currentPage * itemsPerPage;
   const indexOfFirstUser = indexOfLastUser - itemsPerPage;
-  const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
-  const totalUserPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const currentUsers = sortedUsers.slice(indexOfFirstUser, indexOfLastUser);
+  const totalUserPages = Math.ceil(sortedUsers.length / itemsPerPage);
 
   const enrichedLedger = globalLedger.map((log) => {
     const shop = liveShopDetails.find((s) => s.id === log.shop_id);
@@ -940,56 +985,69 @@ export default function AdminUserManager({
             </div>
           </div>
 
-          {/* REAL-TIME STATS ROW */}
+          {/* ✨ SMART REAL-TIME STATS ROW ✨ */}
           {userSubTab !== "ledger" && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-in slide-in-from-top-4 duration-500">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Total{" "}
-                    {userSubTab.charAt(0).toUpperCase() + userSubTab.slice(1)}
-                  </p>
-                  <p className="text-2xl font-black text-slate-800">
-                    {totalAccounts}
-                  </p>
+            userSubTab === "shops" ? (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 animate-in slide-in-from-top-4 duration-500">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Paid Licenses</p>
+                    <p className="text-2xl font-black text-slate-800">{paidCount}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center"><BadgeCheck size={20} /></div>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Users size={20} />
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Active Trials</p>
+                    <p className="text-2xl font-black text-slate-800">{activeTrialsCount}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><Clock size={20} /></div>
                 </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
-                    Verified Accounts
-                  </p>
-                  <p className="text-2xl font-black text-slate-800">
-                    {verifiedAccounts}
-                  </p>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Expired</p>
+                    <p className="text-2xl font-black text-slate-800">{expiredCount}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center"><AlertCircle size={20} /></div>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <CheckCircle2 size={20} />
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
-                    Pending Approvals
-                  </p>
-                  <p className="text-2xl font-black text-slate-800">
-                    {pendingAccounts}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <AlertCircle size={20} />
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Pending</p>
+                    <p className="text-2xl font-black text-slate-800">{pendingAccounts}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center"><Store size={20} /></div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-in slide-in-from-top-4 duration-500">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total {userSubTab.charAt(0).toUpperCase() + userSubTab.slice(1)}</p>
+                    <p className="text-2xl font-black text-slate-800">{totalAccounts}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><Users size={20} /></div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Verified Accounts</p>
+                    <p className="text-2xl font-black text-slate-800">{verifiedAccounts}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><CheckCircle2 size={20} /></div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Pending Approvals</p>
+                    <p className="text-2xl font-black text-slate-800">{pendingAccounts}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center"><AlertCircle size={20} /></div>
+                </div>
+              </div>
+            )
           )}
 
           {/* ✨ FILTERS & SEARCH ROW ✨ */}
           <div className="flex flex-col lg:flex-row gap-4 mb-6 justify-between items-start lg:items-center">
+            
             {/* Search + Verification Filter Group */}
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
               <div className="relative flex-1 max-w-md">
@@ -1010,30 +1068,25 @@ export default function AdminUserManager({
                 />
               </div>
 
-              {/* ✨ NEW: APPROVAL STATUS FILTER ✨ */}
+              {/* ✨ EXPANDED APPROVAL STATUS FILTER ✨ */}
               {userSubTab !== "ledger" && (
-                <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 h-[46px] w-full sm:w-fit shrink-0">
-                  <div className="px-3 border-r border-slate-200 text-slate-400">
+                <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 h-[46px] w-full sm:w-fit shrink-0 overflow-x-auto no-scrollbar">
+                  <div className="px-3 border-r border-slate-200 text-slate-400 sticky left-0 bg-slate-100 hidden sm:block">
                     <Filter size={16} />
                   </div>
-                  <button
-                    onClick={() => setApprovalFilter("all")}
-                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "all" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    All
-                  </button>
-                  <button
-                    onClick={() => setApprovalFilter("verified")}
-                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "verified" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    Verified
-                  </button>
-                  <button
-                    onClick={() => setApprovalFilter("pending")}
-                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "pending" ? "bg-amber-50 text-amber-700 shadow-sm border border-amber-100" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    Pending
-                  </button>
+                  <button onClick={() => setApprovalFilter("all")} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "all" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>All</button>
+                  
+                  {userSubTab === "shops" ? (
+                    <>
+                      <button onClick={() => setApprovalFilter("paid")} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "paid" ? "bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100" : "text-slate-500 hover:text-slate-700"}`}>Paid</button>
+                      <button onClick={() => setApprovalFilter("trial")} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "trial" ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100" : "text-slate-500 hover:text-slate-700"}`}>Trial</button>
+                      <button onClick={() => setApprovalFilter("expired")} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "expired" ? "bg-red-50 text-red-700 shadow-sm border border-red-100" : "text-slate-500 hover:text-slate-700"}`}>Expired</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setApprovalFilter("verified")} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "verified" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-700"}`}>Verified</button>
+                  )}
+                  
+                  <button onClick={() => setApprovalFilter("pending")} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${approvalFilter === "pending" ? "bg-amber-50 text-amber-700 shadow-sm border border-amber-100" : "text-slate-500 hover:text-slate-700"}`}>Pending</button>
                 </div>
               )}
             </div>
@@ -1042,41 +1095,29 @@ export default function AdminUserManager({
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
               {userSubTab === "shops" && (
                 <>
-                  {/* ✨ NEW: BACKUP VERIFIED DROPDOWN ✨ */}
+                  {/* ✨ BACKUP VERIFIED DROPDOWN ✨ */}
                   <div className="relative z-20 w-full sm:w-auto">
                     <button
-                      onClick={() =>
-                        setShowVerifiedExportMenu(!showVerifiedExportMenu)
-                      }
+                      onClick={() => setShowVerifiedExportMenu(!showVerifiedExportMenu)}
                       className="h-[46px] px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 w-full sm:w-auto shrink-0"
                       title="Download Backup of Verified Shops"
                     >
-                      <Download size={16} /> Backup Verified{" "}
-                      <ChevronDown size={14} />
+                      <Download size={16} /> Backup Verified <ChevronDown size={14} />
                     </button>
 
                     {showVerifiedExportMenu && (
                       <>
-                        <div
-                          className="fixed inset-0 z-30"
-                          onClick={() => setShowVerifiedExportMenu(false)}
-                        ></div>
+                        <div className="fixed inset-0 z-30" onClick={() => setShowVerifiedExportMenu(false)}></div>
                         <div className="absolute right-0 top-14 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-40 animate-in fade-in zoom-in-95 duration-200">
                           <button
-                            onClick={() => {
-                              handleExportVerifiedShopsCSV();
-                              setShowVerifiedExportMenu(false);
-                            }}
+                            onClick={() => { handleExportVerifiedShopsCSV(); setShowVerifiedExportMenu(false); }}
                             className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition"
                           >
                             <FileText size={16} /> Excel / CSV
                           </button>
                           <div className="h-px bg-slate-100 w-full"></div>
                           <button
-                            onClick={() => {
-                              handleExportVerifiedShopsPDF();
-                              setShowVerifiedExportMenu(false);
-                            }}
+                            onClick={() => { handleExportVerifiedShopsPDF(); setShowVerifiedExportMenu(false); }}
                             className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition"
                           >
                             <Download size={16} /> PDF Document
@@ -1091,8 +1132,7 @@ export default function AdminUserManager({
                       onClick={handleBulkRevoke}
                       className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 animate-in zoom-in duration-200 h-[46px] w-full sm:w-auto shrink-0"
                     >
-                      <AlertCircle size={16} /> Revoke ({selectedShopIds.length}
-                      )
+                      <AlertCircle size={16} /> Revoke ({selectedShopIds.length})
                     </button>
                   )}
 
@@ -1216,19 +1256,9 @@ export default function AdminUserManager({
                             </div>
                           </td>
                           <td className="p-4 md:p-5">
-                            {log.action_type
-                              ?.toLowerCase()
-                              .includes("revoked") ||
-                            log.action_type
-                              ?.toLowerCase()
-                              .includes("canceled") ||
-                            log.action_type?.toLowerCase().includes("reset") ? (
+                            {log.action_type?.toLowerCase().includes("revoked") || log.action_type?.toLowerCase().includes("canceled") || log.action_type?.toLowerCase().includes("reset") ? (
                               <span className="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-                                {log.action_type
-                                  ?.toLowerCase()
-                                  .includes("canceled")
-                                  ? "Canceled"
-                                  : "Account Suspended / Reset"}
+                                {log.action_type?.toLowerCase().includes("canceled") ? "Canceled" : "Account Suspended / Reset"}
                               </span>
                             ) : (
                               <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
@@ -1332,6 +1362,30 @@ export default function AdminUserManager({
                             : null;
                         const needsRenewal = shopData?.renewal_requested;
 
+                        // ✨ DYNAMIC STATUS BADGE LOGIC
+                        let statusConfig = {
+                          label: "Pending",
+                          colorClass: "bg-amber-50 text-amber-700 border-amber-200",
+                          icon: <AlertCircle size={12} className="text-amber-500" />
+                        };
+
+                        if (user.is_approved) {
+                          if (user.role === "shop") {
+                            const expiry = shopData?.subscription_expires_at ? new Date(shopData.subscription_expires_at) : null;
+                            const daysRem = expiry ? Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+                            
+                            if (daysRem > 15) {
+                              statusConfig = { label: "Paid License", colorClass: "bg-indigo-50 text-indigo-700 border-indigo-200", icon: <BadgeCheck size={12} className="text-indigo-500" /> };
+                            } else if (daysRem > 0) {
+                              statusConfig = { label: `Trial (${daysRem}d left)`, colorClass: "bg-blue-50 text-blue-700 border-blue-200", icon: <Clock size={12} className="text-blue-500" /> };
+                            } else {
+                              statusConfig = { label: "Expired", colorClass: "bg-red-50 text-red-700 border-red-200", icon: <AlertCircle size={12} className="text-red-500" /> };
+                            }
+                          } else {
+                            statusConfig = { label: "Verified", colorClass: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <CheckCircle2 size={12} className="text-emerald-500" /> };
+                          }
+                        }
+
                         return (
                           <tr
                             key={user.id}
@@ -1394,21 +1448,11 @@ export default function AdminUserManager({
                               </div>
                             </td>
                             <td className="p-4 md:p-5">
+                              {/* ✨ APPLIED DYNAMIC STATUS BADGE ✨ */}
                               <div
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] md:text-[11px] font-bold border ${user.is_approved ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] md:text-[11px] font-bold border shadow-sm ${statusConfig.colorClass}`}
                               >
-                                {user.is_approved ? (
-                                  <CheckCircle2
-                                    size={12}
-                                    className="text-emerald-500"
-                                  />
-                                ) : (
-                                  <AlertCircle
-                                    size={12}
-                                    className="text-amber-500"
-                                  />
-                                )}{" "}
-                                {user.is_approved ? "Verified" : "Pending"}
+                                {statusConfig.icon} {statusConfig.label}
                               </div>
                             </td>
                             <td className="p-4 md:p-5 text-right">
