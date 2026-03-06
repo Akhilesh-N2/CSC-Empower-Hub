@@ -566,31 +566,18 @@ function ShopDashboard() {
             <div className="bg-amber-50 border border-amber-200 p-4 md:p-5 rounded-2xl mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm animate-in slide-in-from-top-4">
               <div className="flex-1 text-center sm:text-left">
                 <h4 className="text-amber-800 font-black flex items-center justify-center sm:justify-start gap-2 uppercase tracking-wider text-sm mb-1">
-                  <AlertCircle size={18} /> License Expiring Soon
+                  <AlertCircle size={18} /> Trail License Expiring Soon! 
                 </h4>
                 <p className="text-amber-700 text-xs md:text-sm font-medium">
-                  Your platform license expires on{" "}
+                  Your Trail period ends on{" "}
                   <strong className="font-black text-amber-900">
                     {new Date(
                       shopInfo.subscription_expires_at,
                     ).toLocaleDateString()}
                   </strong>
-                  . Please request a renewal to avoid service interruption.
+                  . Please contact the admin to avoid service interruption.
                 </p>
               </div>
-
-              {shopInfo.renewal_requested ? (
-                <span className="bg-amber-200 text-amber-800 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-inner border border-amber-300">
-                  ⏳ Review Pending
-                </span>
-              ) : (
-                <button
-                  onClick={handleRequestRenewal}
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl text-sm font-black uppercase tracking-wide shadow-md whitespace-nowrap transition transform hover:-translate-y-0.5 w-full sm:w-auto"
-                >
-                  Request Renewal
-                </button>
-              )}
             </div>
           )}
 

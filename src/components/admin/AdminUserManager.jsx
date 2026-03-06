@@ -19,7 +19,7 @@ import {
   Calendar as CalendarIcon,
   X,
   Users,
-  Filter // ✨ ADDED FILTER ICON
+  Filter
 } from "lucide-react";
 import UserDossier from "./UserDossier"; 
 
@@ -91,7 +91,7 @@ export default function AdminUserManager({
     setCurrentPage(1);
     setShowRenewalRequestsOnly(false);
     setSelectedShopIds([]); 
-    setApprovalFilter("all"); // ✨ Reset filter on tab change
+    setApprovalFilter("all"); 
   }, [userSubTab]);
 
   useEffect(() => {
@@ -179,14 +179,15 @@ export default function AdminUserManager({
             !shopData?.subscription_expires_at ||
             new Date(shopData.subscription_expires_at) < new Date()
           ) {
+            // ✨ CHANGED: 14 days changed to 2 days
             const trialExpiryDate = new Date();
-            trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
+            trialExpiryDate.setDate(trialExpiryDate.getDate() + 2);
 
             await supabase.rpc("admin_update_shop_license", {
               target_shop_id: id,
               new_expiry: trialExpiryDate.toISOString(),
               reset_renewal: false,
-              action_taken: "Account Approved (14-Day Free Trial)",
+              action_taken: "Account Approved (2-Day Free Trial)", // ✨ CHANGED text
             });
 
             try {
@@ -204,7 +205,7 @@ export default function AdminUserManager({
               console.error("Failed to send EmailJS email:", emailErr);
             }
 
-            alert("Shop Approved! A 14-Day Trial has been activated.");
+            alert("Shop Approved! A 2-Day Trial has been activated."); // ✨ CHANGED alert
           } else {
             await supabase.rpc("admin_log_shop_action", {
               target_shop_id: id,
