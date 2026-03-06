@@ -675,10 +675,7 @@ export default function ShopCalculators() {
     <div className="animate-in fade-in duration-300 max-w-6xl mx-auto space-y-6">
       
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-          <Calculator className="text-orange-500" /> Shop Calculators & Tools
-        </h2>
-        <p className="text-sm font-semibold text-slate-500 mt-1">Quickly calculate daily shop metrics, assist students, or precisely format documents.</p>
+        <p className="text-md flex justify-center font-semibold text-slate-500 mt-1">Quickly calculate daily shop metrics, precisely format documents, or assist students.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
