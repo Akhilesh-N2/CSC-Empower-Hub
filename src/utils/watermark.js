@@ -2,32 +2,40 @@
 
 export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
   try {
-    // 1. THE FONT INJECTOR (Includes Malayalam Support)
+    // 1. BULLETPROOF FONT LOADER
+    // Upgraded to "Lexend" - a highly premium, wide tech-brand font
     await new Promise((resolve) => {
-      const fontId = 'premium-watermark-font-v3'; 
-      if (document.getElementById(fontId)) {
-        document.fonts.load('700 24px "Montserrat"').then(() => setTimeout(resolve, 100)).catch(resolve);
-        return;
-      }
+      const fontUrl = 'https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800;900&family=Noto+Sans+Malayalam:wght@700;800;900&display=swap';
       
-      const link = document.createElement('link');
-      link.id = fontId;
-      link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;900&family=Noto+Sans+Malayalam:wght@700;900&display=swap';
+      let link = document.querySelector(`link[href="${fontUrl}"]`);
       
-      link.onload = () => {
-        Promise.all([
-          document.fonts.load('900 24px "Montserrat"'),
-          document.fonts.load('700 24px "Montserrat"'),
-          document.fonts.load('600 24px "Montserrat"'),
-          document.fonts.load('500 24px "Montserrat"'),
-          document.fonts.load('900 24px "Noto Sans Malayalam"') // Ensure Malayalam is ready
-        ]).then(() => {
-          setTimeout(resolve, 200); 
-        }).catch(resolve);
+      const loadFontsIntoMemory = async () => {
+        await document.fonts.ready;
+        try {
+          await Promise.all([
+            document.fonts.load('900 24px "Lexend"'),
+            document.fonts.load('800 24px "Lexend"'),
+            document.fonts.load('700 24px "Lexend"'),
+            document.fonts.load('600 24px "Lexend"'),
+            document.fonts.load('500 24px "Lexend"'),
+            document.fonts.load('900 24px "Noto Sans Malayalam"')
+          ]);
+        } catch (e) {
+          console.warn("Font loading error:", e);
+        }
+        setTimeout(resolve, 150); 
       };
-      link.onerror = resolve; 
-      document.head.appendChild(link);
+
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        link.onload = loadFontsIntoMemory; 
+        link.onerror = resolve; 
+        document.head.appendChild(link);
+      } else {
+        loadFontsIntoMemory();
+      }
     });
 
     // 2. CORS BYPASS for main poster
@@ -42,23 +50,27 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
+        // ✨ DUMMY DRAW HACK: Forces browser to cache the Lexend font shapes
+        ctx.font = '800 10px "Lexend"';
+        ctx.fillText('A', -100, -100);
+        ctx.font = '600 10px "Lexend"';
+        ctx.fillText('A', -100, -100);
+        ctx.font = '900 10px "Noto Sans Malayalam"';
+        ctx.fillText('അ', -100, -100);
+
         const imgWidth = img.width;
         const imgHeight = img.height;
 
-        // Heights for our added sections
-        const bannerHeight = Math.max(180, imgHeight * 0.18); 
+        const bannerHeight = Math.max(220, imgHeight * 0.22); 
         const callBoxHeight = Math.max(70, bannerHeight * 0.55);
 
-        // FIX: We ADD both the Yellow Box AND the White Banner to the canvas height.
-        // This ensures the poster is never covered!
         canvas.width = imgWidth;
         canvas.height = imgHeight + callBoxHeight + bannerHeight;
 
-        // Draw the original poster at the very top (0, 0)
         ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
         // ==========================================
-        // DIAGONAL WATERMARK (Anti-piracy background)
+        // DIAGONAL WATERMARK
         // ==========================================
         const watermarkText = shopInfo?.shop_name ? shopInfo.shop_name.toUpperCase() : "AUTHORIZED PARTNER";
         
@@ -73,12 +85,12 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         let overlaySize = Math.floor(diagonalLength * 0.08); 
         
         if ('letterSpacing' in ctx) ctx.letterSpacing = "6px";
-        ctx.font = `900 ${overlaySize}px "Montserrat", sans-serif`;
+        ctx.font = `800 ${overlaySize}px "Lexend", sans-serif`;
 
         let textWidth = ctx.measureText(watermarkText).width;
         if (textWidth > maxOverlayWidth) {
           overlaySize = Math.floor(overlaySize * (maxOverlayWidth / textWidth));
-          ctx.font = `900 ${overlaySize}px "Montserrat", sans-serif`;
+          ctx.font = `800 ${overlaySize}px "Lexend", sans-serif`;
         }
 
         ctx.textAlign = "center";
@@ -97,25 +109,20 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         // ==========================================
         // ✨ PREMIUM SPLIT WHITE BANNER ✨
         // ==========================================
-        
-        // This is the Y-coordinate where the White Banner starts (below the Yellow Box)
         const bannerStartY = imgHeight + callBoxHeight;
 
-        // 1. Fill entire new footer area with White (so no transparency bugs occur)
         ctx.fillStyle = "#ffffff"; 
         ctx.fillRect(0, imgHeight, imgWidth, callBoxHeight + bannerHeight);
 
-        // 2. Top Accent Line (Indian Tricolor Style) - Now sits on top of the White Banner
         const accentHeight = Math.max(6, bannerHeight * 0.04);
-        ctx.fillStyle = "#FF9933"; // Saffron
+        ctx.fillStyle = "#FF9933"; 
         ctx.fillRect(0, bannerStartY, imgWidth / 3, accentHeight);
-        ctx.fillStyle = "#f1f5f9"; // Soft grey
+        ctx.fillStyle = "#f1f5f9"; 
         ctx.fillRect(imgWidth / 3, bannerStartY, imgWidth / 3, accentHeight);
-        ctx.fillStyle = "#138808"; // Green
+        ctx.fillStyle = "#138808"; 
         ctx.fillRect((imgWidth / 3) * 2, bannerStartY, imgWidth / 3, accentHeight);
 
-        // 3. Vertical Divider Line
-        ctx.strokeStyle = "#e2e8f0"; // Light slate grey
+        ctx.strokeStyle = "#e2e8f0"; 
         ctx.lineWidth = Math.max(2, imgWidth * 0.002);
         ctx.beginPath();
         ctx.moveTo(imgWidth * 0.5, bannerStartY + (bannerHeight * 0.2));
@@ -127,18 +134,16 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         // ------------------------------------------
         const leftColWidth = imgWidth * 0.5;
         const leftColCenter = leftColWidth * 0.5;
-        const bannerContentY = bannerStartY + (bannerHeight * 0.45); // Y centerline for name/logo
+        const bannerContentY = bannerStartY + (bannerHeight * 0.35); 
         
         ctx.save();
         ctx.textBaseline = "middle";
         
-        // Load Logo if exists
         let logoImg = null;
-        const logoSize = Math.max(40, bannerHeight * 0.4); // Target size for logo
+        const logoSize = Math.max(40, bannerHeight * 0.4); 
 
         if (shopInfo?.logo_url) {
           try {
-            // CORS bypass for logo
             const logoResp = await fetch(`${shopInfo.logo_url}${shopInfo.logo_url.includes('?') ? '&' : '?'}cb=${Date.now()}`);
             const logoBlob = await logoResp.blob();
             const logoLocalUrl = URL.createObjectURL(logoBlob);
@@ -146,7 +151,7 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
             logoImg = await new Promise((res) => {
               const lImg = new Image();
               lImg.onload = () => res(lImg);
-              lImg.onerror = () => res(null); // Continue even if logo fails
+              lImg.onerror = () => res(null); 
               lImg.src = logoLocalUrl;
             });
           } catch (e) {
@@ -154,12 +159,11 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
           }
         }
 
-        // Define Font settings
         let nameSize = Math.max(28, Math.floor(bannerHeight * 0.28));
-        ctx.font = `900 ${nameSize}px "Montserrat", sans-serif`;
-        ctx.fillStyle = "#1e3a8a"; // Deep Blue
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "0px"; // Lexend is already wide
+        ctx.font = `800 ${nameSize}px "Lexend", sans-serif`;
 
-        const gap = 15; // Gap between logo and text
+        const gap = 15; 
         let logoFinalWidth = 0;
         let logoFinalHeight = 0;
 
@@ -167,55 +171,55 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
           const aspectRatio = logoImg.width / logoImg.height;
           logoFinalHeight = logoSize;
           logoFinalWidth = logoSize * aspectRatio;
-          // Ensure logo isn't ridiculously wide
           if (logoFinalWidth > leftColWidth * 0.3) {
              logoFinalWidth = leftColWidth * 0.3;
              logoFinalHeight = logoFinalWidth / aspectRatio;
           }
         }
 
-        // Calculate maximum available width for text
         const padding = 20;
         const maxTextWidth = leftColWidth - padding * 2 - (logoImg ? logoFinalWidth + gap : 0);
 
-        // Scale down Shop Name font size if it's too long
         while (ctx.measureText(watermarkText).width > maxTextWidth && nameSize > 14) {
           nameSize -= 2;
-          ctx.font = `900 ${nameSize}px "Montserrat", sans-serif`;
+          ctx.font = `800 ${nameSize}px "Lexend", sans-serif`;
         }
 
         const measuredTextWidth = ctx.measureText(watermarkText).width;
-        
-        // Calculate total width of block (logo + gap + text) to center it
         const totalBlockWidth = (logoImg ? logoFinalWidth + gap : 0) + measuredTextWidth;
         const blockStartX = leftColCenter - (totalBlockWidth / 2);
 
-        // Draw Logo if available
         if (logoImg) {
           const logoX = blockStartX;
           const logoY = bannerContentY - (logoFinalHeight / 2);
           ctx.drawImage(logoImg, logoX, logoY, logoFinalWidth, logoFinalHeight);
-          if (logoImg.src.startsWith('blob:')) URL.revokeObjectURL(logoImg.src); // Clean up
+          if (logoImg.src.startsWith('blob:')) URL.revokeObjectURL(logoImg.src); 
         }
 
-        // Draw Shop Name
-        ctx.textAlign = "left"; // Draw from left to right within centered block
         const textX = blockStartX + (logoImg ? logoFinalWidth + gap : 0);
-        ctx.fillText(watermarkText, textX, bannerContentY);
 
-        // Draw Subtitle (Centered below the name/logo block)
-        const subtitleY = bannerStartY + (bannerHeight * 0.68);
-        ctx.font = `700 ${Math.max(12, Math.floor(nameSize * 0.35))}px "Montserrat", sans-serif`;
-        ctx.fillStyle = "#64748b"; // Slate grey
-        ctx.textAlign = "center"; // Center subtitle relative to column
-        if ('letterSpacing' in ctx) ctx.letterSpacing = "2px";
+        // ✨ NEW: Premium Linear Gradient for the Title
+        const titleGradient = ctx.createLinearGradient(textX, 0, textX + measuredTextWidth, 0);
+        titleGradient.addColorStop(0, "#1e3a8a"); // Deep Navy
+        titleGradient.addColorStop(1, "#3b82f6"); // Vibrant Blue
+        ctx.fillStyle = titleGradient;
+
+        ctx.textAlign = "left"; 
+        ctx.fillText(watermarkText, textX, bannerContentY);
+        
+        // ✨ NEW: Vibrant Subtitle Styling
+        const subtitleY = bannerContentY + (nameSize * 0.85); 
+        ctx.font = `600 ${Math.max(12, Math.floor(nameSize * 0.30))}px "Lexend", sans-serif`;
+        ctx.fillStyle = "#2563eb"; // Bright solid blue to match gradient end
+        ctx.textAlign = "center"; 
+        if ('letterSpacing' in ctx) ctx.letterSpacing = "3px";
         ctx.fillText("AUTHORIZED SERVICE CENTER", leftColCenter, subtitleY);
         
-        ctx.restore(); // Restore baseline and alignment
+        ctx.restore(); 
 
 
         // ------------------------------------------
-        // ✨ RIGHT COLUMN: CONTACT DETAILS (Vector Icons) ✨
+        // ✨ RIGHT COLUMN: CONTACT DETAILS ✨
         // ------------------------------------------
         const rightColStart = imgWidth * 0.55; 
         const maxRightTextWidth = (imgWidth * 0.40) - 20; 
@@ -233,22 +237,28 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         const drawVectorRow = (iconPath, text, rowNum) => {
           const y = bannerStartY + (rowSpacing * rowNum);
           
+          // ✨ NEW: Floating 3D Badge for Icons
+          ctx.save();
+          ctx.shadowColor = "rgba(0, 0, 0, 0.08)";
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetY = 3;
           ctx.beginPath();
           ctx.arc(rightColStart + (iconSize / 2), y, iconSize * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = "#eff6ff"; 
+          ctx.fillStyle = "#ffffff"; 
           ctx.fill();
+          ctx.restore();
 
+          // Draw Icon Inside Badge
           ctx.save();
           ctx.translate(rightColStart, y - (iconSize / 2)); 
           const scale = iconSize / 24; 
           ctx.scale(scale, scale);
-          
-          ctx.fillStyle = "#1e3a8a"; 
+          ctx.fillStyle = "#2563eb"; // Bright blue
           ctx.fill(new Path2D(iconPath));
           ctx.restore();
           
-          ctx.font = `600 ${contactTextSize}px "Montserrat", sans-serif`;
-          ctx.fillStyle = "#334155"; 
+          ctx.font = `500 ${contactTextSize}px "Lexend", sans-serif`;
+          ctx.fillStyle = "#475569"; 
           
           const textStartOffset = rightColStart + (iconSize * 1.8);
           let displayText = text;
@@ -269,10 +279,8 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         // ==========================================
         // ✨ MALAYALAM CALL-TO-ACTION BOX ✨
         // ==========================================
-        
         const callBoxWidth = imgWidth * 0.65;
         const callBoxX = (imgWidth - callBoxWidth) / 2;
-        // The box now starts exactly where the poster ends
         const callBoxY = imgHeight; 
 
         // Shadow
@@ -281,28 +289,26 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 4;
 
-        ctx.fillStyle = "#fef08a"; 
+        ctx.fillStyle = "#fde047"; // Richer Amber Gold color
         const radius = Math.max(15, imgWidth * 0.03);
         
-        // Draw Box
         ctx.beginPath();
-        ctx.moveTo(callBoxX, bannerStartY); // Bottom left (touches the Tricolor line)
-        ctx.lineTo(callBoxX, callBoxY + radius); // Up to top left
-        ctx.quadraticCurveTo(callBoxX, callBoxY, callBoxX + radius, callBoxY); // Rounded top left
-        ctx.lineTo(callBoxX + callBoxWidth - radius, callBoxY); // Top edge
-        ctx.quadraticCurveTo(callBoxX + callBoxWidth, callBoxY, callBoxX + callBoxWidth, callBoxY + radius); // Rounded top right
-        ctx.lineTo(callBoxX + callBoxWidth, bannerStartY); // Bottom right
+        ctx.moveTo(callBoxX, bannerStartY); 
+        ctx.lineTo(callBoxX, callBoxY + radius); 
+        ctx.quadraticCurveTo(callBoxX, callBoxY, callBoxX + radius, callBoxY); 
+        ctx.lineTo(callBoxX + callBoxWidth - radius, callBoxY); 
+        ctx.quadraticCurveTo(callBoxX + callBoxWidth, callBoxY, callBoxX + callBoxWidth, callBoxY + radius); 
+        ctx.lineTo(callBoxX + callBoxWidth, bannerStartY); 
         ctx.closePath();
         ctx.fill();
         ctx.restore(); 
 
-        // Write the Malayalam Text
         ctx.fillStyle = "#000000";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         
         let malSize = Math.max(18, callBoxHeight * 0.26);
-        ctx.font = `900 ${malSize}px "Noto Sans Malayalam", "Montserrat", sans-serif`;
+        ctx.font = `900 ${malSize}px "Noto Sans Malayalam", "Lexend", sans-serif`;
         
         const textLine1 = "എല്ലാവിധ ഓൺലൈൻ";
         const textLine2 = "സേവനങ്ങൾക്കും സമീപിക്കുക";
@@ -311,7 +317,7 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         let text2Width = ctx.measureText(textLine2).width;
         if (text2Width > maxMalTextWidth) {
           malSize = malSize * (maxMalTextWidth / text2Width);
-          ctx.font = `900 ${malSize}px "Noto Sans Malayalam", "Montserrat", sans-serif`;
+          ctx.font = `900 ${malSize}px "Noto Sans Malayalam", "Lexend", sans-serif`;
         }
 
         ctx.fillText(textLine1, imgWidth / 2, callBoxY + (callBoxHeight * 0.35));

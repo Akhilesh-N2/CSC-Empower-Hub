@@ -179,15 +179,15 @@ export default function AdminUserManager({
             !shopData?.subscription_expires_at ||
             new Date(shopData.subscription_expires_at) < new Date()
           ) {
-            // ✨ CHANGED: 14 days changed to 2 days
+            // ✨ CHANGED: 2 days changed to 3 days
             const trialExpiryDate = new Date();
-            trialExpiryDate.setDate(trialExpiryDate.getDate() + 2);
+            trialExpiryDate.setDate(trialExpiryDate.getDate() + 3);
 
             await supabase.rpc("admin_update_shop_license", {
               target_shop_id: id,
               new_expiry: trialExpiryDate.toISOString(),
               reset_renewal: false,
-              action_taken: "Account Approved (2-Day Free Trial)", // ✨ CHANGED text
+              action_taken: "Account Approved (3-Day Free Trial)", // ✨ CHANGED text
             });
 
             try {
@@ -205,7 +205,7 @@ export default function AdminUserManager({
               console.error("Failed to send EmailJS email:", emailErr);
             }
 
-            alert("Shop Approved! A 2-Day Trial has been activated."); // ✨ CHANGED alert
+            alert("Shop Approved! A 3-Day Trial has been activated."); // ✨ CHANGED alert
           } else {
             await supabase.rpc("admin_log_shop_action", {
               target_shop_id: id,

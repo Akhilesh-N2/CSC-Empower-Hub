@@ -391,7 +391,9 @@ function ShopDashboard() {
       else if (nameLen > 15) watermarkFontSize = "38px";
       else watermarkFontSize = "55px";
     }
-    const premiumSideBar = isThermal ? "" : "border-left: 8px solid #111827; padding-left: 24px; padding-right: 10px;";
+    
+    // ✨ FIX: Changed from thick left border to a clean box outline for A4/A5
+    const premiumSideBar = isThermal ? "" : "border: 1px solid #cbd5e1; border-radius: 4px; padding: 24px;";
 
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
@@ -401,7 +403,7 @@ function ShopDashboard() {
         * { box-sizing: border-box; } html, body { font-family: 'Inter', sans-serif; color: #111827; margin: 0; padding: 0; background: #fff; } 
         ${pageCSS} 
         .print-container { position: relative; ${containerStyle} overflow: hidden; }
-        .content-layer { position: relative; z-index: 1; ${premiumSideBar} padding-bottom: 20px; }
+        .content-layer { position: relative; z-index: 1; ${premiumSideBar} }
         .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: ${watermarkFontSize}; color: rgba(0, 0, 0, 0.05); z-index: 10; text-align: center !important; width: 100%; line-height: 1.2; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; pointer-events: none; white-space: pre-wrap; word-break: keep-all; overflow-wrap: break-word; }
         .text-center { text-align: center !important; } .text-right { text-align: right; } .text-muted { color: #6b7280; font-size: 0.9em; } .text-bold { font-weight: 700; } .mt-1 { margin-top: 5px; } .flex-between { display: flex; justify-content: space-between; align-items: center; }
         .shop-title { margin: 0 0 4px 0; font-size: ${isThermal ? "16px" : "26px"}; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-align: center !important; word-wrap: break-word; width: 100%;}
