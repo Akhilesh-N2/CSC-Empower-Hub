@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {
   ChevronLeft, KeyRound, Trash2, CheckCircle2, AlertCircle,
   User, Store, GraduationCap, Briefcase, Phone, MapPin,
-  BadgeCheck, Laptop, History, ShieldAlert, ShieldCheck, Eye, EyeOff, X 
+  BadgeCheck, Laptop, History, ShieldAlert, ShieldCheck, Eye, EyeOff, X, Clock, RotateCcw
 } from "lucide-react";
 import ShopDeviceManager from "../ShopDeviceManager";
 
@@ -33,7 +33,9 @@ export default function UserDossier({
   handleCancelRenewalRequest, 
   toggleJobStatus,
   deleteJob,
-  updateDeviceLimit
+  updateDeviceLimit,
+  handleExtendTrial,
+  handleResetAccount // ✨ NEW PROP
 }) {
   const [selectedJobDetails, setSelectedJobDetails] = useState(null);
 
@@ -55,7 +57,14 @@ export default function UserDossier({
           <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
           Back to Directory
         </button>
-        <div className="flex gap-2 w-full sm:w-fit">
+        <div className="flex flex-wrap gap-2 w-full sm:w-fit">
+          {/* ✨ NEW: Reset Account Button */}
+          <button
+            onClick={() => handleResetAccount(selectedUser.id)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-100 transition shadow-sm"
+          >
+            <RotateCcw size={16} /> Reset Status
+          </button>
           <button
             onClick={() => handleForcePasswordReset(selectedUser.id, selectedUser.email)}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-bold hover:bg-amber-100 transition shadow-sm"
@@ -200,6 +209,13 @@ export default function UserDossier({
                           )}
 
                           <button 
+                            onClick={() => handleExtendTrial(selectedUser.id)} 
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1"
+                          >
+                            <Clock size={14} /> +3 Days Trial
+                          </button>
+
+                          <button 
                             onClick={() => handleRenewSubscription(selectedUser.id)} 
                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
                           >
@@ -216,7 +232,7 @@ export default function UserDossier({
                           </div>
                           <div className="space-y-3 border-l-2 border-slate-200 ml-2 pl-4">
                             {renewalHistory.map((history) => {
-                              let isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled");
+                              let isRevoke = history.action_type?.toLowerCase().includes("revoked") || history.action_type?.toLowerCase().includes("canceled") || history.action_type?.toLowerCase().includes("reset");
                               let isPending = history.action_type?.toLowerCase().includes("pending");
                               let badgeColor = isRevoke ? "text-red-600 bg-red-50" : isPending ? "text-amber-600 bg-amber-50" : "text-emerald-600 bg-emerald-50";
                               let Icon = isRevoke ? ShieldAlert : isPending ? History : BadgeCheck;
@@ -232,7 +248,7 @@ export default function UserDossier({
                                     {!isRevoke && !isPending && history.new_expiry && (
                                       <div className="text-right">
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Expiration Set To</p>
-                                        <p className="text-xs font-bold text-slate-800">{new Date(history.new_expiry).getFullYear()}</p>
+                                        <p className="text-xs font-bold text-slate-800">{new Date(history.new_expiry).toLocaleDateString()}</p>
                                       </div>
                                     )}
                                   </div>

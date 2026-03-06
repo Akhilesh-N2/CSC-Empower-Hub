@@ -3,6 +3,8 @@ import { supabase } from "../../supabaseClient";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import emailjs from "@emailjs/browser";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,9 +21,12 @@ import {
   Calendar as CalendarIcon,
   X,
   Users,
-  Filter
+  Filter,
+  Download,
+  ChevronDown,
+  FileText,
 } from "lucide-react";
-import UserDossier from "./UserDossier"; 
+import UserDossier from "./UserDossier";
 
 export default function AdminUserManager({
   users,
@@ -34,11 +39,11 @@ export default function AdminUserManager({
   const [userSubTab, setUserSubTab] = useState("seekers");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   // LIVE STATE OVERRIDES
   const [liveUsers, setLiveUsers] = useState(users);
   const [liveShopDetails, setLiveShopDetails] = useState(initialShopDetails);
-  
+
   const [selectedUser, setSelectedUser] = useState(null);
   const [renewalHistory, setRenewalHistory] = useState([]);
   const [globalLedger, setGlobalLedger] = useState([]);
@@ -49,9 +54,10 @@ export default function AdminUserManager({
   const [showCalendar, setShowCalendar] = useState(false);
 
   const [selectedShopIds, setSelectedShopIds] = useState([]);
-  
-  // ✨ NEW: Approval Status Filter
-  const [approvalFilter, setApprovalFilter] = useState("all"); // 'all', 'verified', 'pending'
+  const [approvalFilter, setApprovalFilter] = useState("all");
+
+  // ✨ NEW: Dropdown state for Export Menu
+  const [showVerifiedExportMenu, setShowVerifiedExportMenu] = useState(false);
 
   const itemsPerPage = 10;
 
@@ -63,21 +69,36 @@ export default function AdminUserManager({
   // SUPABASE REAL-TIME SUBSCRIPTIONS
   useEffect(() => {
     const profileSubscription = supabase
-      .channel('admin-profiles')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
-        fetchData(); 
-      })
+      .channel("admin-profiles")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload) => {
+          fetchData();
+        },
+      )
       .subscribe();
 
     const shopSubscription = supabase
-      .channel('admin-shops')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_profiles' }, (payload) => {
-        fetchData(); 
-        
-        if (selectedUser && selectedUser.role === 'shop' && payload.new && payload.new.id === selectedUser.id) {
-            setLiveShopDetails(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-        }
-      })
+      .channel("admin-shops")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shop_profiles" },
+        (payload) => {
+          fetchData();
+
+          if (
+            selectedUser &&
+            selectedUser.role === "shop" &&
+            payload.new &&
+            payload.new.id === selectedUser.id
+          ) {
+            setLiveShopDetails((prev) =>
+              prev.map((s) => (s.id === payload.new.id ? payload.new : s)),
+            );
+          }
+        },
+      )
       .subscribe();
 
     return () => {
@@ -90,8 +111,8 @@ export default function AdminUserManager({
     setSearchTerm("");
     setCurrentPage(1);
     setShowRenewalRequestsOnly(false);
-    setSelectedShopIds([]); 
-    setApprovalFilter("all"); 
+    setSelectedShopIds([]);
+    setApprovalFilter("all");
   }, [userSubTab]);
 
   useEffect(() => {
@@ -129,7 +150,7 @@ export default function AdminUserManager({
   const handleBulkRevoke = async () => {
     if (
       !window.confirm(
-        `🚨 Are you sure you want to BULK REVOKE access for ${selectedShopIds.length} shop(s)?\n\nThey will immediately lose access to the platform.`
+        `🚨 Are you sure you want to BULK REVOKE access for ${selectedShopIds.length} shop(s)?\n\nThey will immediately lose access to the platform.`,
       )
     )
       return;
@@ -149,9 +170,11 @@ export default function AdminUserManager({
         });
       }
 
-      alert(`Successfully revoked access for ${selectedShopIds.length} shop(s).`);
-      setSelectedShopIds([]); 
-      fetchData(); 
+      alert(
+        `Successfully revoked access for ${selectedShopIds.length} shop(s).`,
+      );
+      setSelectedShopIds([]);
+      fetchData();
       fetchGlobalLedger();
     } catch (error) {
       alert("Bulk revoke failed: " + error.message);
@@ -179,7 +202,6 @@ export default function AdminUserManager({
             !shopData?.subscription_expires_at ||
             new Date(shopData.subscription_expires_at) < new Date()
           ) {
-            // ✨ CHANGED: 2 days changed to 3 days
             const trialExpiryDate = new Date();
             trialExpiryDate.setDate(trialExpiryDate.getDate() + 3);
 
@@ -187,13 +209,13 @@ export default function AdminUserManager({
               target_shop_id: id,
               new_expiry: trialExpiryDate.toISOString(),
               reset_renewal: false,
-              action_taken: "Account Approved (3-Day Free Trial)", // ✨ CHANGED text
+              action_taken: "Account Approved (3-Day Free Trial)",
             });
 
             try {
               await emailjs.send(
-                "service_7bfs32k", 
-                "template_cok2tvd", 
+                "service_7bfs32k",
+                "template_cok2tvd",
                 {
                   to_email: email,
                   owner_name: shopData?.full_name || "Valued Partner",
@@ -205,7 +227,7 @@ export default function AdminUserManager({
               console.error("Failed to send EmailJS email:", emailErr);
             }
 
-            alert("Shop Approved! A 3-Day Trial has been activated."); // ✨ CHANGED alert
+            alert("Shop Approved! A 3-Day Trial has been activated.");
           } else {
             await supabase.rpc("admin_log_shop_action", {
               target_shop_id: id,
@@ -230,7 +252,9 @@ export default function AdminUserManager({
         fetchGlobalLedger();
       }
 
-      setLiveUsers(prev => prev.map(u => u.id === id ? { ...u, is_approved: isApproving } : u));
+      setLiveUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, is_approved: isApproving } : u)),
+      );
       if (selectedUser && selectedUser.id === id) {
         setSelectedUser((prev) => ({ ...prev, is_approved: isApproving }));
       }
@@ -245,8 +269,8 @@ export default function AdminUserManager({
     const userEmail = targetUser?.email;
 
     const newExpiryDate = new Date();
-    newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1); 
-    
+    newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1);
+
     const friendlyDate = newExpiryDate.toLocaleDateString(undefined, {
       year: "numeric",
       month: "long",
@@ -255,14 +279,15 @@ export default function AdminUserManager({
 
     if (
       !window.confirm(
-        `🚀 ACTIVATE PAID LICENSE?\n\nThis will start a 1-Year license from TODAY, overriding their trial.\n\nNew Expiration: 👉 ${friendlyDate}\n\nDo you want to proceed?`
+        `🚀 ACTIVATE PAID LICENSE?\n\nThis will start a 1-Year license from TODAY, overriding their trial.\n\nNew Expiration: 👉 ${friendlyDate}\n\nDo you want to proceed?`,
       )
-    ) return;
+    )
+      return;
 
     const { error } = await supabase.rpc("admin_update_shop_license", {
       target_shop_id: id,
       new_expiry: newExpiryDate.toISOString(),
-      reset_renewal: true, 
+      reset_renewal: true,
       action_taken: "Paid License Activated (1 Year from Today)",
     });
 
@@ -273,13 +298,13 @@ export default function AdminUserManager({
 
       try {
         await emailjs.send(
-          "service_7bfs32k", 
-          "template_6oekg48", 
+          "service_7bfs32k",
+          "template_6oekg48",
           {
             to_email: userEmail,
             owner_name: shopData?.full_name || "Valued Partner",
-            shop_name: shopData?.shop_name || "your shop", 
-            new_expiry: friendlyDate, 
+            shop_name: shopData?.shop_name || "your shop",
+            new_expiry: friendlyDate,
           },
           "LCf7B01Dm3o5RmXRv",
         );
@@ -287,9 +312,21 @@ export default function AdminUserManager({
         console.error("Failed to send activation email:", emailErr);
       }
 
-      setLiveShopDetails(prev => prev.map(s => s.id === id ? { ...s, subscription_expires_at: newExpiryDate.toISOString(), renewal_requested: false } : s));
+      setLiveShopDetails((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                subscription_expires_at: newExpiryDate.toISOString(),
+                renewal_requested: false,
+              }
+            : s,
+        ),
+      );
 
-      alert(`Success! Paid License activated. It will expire on ${friendlyDate}.`);
+      alert(
+        `Success! Paid License activated. It will expire on ${friendlyDate}.`,
+      );
       fetchGlobalLedger();
     }
   };
@@ -337,13 +374,13 @@ export default function AdminUserManager({
 
       try {
         await emailjs.send(
-          "service_7bfs32k", 
-          "template_6oekg48", 
+          "service_7bfs32k",
+          "template_6oekg48",
           {
             to_email: userEmail,
             owner_name: shopData?.full_name || "Valued Partner",
-            shop_name: shopData?.shop_name || "your shop", 
-            new_expiry: friendlyDate, 
+            shop_name: shopData?.shop_name || "your shop",
+            new_expiry: friendlyDate,
           },
           "LCf7B01Dm3o5RmXRv",
         );
@@ -351,7 +388,17 @@ export default function AdminUserManager({
         console.error("Failed to send renewal email:", emailErr);
       }
 
-      setLiveShopDetails(prev => prev.map(s => s.id === id ? { ...s, subscription_expires_at: newExpiryDate.toISOString(), renewal_requested: false } : s));
+      setLiveShopDetails((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                subscription_expires_at: newExpiryDate.toISOString(),
+                renewal_requested: false,
+              }
+            : s,
+        ),
+      );
 
       alert(`Success! License extended to ${newExpiryDate.getFullYear()}.`);
 
@@ -365,23 +412,294 @@ export default function AdminUserManager({
     }
   };
 
-  const handleCancelRenewalRequest = async (id) => {
-    if (!window.confirm("Are you sure you want to cancel this pending renewal request?")) return;
+  // ✨ CSV EXPORT
+  const handleExportVerifiedShopsCSV = () => {
+    const verifiedUsers = liveUsers.filter(
+      (u) => u.role === "shop" && u.is_approved,
+    );
+    if (verifiedUsers.length === 0)
+      return alert("No verified accounts found to export.");
+
+    const headers = [
+      "System ID",
+      "Email",
+      "Shop Name",
+      "Owner Name",
+      "Phone",
+      "Location",
+      "Member ID",
+      "Expiry Date",
+      "Device Limit",
+    ];
+
+    const csvRows = verifiedUsers.map((user) => {
+      const shop = liveShopDetails.find((s) => s.id === user.id) || {};
+      let expiry = "No Expiry";
+      if (shop.subscription_expires_at) {
+        expiry = new Date(shop.subscription_expires_at).toLocaleDateString();
+      }
+      const escapeCSV = (str) =>
+        `"${(str ? String(str) : "").replace(/"/g, '""')}"`;
+
+      return [
+        escapeCSV(user.id),
+        escapeCSV(user.email),
+        escapeCSV(shop.shop_name),
+        escapeCSV(shop.full_name),
+        escapeCSV(shop.phone),
+        escapeCSV(shop.location),
+        escapeCSV(shop.member_id),
+        escapeCSV(expiry),
+        escapeCSV(shop.device_limit || 1),
+      ].join(",");
+    });
+
+    const csvContent = [headers.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `Verified_Shops_Backup_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ✨ PDF EXPORT
+  // ✨ PDF EXPORT
+  const handleExportVerifiedShopsPDF = () => {
+    const verifiedUsers = liveUsers.filter(
+      (u) => u.role === "shop" && u.is_approved,
+    );
+    if (verifiedUsers.length === 0)
+      return alert("No verified accounts found to export.");
+
     try {
-      const { error: clearError } = await supabase.rpc("admin_clear_renewal", {
-        target_shop_id: id
+      // Create landscape document for better table fit
+      const doc = new jsPDF("landscape");
+
+      doc.setFontSize(16);
+      doc.setTextColor(17, 24, 39);
+      doc.text("Verified Shops Backup", 14, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(107, 114, 128);
+      doc.text(
+        `Generated on: ${new Date().toLocaleDateString()} | Total Verified: ${verifiedUsers.length}`,
+        14,
+        30,
+      );
+
+      const tableData = verifiedUsers.map((user, index) => {
+        const shop = liveShopDetails.find((s) => s.id === user.id) || {};
+        let expiry = "No Expiry";
+        if (shop.subscription_expires_at) {
+          expiry = new Date(shop.subscription_expires_at).toLocaleDateString();
+        }
+        return [
+          index + 1,
+          shop.shop_name || "N/A",
+          shop.full_name || "N/A", // ✨ Added Owner Name here
+          user.email || "N/A",
+          shop.phone || "N/A",
+          shop.member_id || "N/A",
+          expiry,
+          shop.device_limit || 1,
+        ];
       });
-      if (clearError) throw clearError;
-      
+
+      autoTable(doc, {
+        startY: 35,
+        head: [
+          [
+            "#",
+            "Shop Name",
+            "Owner Name",
+            "Email",
+            "Phone",
+            "Member ID",
+            "Expiry Date",
+            "Device Limit",
+          ],
+        ], // ✨ Added to headers
+        body: tableData,
+        theme: "striped",
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: 255,
+          fontStyle: "bold",
+        }, // Slate 900
+        styles: { fontSize: 8, cellPadding: 3 }, // ✨ Slightly reduced size to fit the extra column neatly
+        columnStyles: {
+          0: { cellWidth: 10 },
+          7: { halign: "center", cellWidth: 22 }, // ✨ Shifted index to 7 for Device Limit
+        },
+      });
+
+      doc.save(
+        `Verified_Shops_Backup_${new Date().toISOString().split("T")[0]}.pdf`,
+      );
+    } catch (err) {
+      console.error(err);
+      alert(
+        "Error generating PDF. Make sure jspdf and jspdf-autotable are working properly.",
+      );
+    }
+  };
+
+  const handleExtendTrial = async (id) => {
+    const shopData = liveShopDetails.find((s) => s.id === id);
+
+    let baseDate = new Date();
+    if (shopData?.subscription_expires_at) {
+      const currentExpiry = new Date(shopData.subscription_expires_at);
+      if (currentExpiry > baseDate) {
+        baseDate = currentExpiry;
+      }
+    }
+
+    const newExpiryDate = new Date(baseDate);
+    newExpiryDate.setDate(newExpiryDate.getDate() + 3);
+
+    const friendlyDate = newExpiryDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    if (
+      !window.confirm(
+        `GRANT +3 DAYS TRIAL EXTENSION?\n\nThe new expiration date will be:\n👉 ${friendlyDate}\n\nDo you want to proceed?`,
+      )
+    )
+      return;
+
+    try {
+      const { error } = await supabase.rpc("admin_update_shop_license", {
+        target_shop_id: id,
+        new_expiry: newExpiryDate.toISOString(),
+        reset_renewal: false,
+        action_taken: "Manual Trial Extension (+3 Days)",
+      });
+
+      if (error) throw error;
+
+      await supabase.rpc("admin_clear_renewal", { target_shop_id: id });
+
+      setLiveShopDetails((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                subscription_expires_at: newExpiryDate.toISOString(),
+                renewal_requested: false,
+              }
+            : s,
+        ),
+      );
+      alert(
+        `Success! Trial extended. They now have access until ${friendlyDate}.`,
+      );
+
+      const { data: newHistory } = await supabase
+        .from("license_renewals")
+        .select("*")
+        .eq("shop_id", id)
+        .order("renewed_at", { ascending: false });
+      setRenewalHistory(newHistory || []);
+      fetchGlobalLedger();
+    } catch (err) {
+      alert("Failed to extend trial: " + err.message);
+    }
+  };
+
+  const handleResetAccount = async (id) => {
+    if (
+      !window.confirm(
+        "RESET ACCOUNT STATUS?\n\nThis will instantly remove their approval status and permanently clear their license expiration, setting them completely back to 'Pending Approval'.\n\nAll of their personal data (Name, Phone, etc) will remain safe.\n\nProceed?",
+      )
+    )
+      return;
+
+    try {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ is_approved: false })
+        .eq("id", id);
+      if (profileError) throw profileError;
+
+      const { error: shopError } = await supabase
+        .from("shop_profiles")
+        .update({
+          subscription_expires_at: null,
+          renewal_requested: false,
+        })
+        .eq("id", id);
+      if (shopError) throw shopError;
+
+      await supabase.rpc("admin_clear_renewal", { target_shop_id: id });
+
       await supabase.rpc("admin_log_shop_action", {
         target_shop_id: id,
-        action_taken: "Renewal Request Canceled (Payment Pending)", 
+        action_taken: "Account Reset to Pending Status (License Cleared)",
       });
-      
-      setLiveShopDetails(prev => prev.map(s => s.id === id ? { ...s, renewal_requested: false } : s));
+
+      setLiveUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, is_approved: false } : u)),
+      );
+      setLiveShopDetails((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, subscription_expires_at: null, renewal_requested: false }
+            : s,
+        ),
+      );
+
+      if (selectedUser && selectedUser.id === id) {
+        setSelectedUser((prev) => ({ ...prev, is_approved: false }));
+      }
+
+      alert("Success! Account has been completely reset to Pending Approval.");
+
+      const { data: newHistory } = await supabase
+        .from("license_renewals")
+        .select("*")
+        .eq("shop_id", id)
+        .order("renewed_at", { ascending: false });
+      setRenewalHistory(newHistory || []);
+      fetchGlobalLedger();
+    } catch (err) {
+      alert("Failed to reset account: " + err.message);
+    }
+  };
+
+  const handleCancelRenewalRequest = async (id) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to cancel this pending renewal request?",
+      )
+    )
+      return;
+    try {
+      const { error: clearError } = await supabase.rpc("admin_clear_renewal", {
+        target_shop_id: id,
+      });
+      if (clearError) throw clearError;
+
+      await supabase.rpc("admin_log_shop_action", {
+        target_shop_id: id,
+        action_taken: "Renewal Request Canceled (Payment Pending)",
+      });
+
+      setLiveShopDetails((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, renewal_requested: false } : s)),
+      );
       alert("Renewal request has been successfully cancelled.");
       fetchGlobalLedger();
-      
+
       if (selectedUser && selectedUser.id === id) {
         const { data: newHistory } = await supabase
           .from("license_renewals")
@@ -390,7 +708,6 @@ export default function AdminUserManager({
           .order("renewed_at", { ascending: false });
         setRenewalHistory(newHistory || []);
       }
-      
     } catch (error) {
       alert("Failed to cancel request: " + error.message);
     }
@@ -459,27 +776,30 @@ export default function AdminUserManager({
       .eq("id", id);
     fetchData();
   };
-  
+
   const deleteJob = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this job permanently?")) return;
+    if (
+      !window.confirm("Are you sure you want to delete this job permanently?")
+    )
+      return;
     await supabase.from("jobs").delete().eq("id", id);
     fetchData();
   };
 
-  const pendingRenewalsCount = liveShopDetails.filter((s) => s.renewal_requested).length;
-  
-  // DATA FOR REAL-TIME STATS 
+  const pendingRenewalsCount = liveShopDetails.filter(
+    (s) => s.renewal_requested,
+  ).length;
+
   const roleMap = { seekers: "seeker", providers: "provider", shops: "shop" };
   const usersByRole = liveUsers.filter((u) => u.role === roleMap[userSubTab]);
-  
+
   const totalAccounts = usersByRole.length;
-  const verifiedAccounts = usersByRole.filter(u => u.is_approved).length;
+  const verifiedAccounts = usersByRole.filter((u) => u.is_approved).length;
   const pendingAccounts = totalAccounts - verifiedAccounts;
 
-  // ✨ UPDATED FILTER LOGIC: Includes the Approval Status Filter
   const filteredUsers = usersByRole.filter((user) => {
     const term = searchTerm.toLowerCase().trim();
-    
+
     let isRenewalRequested = false;
     let shopNameMatch = false;
     let memberIdMatch = false;
@@ -488,25 +808,28 @@ export default function AdminUserManager({
       const shopData = liveShopDetails.find((s) => s.id === user.id);
       if (shopData) {
         if (shopData.renewal_requested) isRenewalRequested = true;
-        if (shopData.shop_name) shopNameMatch = shopData.shop_name.toLowerCase().includes(term);
-        if (shopData.member_id) memberIdMatch = shopData.member_id.toString().includes(term);
+        if (shopData.shop_name)
+          shopNameMatch = shopData.shop_name.toLowerCase().includes(term);
+        if (shopData.member_id)
+          memberIdMatch = shopData.member_id.toString().includes(term);
       }
     }
 
-    // 1. Shop Requests Filter
-    if (userSubTab === "shops" && showRenewalRequestsOnly && !isRenewalRequested) {
+    if (
+      userSubTab === "shops" &&
+      showRenewalRequestsOnly &&
+      !isRenewalRequested
+    ) {
       return false;
     }
 
-    // 2. ✨ Approval Status Filter (Verified vs Pending)
     if (approvalFilter === "verified" && !user.is_approved) return false;
     if (approvalFilter === "pending" && user.is_approved) return false;
 
-    // 3. Search Filter
     if (!term) return true;
 
     const emailMatch = user.email?.toLowerCase().includes(term);
-    const systemIdMatch = user.id?.toLowerCase().includes(term); 
+    const systemIdMatch = user.id?.toLowerCase().includes(term);
 
     return emailMatch || systemIdMatch || shopNameMatch || memberIdMatch;
   });
@@ -529,9 +852,9 @@ export default function AdminUserManager({
 
   const filteredLedger = enrichedLedger.filter((log) => {
     const term = searchTerm.toLowerCase().trim();
-    
+
     const matchesSearch =
-      !term || 
+      !term ||
       log.shopName?.toLowerCase().includes(term) ||
       log.email?.toLowerCase().includes(term) ||
       log.memberId?.toString().includes(term);
@@ -564,11 +887,13 @@ export default function AdminUserManager({
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       const newSelected = new Set(selectedShopIds);
-      currentUsers.forEach(u => newSelected.add(u.id));
+      currentUsers.forEach((u) => newSelected.add(u.id));
       setSelectedShopIds(Array.from(newSelected));
     } else {
-      const currentIds = currentUsers.map(u => u.id);
-      setSelectedShopIds(selectedShopIds.filter(id => !currentIds.includes(id)));
+      const currentIds = currentUsers.map((u) => u.id);
+      setSelectedShopIds(
+        selectedShopIds.filter((id) => !currentIds.includes(id)),
+      );
     }
   };
 
@@ -621,19 +946,26 @@ export default function AdminUserManager({
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Total {userSubTab.charAt(0).toUpperCase() + userSubTab.slice(1)}
+                    Total{" "}
+                    {userSubTab.charAt(0).toUpperCase() + userSubTab.slice(1)}
                   </p>
-                  <p className="text-2xl font-black text-slate-800">{totalAccounts}</p>
+                  <p className="text-2xl font-black text-slate-800">
+                    {totalAccounts}
+                  </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
                   <Users size={20} />
                 </div>
               </div>
-              
+
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Verified Accounts</p>
-                  <p className="text-2xl font-black text-slate-800">{verifiedAccounts}</p>
+                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                    Verified Accounts
+                  </p>
+                  <p className="text-2xl font-black text-slate-800">
+                    {verifiedAccounts}
+                  </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
                   <CheckCircle2 size={20} />
@@ -642,8 +974,12 @@ export default function AdminUserManager({
 
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Pending Approvals</p>
-                  <p className="text-2xl font-black text-slate-800">{pendingAccounts}</p>
+                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                    Pending Approvals
+                  </p>
+                  <p className="text-2xl font-black text-slate-800">
+                    {pendingAccounts}
+                  </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
                   <AlertCircle size={20} />
@@ -654,7 +990,6 @@ export default function AdminUserManager({
 
           {/* ✨ FILTERS & SEARCH ROW ✨ */}
           <div className="flex flex-col lg:flex-row gap-4 mb-6 justify-between items-start lg:items-center">
-            
             {/* Search + Verification Filter Group */}
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
               <div className="relative flex-1 max-w-md">
@@ -707,12 +1042,57 @@ export default function AdminUserManager({
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
               {userSubTab === "shops" && (
                 <>
+                  {/* ✨ NEW: BACKUP VERIFIED DROPDOWN ✨ */}
+                  <div className="relative z-20 w-full sm:w-auto">
+                    <button
+                      onClick={() =>
+                        setShowVerifiedExportMenu(!showVerifiedExportMenu)
+                      }
+                      className="h-[46px] px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 w-full sm:w-auto shrink-0"
+                      title="Download Backup of Verified Shops"
+                    >
+                      <Download size={16} /> Backup Verified{" "}
+                      <ChevronDown size={14} />
+                    </button>
+
+                    {showVerifiedExportMenu && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setShowVerifiedExportMenu(false)}
+                        ></div>
+                        <div className="absolute right-0 top-14 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-40 animate-in fade-in zoom-in-95 duration-200">
+                          <button
+                            onClick={() => {
+                              handleExportVerifiedShopsCSV();
+                              setShowVerifiedExportMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition"
+                          >
+                            <FileText size={16} /> Excel / CSV
+                          </button>
+                          <div className="h-px bg-slate-100 w-full"></div>
+                          <button
+                            onClick={() => {
+                              handleExportVerifiedShopsPDF();
+                              setShowVerifiedExportMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition"
+                          >
+                            <Download size={16} /> PDF Document
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   {selectedShopIds.length > 0 && (
                     <button
                       onClick={handleBulkRevoke}
                       className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 animate-in zoom-in duration-200 h-[46px] w-full sm:w-auto shrink-0"
                     >
-                      <AlertCircle size={16} /> Revoke ({selectedShopIds.length})
+                      <AlertCircle size={16} /> Revoke ({selectedShopIds.length}
+                      )
                     </button>
                   )}
 
@@ -836,14 +1216,24 @@ export default function AdminUserManager({
                             </div>
                           </td>
                           <td className="p-4 md:p-5">
-                            {log.action_type?.toLowerCase().includes("revoked") || log.action_type?.toLowerCase().includes("canceled") ? (
+                            {log.action_type
+                              ?.toLowerCase()
+                              .includes("revoked") ||
+                            log.action_type
+                              ?.toLowerCase()
+                              .includes("canceled") ||
+                            log.action_type?.toLowerCase().includes("reset") ? (
                               <span className="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-                                {log.action_type?.toLowerCase().includes("canceled") ? "Canceled" : "Account Suspended"}
+                                {log.action_type
+                                  ?.toLowerCase()
+                                  .includes("canceled")
+                                  ? "Canceled"
+                                  : "Account Suspended / Reset"}
                               </span>
                             ) : (
                               <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">
-                                Extended to{" "}
-                                {new Date(log.new_expiry).getFullYear()}
+                                Valid To:{" "}
+                                {new Date(log.new_expiry).toLocaleDateString()}
                               </span>
                             )}
                           </td>
@@ -921,7 +1311,9 @@ export default function AdminUserManager({
                               className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                               checked={
                                 currentUsers.length > 0 &&
-                                currentUsers.every(u => selectedShopIds.includes(u.id))
+                                currentUsers.every((u) =>
+                                  selectedShopIds.includes(u.id),
+                                )
                               }
                               onChange={handleSelectAll}
                             />
@@ -939,7 +1331,7 @@ export default function AdminUserManager({
                             ? liveShopDetails.find((s) => s.id === user.id)
                             : null;
                         const needsRenewal = shopData?.renewal_requested;
-                        
+
                         return (
                           <tr
                             key={user.id}
@@ -953,9 +1345,16 @@ export default function AdminUserManager({
                                   checked={selectedShopIds.includes(user.id)}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setSelectedShopIds([...selectedShopIds, user.id]);
+                                      setSelectedShopIds([
+                                        ...selectedShopIds,
+                                        user.id,
+                                      ]);
                                     } else {
-                                      setSelectedShopIds(selectedShopIds.filter(id => id !== user.id));
+                                      setSelectedShopIds(
+                                        selectedShopIds.filter(
+                                          (id) => id !== user.id,
+                                        ),
+                                      );
                                     }
                                   }}
                                 />
@@ -1027,7 +1426,10 @@ export default function AdminUserManager({
                       })}
                       {currentUsers.length === 0 && (
                         <tr>
-                          <td colSpan={userSubTab === "shops" ? 4 : 3} className="p-10 text-center">
+                          <td
+                            colSpan={userSubTab === "shops" ? 4 : 3}
+                            className="p-10 text-center"
+                          >
                             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-3">
                               <Search size={20} />
                             </div>
@@ -1084,10 +1486,12 @@ export default function AdminUserManager({
           toggleUserApproval={toggleUserApproval}
           handleRenewSubscription={handleRenewSubscription}
           handleActivatePaidLicense={handleActivatePaidLicense}
-          handleCancelRenewalRequest={handleCancelRenewalRequest} 
+          handleCancelRenewalRequest={handleCancelRenewalRequest}
           toggleJobStatus={toggleJobStatus}
           deleteJob={deleteJob}
           updateDeviceLimit={updateDeviceLimit}
+          handleExtendTrial={handleExtendTrial}
+          handleResetAccount={handleResetAccount}
         />
       )}
     </div>
