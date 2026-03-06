@@ -25,7 +25,7 @@ import {
   Download,
   ChevronDown,
   FileText,
-  Clock // ✨ ADDED CLOCK ICON FOR TRIAL BADGE
+  Clock
 } from "lucide-react";
 import UserDossier from "./UserDossier";
 
@@ -950,8 +950,12 @@ export default function AdminUserManager({
         <div className="animate-in fade-in duration-500">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
                 User Directory
+                {/* ✨ NEW: GLOBAL ALL USERS BADGE */}
+                <span className="text-xs md:text-sm bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-bold border border-slate-200">
+                  {liveUsers.length} Total Users
+                </span>
               </h2>
               <p className="text-sm text-slate-500 mt-1 font-medium">
                 Manage platform access and review profiles.
@@ -988,34 +992,43 @@ export default function AdminUserManager({
           {/* ✨ SMART REAL-TIME STATS ROW ✨ */}
           {userSubTab !== "ledger" && (
             userSubTab === "shops" ? (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 animate-in slide-in-from-top-4 duration-500">
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-6 animate-in slide-in-from-top-4 duration-500">
+                {/* ✨ NEW: Total Shops Card Restored */}
+                <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Paid Licenses</p>
-                    <p className="text-2xl font-black text-slate-800">{paidCount}</p>
+                    <p className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Shops</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{totalAccounts}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center"><BadgeCheck size={20} /></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center"><Users size={16} className="md:w-5 md:h-5" /></div>
                 </div>
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+
+                <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Active Trials</p>
-                    <p className="text-2xl font-black text-slate-800">{activeTrialsCount}</p>
+                    <p className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase tracking-widest">Paid Licenses</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{paidCount}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><Clock size={20} /></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center"><BadgeCheck size={16} className="md:w-5 md:h-5" /></div>
                 </div>
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Expired</p>
-                    <p className="text-2xl font-black text-slate-800">{expiredCount}</p>
+                    <p className="text-[9px] md:text-[10px] font-black text-blue-500 uppercase tracking-widest">Active Trials</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{activeTrialsCount}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center"><AlertCircle size={20} /></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><Clock size={16} className="md:w-5 md:h-5" /></div>
                 </div>
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Pending</p>
-                    <p className="text-2xl font-black text-slate-800">{pendingAccounts}</p>
+                    <p className="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-widest">Expired</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{expiredCount}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center"><Store size={20} /></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center"><AlertCircle size={16} className="md:w-5 md:h-5" /></div>
+                </div>
+                <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] md:text-[10px] font-black text-amber-500 uppercase tracking-widest">Pending</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{pendingAccounts}</p>
+                  </div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center"><Store size={16} className="md:w-5 md:h-5" /></div>
                 </div>
               </div>
             ) : (
@@ -1095,7 +1108,6 @@ export default function AdminUserManager({
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
               {userSubTab === "shops" && (
                 <>
-                  {/* ✨ BACKUP VERIFIED DROPDOWN ✨ */}
                   <div className="relative z-20 w-full sm:w-auto">
                     <button
                       onClick={() => setShowVerifiedExportMenu(!showVerifiedExportMenu)}
