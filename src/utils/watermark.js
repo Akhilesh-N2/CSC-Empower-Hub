@@ -198,7 +198,7 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
 
         const textX = blockStartX + (logoImg ? logoFinalWidth + gap : 0);
 
-        // ✨ NEW: Premium Linear Gradient for the Title
+        // Premium Linear Gradient for the Title
         const titleGradient = ctx.createLinearGradient(textX, 0, textX + measuredTextWidth, 0);
         titleGradient.addColorStop(0, "#1e3a8a"); // Deep Navy
         titleGradient.addColorStop(1, "#3b82f6"); // Vibrant Blue
@@ -207,7 +207,7 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         ctx.textAlign = "left"; 
         ctx.fillText(watermarkText, textX, bannerContentY);
         
-        // ✨ NEW: Vibrant Subtitle Styling
+        // Vibrant Subtitle Styling
         const subtitleY = bannerContentY + (nameSize * 0.85); 
         ctx.font = `600 ${Math.max(12, Math.floor(nameSize * 0.30))}px "Lexend", sans-serif`;
         ctx.fillStyle = "#2563eb"; // Bright solid blue to match gradient end
@@ -253,48 +253,61 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
           ctx.translate(rightColStart, y - (iconSize / 2)); 
           const scale = iconSize / 24; 
           ctx.scale(scale, scale);
-          ctx.fillStyle = "#2563eb"; // Bright blue
+          ctx.fillStyle = "#2563eb"; 
           ctx.fill(new Path2D(iconPath));
           ctx.restore();
           
-          ctx.font = `500 ${contactTextSize}px "Lexend", sans-serif`;
-          ctx.fillStyle = "#475569"; 
-          
           const textStartOffset = rightColStart + (iconSize * 1.8);
           
-          // ✨ NEW: DYNAMIC TEXT WRAPPING
-          const words = text.toString().split(' ');
-          let line = '';
+          // ✨ NEW: DYNAMIC TEXT WRAPPING & AUTO-RESIZING
+          let currentTextSize = contactTextSize;
+          let words = text.toString().split(' ');
           let lines = [];
+          let maxLines = 2; // Strict 2-line cap to avoid hitting the row beneath it
 
-          for(let n = 0; n < words.length; n++) {
-            let testLine = line + words[n] + ' ';
-            let metrics = ctx.measureText(testLine);
-            if (metrics.width > maxRightTextWidth && n > 0) {
-              lines.push(line.trim());
-              line = words[n] + ' ';
-            } else {
-              line = testLine;
+          // Loop: Shrink font size until it fits into 2 lines
+          while (currentTextSize > 8) {
+            ctx.font = `500 ${currentTextSize}px "Lexend", sans-serif`;
+            let line = '';
+            lines = [];
+
+            for(let n = 0; n < words.length; n++) {
+              let testLine = line + words[n] + ' ';
+              let metrics = ctx.measureText(testLine);
+              if (metrics.width > maxRightTextWidth && n > 0) {
+                lines.push(line.trim());
+                line = words[n] + ' ';
+              } else {
+                line = testLine;
+              }
             }
-          }
-          lines.push(line.trim());
+            lines.push(line.trim());
 
-          // Cap at 2 lines max to prevent crashing into the next row
-          if (lines.length > 2) {
-            lines = lines.slice(0, 2);
-            let lastLine = lines[1];
+            if (lines.length <= maxLines) {
+              break; // Fits perfectly!
+            }
+            currentTextSize -= 1; // Shrink and try again
+          }
+
+          // Fallback: If it's a massive paragraph, cap it and add "..."
+          if (lines.length > maxLines) {
+            lines = lines.slice(0, maxLines);
+            let lastLine = lines[maxLines - 1];
             while (ctx.measureText(lastLine + "...").width > maxRightTextWidth && lastLine.length > 0) {
               lastLine = lastLine.slice(0, -1);
             }
-            lines[1] = lastLine.trim() + "...";
+            lines[maxLines - 1] = lastLine.trim() + "...";
           }
 
-          // Draw text vertically centered depending on line count
+          // Finally, draw the properly sized and wrapped text
+          ctx.font = `500 ${currentTextSize}px "Lexend", sans-serif`;
+          ctx.fillStyle = "#475569"; 
+          const lineHeight = currentTextSize * 1.2;
+
           if (lines.length === 1) {
             ctx.fillText(lines[0], textStartOffset, y);
           } else {
-            const lineHeight = contactTextSize * 1.2;
-            const startY = y - (lineHeight * 0.45); // Shift up slightly
+            const startY = y - (lineHeight * 0.45); // Shift up so both lines stay vertically centered on icon
             ctx.fillText(lines[0], textStartOffset, startY);
             ctx.fillText(lines[1], textStartOffset, startY + lineHeight);
           }
