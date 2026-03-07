@@ -8,7 +8,8 @@ import {
   ScanLine, Loader2, BookOpen, Building2, CheckCircle2, 
   FileImage, FileDown, Image as ImageIcon, X, Minimize, RefreshCw, 
   UploadCloud, Files, Settings2, Crop, FilePlus, FileArchive,
-  MoveLeft, MoveRight, Maximize2, Layout
+  MoveLeft, MoveRight, Maximize2, Layout, UserSquare, CalendarDays,
+  Download, PenTool
 } from "lucide-react";
 import { supabase } from '../supabaseClient';
 
@@ -118,7 +119,7 @@ export default function ShopCalculators() {
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const convertPdfInputRef = useRef(null);
 
-  // --- PDF MERGE PRO STATE (from File 1) ---
+  // --- PDF MERGE PRO STATE ---
   const [pdfSettingsOpen, setPdfSettingsOpen] = useState(false);
   const [pdfOrientation, setPdfOrientation] = useState("p"); // 'p' or 'l'
   const [pdfMargin, setPdfMargin] = useState(0); // 0, 10, 20
@@ -161,6 +162,171 @@ export default function ShopCalculators() {
   const insertImageInputRef = useRef(null);
   const [isLoadingVisualPdf, setIsLoadingVisualPdf] = useState(false);
 
+  // --- ✨ NEW: PSC PHOTO & SIGNATURE STATE ✨ ---
+  const [pscImage, setPscImage] = useState(null);
+  const [pscSignature, setPscSignature] = useState(null);
+  const [pscName, setPscName] = useState('');
+  const [pscDate, setPscDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isGeneratingPsc, setIsGeneratingPsc] = useState(false);
+  const pscFileInputRef = useRef(null);
+  const pscSigInputRef = useRef(null);
+  const pscCanvasRef = useRef(null);
+
+  // --- PSC PHOTO HANDLERS ---
+  const handlePscPhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (re) => setPscImage(re.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePscSigUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (re) => setPscSignature(re.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const processAndDownloadPhoto = () => {
+    return new Promise((resolve) => {
+      if (!pscImage) return resolve();
+      const canvas = pscCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      const targetWidth = 150;
+      const targetHeight = 200;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      img.onload = () => {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        const imageHeight = 170; 
+        const imgRatio = img.width / img.height;
+        const targetRatio = targetWidth / imageHeight;
+        let srcX = 0, srcY = 0, srcW = img.width, srcH = img.height;
+        
+        if (imgRatio > targetRatio) {
+          srcW = img.height * targetRatio;
+          srcX = (img.width - srcW) / 2;
+        } else {
+          srcH = img.width / targetRatio;
+          srcY = (img.height - srcH) / 2;
+        }
+
+        ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetWidth, imageHeight);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, imageHeight, targetWidth, targetHeight - imageHeight);
+        
+        if (pscName) {
+          ctx.fillStyle = "#000000";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          let displayName = pscName.toUpperCase();
+          ctx.font = 'bold 11px sans-serif';
+          while (ctx.measureText(displayName).width > targetWidth - 4 && displayName.length > 5) {
+            displayName = displayName.slice(0, -1);
+          }
+          if (displayName.length < pscName.length) displayName += "..";
+          ctx.fillText(displayName, targetWidth / 2, imageHeight + 4);
+        }
+
+        if (pscDate) {
+          ctx.fillStyle = "#000000";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.font = '500 10px sans-serif';
+          const formattedDate = pscDate.split('-').reverse().join('/');
+          ctx.fillText(formattedDate, targetWidth / 2, imageHeight + 16);
+        }
+
+        const finalImageDataUrl = canvas.toDataURL('image/jpeg', 1.0);
+        const link = document.createElement("a");
+        link.href = finalImageDataUrl;
+        let downName = pscName.trim() ? pscName.replace(/\s+/g, '_') : 'Candidate';
+        link.download = `PSC_${downName}_Photo.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        resolve();
+      };
+      img.src = pscImage;
+    });
+  };
+
+  const processAndDownloadSignature = () => {
+    return new Promise((resolve) => {
+      if (!pscSignature) return resolve();
+      const canvas = pscCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      // Standard Kerala PSC Signature Size
+      const targetWidth = 150;
+      const targetHeight = 100;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      img.onload = () => {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        // Contain scaling to ensure no part of the signature is cut off
+        const imgRatio = img.width / img.height;
+        const containerRatio = targetWidth / targetHeight;
+
+        let renderWidth, renderHeight;
+        if (imgRatio > containerRatio) {
+          renderWidth = targetWidth;
+          renderHeight = targetWidth / imgRatio;
+        } else {
+          renderHeight = targetHeight;
+          renderWidth = targetHeight * imgRatio;
+        }
+
+        const x = (targetWidth - renderWidth) / 2;
+        const y = (targetHeight - renderHeight) / 2;
+
+        ctx.drawImage(img, x, y, renderWidth, renderHeight);
+
+        const finalImageDataUrl = canvas.toDataURL('image/jpeg', 1.0);
+        const link = document.createElement("a");
+        link.href = finalImageDataUrl;
+        let downName = pscName.trim() ? pscName.replace(/\s+/g, '_') : 'Candidate';
+        link.download = `PSC_${downName}_Signature.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        resolve();
+      };
+      img.src = pscSignature;
+    });
+  };
+
+  const generatePSCAssets = async () => {
+    if (!pscImage && !pscSignature) return;
+    setIsGeneratingPsc(true);
+    
+    if (pscImage) {
+      await processAndDownloadPhoto();
+    }
+    
+    if (pscSignature) {
+      // Small delay if downloading both to prevent browser blocking simultaneous downloads
+      if (pscImage) await new Promise(r => setTimeout(r, 400));
+      await processAndDownloadSignature();
+    }
+    
+    setIsGeneratingPsc(false);
+  };
+
+
   // --- UNIT CONVERTER HANDLERS ---
   const handleCategoryChange = (e) => {
     const newCat = e.target.value; setCalcCategory(newCat);
@@ -171,7 +337,7 @@ export default function ShopCalculators() {
     return ((calcInput * conversionRates[calcCategory][calcFromUnit]) / conversionRates[calcCategory][calcToUnit]).toFixed(4);
   };
 
-  // --- PDF MERGE HANDLERS (updated from File 1) ---
+  // --- PDF MERGE HANDLERS ---
   const handleAddPdfFiles = (e) => {
     const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
     if (files.length === 0) return;
@@ -182,11 +348,10 @@ export default function ShopCalculators() {
       preview: URL.createObjectURL(file) 
     }));
     setConvertFiles(prev => [...prev, ...newFiles]);
-    setPdfSettingsOpen(true); // Auto-open settings when files are added
+    setPdfSettingsOpen(true); 
     if (convertPdfInputRef.current) convertPdfInputRef.current.value = '';
   };
 
-  // Move page handler (from File 1)
   const movePage = (index, direction) => {
     const newFiles = [...convertFiles];
     const newIndex = index + direction;
@@ -205,23 +370,19 @@ export default function ShopCalculators() {
 
     const img = new Image();
     img.onload = () => {
-      // A4 dimensions ratio: 210 x 297mm (portrait) or 297 x 210mm (landscape)
       const isLandscape = pdfOrientation === 'l';
       const pageW = isLandscape ? 297 : 210;
       const pageH = isLandscape ? 210 : 297;
 
-      // Scale to fit canvas display size
       const canvasW = canvas.width;
       const canvasH = canvas.height;
 
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvasW, canvasH);
 
-      // Page background
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvasW, canvasH);
 
-      // Draw margin indicator lines
       const marginRatioX = (pdfMargin / pageW) * canvasW;
       const marginRatioY = (pdfMargin / pageH) * canvasH;
 
@@ -233,7 +394,6 @@ export default function ShopCalculators() {
         ctx.setLineDash([]);
       }
 
-      // Calculate image draw area (respecting margin)
       const availW = canvasW - marginRatioX * 2;
       const availH = canvasH - marginRatioY * 2;
 
@@ -254,7 +414,6 @@ export default function ShopCalculators() {
 
       ctx.drawImage(img, x, y, drawW, drawH);
 
-      // Subtle page shadow/border effect on top
       ctx.strokeStyle = 'rgba(0,0,0,0.08)';
       ctx.lineWidth = 1;
       ctx.strokeRect(0, 0, canvasW, canvasH);
@@ -264,13 +423,11 @@ export default function ShopCalculators() {
 
   useEffect(() => {
     if (pdfSettingsOpen) {
-      // Small timeout to ensure canvas is mounted
       const t = setTimeout(renderPreview, 30);
       return () => clearTimeout(t);
     }
   }, [pdfSettingsOpen, renderPreview]);
 
-  // Updated handleCreatePdf with orientation and margin support (from File 1)
   const handleCreatePdf = async () => {
     if (convertFiles.length === 0) return;
     setIsConvertingPdf(true);
@@ -328,7 +485,6 @@ export default function ShopCalculators() {
     }
   };
 
-  // Advanced Target KB PDF Compressor
   const handleCompressPdf = async () => {
     if (!compressPdfFile) return alert("Please select a PDF file first.");
     if (!targetPdfKB || targetPdfKB < 10) return alert("Please enter a valid target size in KB.");
@@ -736,6 +892,11 @@ export default function ShopCalculators() {
             
             <div className="hidden md:block w-full h-px bg-slate-200 my-2"></div>
 
+            {/* ✨ NEW: PSC Photo Maker Tab */}
+            <button onClick={() => setActiveToolTab('psc-photo')} className={getTabClass('psc-photo', 'orange')}>
+              <UserSquare size={16} /> PSC Photo Editor
+            </button>
+
             <button onClick={() => setActiveToolTab('resize')} className={getTabClass('resize', 'pink')}>
               <Crop size={16} /> Crop/Resize Image
             </button>
@@ -750,7 +911,7 @@ export default function ShopCalculators() {
           {/* Main Content Area */}
           <div className="flex-1 p-5 md:p-8 flex flex-col bg-white">
             
-            {/* TAB 1: MERGE PDF - Updated with new centered design from File 1 */}
+            {/* TAB 1: MERGE PDF */}
             {activeToolTab === 'pdf' && (
               <div className="flex flex-col h-full items-center justify-center text-center">
                 <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mb-4">
@@ -873,6 +1034,104 @@ export default function ShopCalculators() {
                 <button onClick={handleCompressPdf} disabled={!compressPdfFile || isCompressingPdf} className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-sm transition flex items-center justify-center gap-2 ${!compressPdfFile ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-teal-600 hover:bg-teal-700 text-white"}`}>
                   {isCompressingPdf ? <><Loader2 size={16} className="animate-spin" /> Compressing & Flattening...</> : <><Minimize size={16} /> Download Compressed PDF</>}
                 </button>
+              </div>
+            )}
+
+            {/* ✨ NEW TAB: PSC PHOTO MAKER ✨ */}
+            {activeToolTab === 'psc-photo' && (
+              <div className="flex flex-col h-full animate-in fade-in duration-200">
+                <div className="mb-4">
+                  <h4 className="font-bold text-slate-800">PSC Photo & Signature Editor</h4>
+                  <p className="text-xs text-slate-500 mt-1">Generate standard 150x200px photo and 150x100px signature for Kerala PSC.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2 flex-1">
+                  {/* Upload Column */}
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2"><ImageIcon className="text-orange-500" size={14}/> Step 1: Uploads (Optional)</h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Photo Box */}
+                      <div 
+                        onClick={() => pscFileInputRef.current.click()} 
+                        className={`relative group cursor-pointer border-2 border-dashed rounded-2xl aspect-[3/4] flex flex-col items-center justify-center p-3 text-center transition ${pscImage ? 'border-orange-500 bg-orange-50' : 'border-slate-300 bg-slate-50 hover:border-orange-400 hover:bg-orange-50/50'}`}
+                      >
+                        {pscImage ? (
+                          <img src={pscImage} alt="Photo" className="absolute inset-0 w-full h-full object-cover rounded-2xl group-hover:opacity-50 transition" />
+                        ) : (
+                          <>
+                            <UserSquare size={24} className="text-slate-400 mb-2 group-hover:scale-110 transition group-hover:text-orange-500" />
+                            <p className="text-[10px] font-bold text-slate-600">Photo</p>
+                          </>
+                        )}
+                        <input ref={pscFileInputRef} type="file" accept="image/*" onChange={handlePscPhotoUpload} className="hidden" />
+                      </div>
+
+                      {/* Signature Box */}
+                      <div 
+                        onClick={() => pscSigInputRef.current.click()} 
+                        className={`relative group cursor-pointer border-2 border-dashed rounded-2xl aspect-[3/4] flex flex-col items-center justify-center p-3 text-center transition ${pscSignature ? 'border-orange-500 bg-orange-50' : 'border-slate-300 bg-slate-50 hover:border-orange-400 hover:bg-orange-50/50'}`}
+                      >
+                        {pscSignature ? (
+                          <img src={pscSignature} alt="Signature" className="absolute inset-0 w-full h-full object-contain p-2 rounded-2xl group-hover:opacity-50 transition" />
+                        ) : (
+                          <>
+                            <PenTool size={24} className="text-slate-400 mb-2 group-hover:scale-110 transition group-hover:text-orange-500" />
+                            <p className="text-[10px] font-bold text-slate-600">Signature</p>
+                          </>
+                        )}
+                        <input ref={pscSigInputRef} type="file" accept="image/*" onChange={handlePscSigUpload} className="hidden" />
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-slate-400 text-center">White/plain background required. Upload one or both.</p>
+                  </div>
+
+                  {/* Inputs Column */}
+                  <div className="flex flex-col">
+                    <h3 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-2"><Settings2 className="text-orange-500" size={14}/> Step 2: Photo Details</h3>
+                    
+                    <div className="space-y-4 mb-6">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Candidate Name (For Photo)</label>
+                        <input 
+                          type="text" 
+                          value={pscName}
+                          onChange={(e) => setPscName(e.target.value)}
+                          placeholder="e.g. RAMESH K"
+                          className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-sm uppercase bg-slate-50 focus:bg-white transition-all"
+                          disabled={!pscImage}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Photo Date</label>
+                        <div className="relative">
+                          <CalendarDays size={16} className={`absolute left-3 top-3 ${pscImage ? 'text-slate-400' : 'text-slate-300'}`} />
+                          <input 
+                            type="date" 
+                            value={pscDate}
+                            onChange={(e) => setPscDate(e.target.value)}
+                            className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-sm text-slate-700 bg-slate-50 focus:bg-white transition-all disabled:opacity-50"
+                            disabled={!pscImage}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto">
+                      <h3 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-2"><FileDown className="text-emerald-500" size={14}/> Step 3: Final Download</h3>
+                      <button 
+                        onClick={generatePSCAssets}
+                        disabled={(!pscImage && !pscSignature) || isGeneratingPsc}
+                        className="w-full py-3.5 rounded-xl bg-orange-600 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-orange-700 transition disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      >
+                        {isGeneratingPsc ? <><Loader2 size={16} className="animate-spin" /> Processing...</> : <><Download size={16} /> Download File(s)</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hidden Canvas used for manipulation */}
+                <canvas ref={pscCanvasRef} className="hidden" />
               </div>
             )}
 
@@ -1122,7 +1381,7 @@ export default function ShopCalculators() {
 
       </div>
 
-      {/* ✨ PDF MERGE PRO MODAL (from File 1) ✨ */}
+      {/* ✨ PDF MERGE PRO MODAL ✨ */}
       {pdfSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">

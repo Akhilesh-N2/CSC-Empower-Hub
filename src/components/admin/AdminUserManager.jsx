@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../../supabaseClient";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import emailjs from "@emailjs/browser";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -210,18 +209,18 @@ export default function AdminUserManager({
             });
 
             try {
-              await emailjs.send(
-                "service_7bfs32k",
-                "template_cok2tvd",
-                {
-                  to_email: email,
-                  owner_name: shopData?.full_name || "Valued Partner",
-                  shop_name: shopData?.shop_name || "your shop",
-                },
-                "LCf7B01Dm3o5RmXRv",
-              );
+              await supabase.functions.invoke("send-admin-email", {
+                body: {
+                  template_id: "template_cok2tvd",
+                  template_params: {
+                    to_email: email,
+                    owner_name: shopData?.full_name || "Valued Partner",
+                    shop_name: shopData?.shop_name || "your shop",
+                  }
+                }
+              });
             } catch (emailErr) {
-              console.error("Failed to send EmailJS email:", emailErr);
+              console.error("Failed to send secure email:", emailErr);
             }
 
             alert("Shop Approved! A 3-Day Trial has been activated.");
@@ -294,19 +293,19 @@ export default function AdminUserManager({
       await supabase.rpc("admin_clear_renewal", { target_shop_id: id });
 
       try {
-        await emailjs.send(
-          "service_7bfs32k",
-          "template_6oekg48",
-          {
-            to_email: userEmail,
-            owner_name: shopData?.full_name || "Valued Partner",
-            shop_name: shopData?.shop_name || "your shop",
-            new_expiry: friendlyDate,
-          },
-          "LCf7B01Dm3o5RmXRv",
-        );
+        await supabase.functions.invoke("send-admin-email", {
+          body: {
+            template_id: "template_6oekg48",
+            template_params: {
+              to_email: userEmail,
+              owner_name: shopData?.full_name || "Valued Partner",
+              shop_name: shopData?.shop_name || "your shop",
+              new_expiry: friendlyDate,
+            }
+          }
+        });
       } catch (emailErr) {
-        console.error("Failed to send activation email:", emailErr);
+        console.error("Failed to send secure activation email:", emailErr);
       }
 
       setLiveShopDetails((prev) =>
@@ -370,19 +369,19 @@ export default function AdminUserManager({
       await supabase.rpc("admin_clear_renewal", { target_shop_id: id });
 
       try {
-        await emailjs.send(
-          "service_7bfs32k",
-          "template_6oekg48",
-          {
-            to_email: userEmail,
-            owner_name: shopData?.full_name || "Valued Partner",
-            shop_name: shopData?.shop_name || "your shop",
-            new_expiry: friendlyDate,
-          },
-          "LCf7B01Dm3o5RmXRv",
-        );
+        await supabase.functions.invoke("send-admin-email", {
+          body: {
+            template_id: "template_6oekg48",
+            template_params: {
+              to_email: userEmail,
+              owner_name: shopData?.full_name || "Valued Partner",
+              shop_name: shopData?.shop_name || "your shop",
+              new_expiry: friendlyDate,
+            }
+          }
+        });
       } catch (emailErr) {
-        console.error("Failed to send renewal email:", emailErr);
+        console.error("Failed to send secure renewal email:", emailErr);
       }
 
       setLiveShopDetails((prev) =>
