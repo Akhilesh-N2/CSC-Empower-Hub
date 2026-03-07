@@ -237,7 +237,7 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
         const drawVectorRow = (iconPath, text, rowNum) => {
           const y = bannerStartY + (rowSpacing * rowNum);
           
-          // ✨ NEW: Floating 3D Badge for Icons
+          // Floating 3D Badge for Icons
           ctx.save();
           ctx.shadowColor = "rgba(0, 0, 0, 0.08)";
           ctx.shadowBlur = 8;
@@ -261,14 +261,43 @@ export const downloadWatermarkedPoster = async (imageUrl, shopInfo, title) => {
           ctx.fillStyle = "#475569"; 
           
           const textStartOffset = rightColStart + (iconSize * 1.8);
-          let displayText = text;
           
-          while (ctx.measureText(displayText).width > maxRightTextWidth && displayText.length > 5) {
-            displayText = displayText.slice(0, -1);
+          // ✨ NEW: DYNAMIC TEXT WRAPPING
+          const words = text.toString().split(' ');
+          let line = '';
+          let lines = [];
+
+          for(let n = 0; n < words.length; n++) {
+            let testLine = line + words[n] + ' ';
+            let metrics = ctx.measureText(testLine);
+            if (metrics.width > maxRightTextWidth && n > 0) {
+              lines.push(line.trim());
+              line = words[n] + ' ';
+            } else {
+              line = testLine;
+            }
           }
-          if (displayText !== text) displayText += "...";
-          
-          ctx.fillText(displayText, textStartOffset, y);
+          lines.push(line.trim());
+
+          // Cap at 2 lines max to prevent crashing into the next row
+          if (lines.length > 2) {
+            lines = lines.slice(0, 2);
+            let lastLine = lines[1];
+            while (ctx.measureText(lastLine + "...").width > maxRightTextWidth && lastLine.length > 0) {
+              lastLine = lastLine.slice(0, -1);
+            }
+            lines[1] = lastLine.trim() + "...";
+          }
+
+          // Draw text vertically centered depending on line count
+          if (lines.length === 1) {
+            ctx.fillText(lines[0], textStartOffset, y);
+          } else {
+            const lineHeight = contactTextSize * 1.2;
+            const startY = y - (lineHeight * 0.45); // Shift up slightly
+            ctx.fillText(lines[0], textStartOffset, startY);
+            ctx.fillText(lines[1], textStartOffset, startY + lineHeight);
+          }
         };
 
         drawVectorRow(iconLocation, shopInfo?.address || "Location not provided", 1);

@@ -68,9 +68,10 @@ export default function AdminUserManager({
   }, [users, initialShopDetails]);
 
   // SUPABASE REAL-TIME SUBSCRIPTIONS
+  // SUPABASE REAL-TIME SUBSCRIPTIONS
   useEffect(() => {
     const profileSubscription = supabase
-      .channel("admin-profiles")
+      .channel('admin-profiles-global') // Changed channel name to prevent conflicts
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "profiles" },
@@ -81,19 +82,14 @@ export default function AdminUserManager({
       .subscribe();
 
     const shopSubscription = supabase
-      .channel("admin-shops")
+      .channel("admin-shops-global") // Changed channel name
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "shop_profiles" },
         (payload) => {
           fetchData();
-
-          if (
-            selectedUser &&
-            selectedUser.role === "shop" &&
-            payload.new &&
-            payload.new.id === selectedUser.id
-          ) {
+          // Safely update live details without depending on selectedUser
+          if (payload.new && payload.new.id) {
             setLiveShopDetails((prev) =>
               prev.map((s) => (s.id === payload.new.id ? payload.new : s)),
             );
@@ -106,7 +102,7 @@ export default function AdminUserManager({
       supabase.removeChannel(profileSubscription);
       supabase.removeChannel(shopSubscription);
     };
-  }, [selectedUser]);
+  }, []); // ✨ FIX: Empty array! Now WebSockets won't disconnect/reconnect when searching!
 
   useEffect(() => {
     setSearchTerm("");
@@ -923,10 +919,14 @@ export default function AdminUserManager({
 
   const activeUserDetails = selectedUser
     ? selectedUser.role === "seeker"
-      ? seekerDetails.find((s) => s.id === selectedUser.id)
+      ? seekerDetails.find((s) => s.id === selectedUser.id) || { full_name: "Profile Missing" }
       : selectedUser.role === "provider"
-        ? providerDetails.find((p) => p.id === selectedUser.id)
-        : liveShopDetails.find((s) => s.id === selectedUser.id)
+        ? providerDetails.find((p) => p.id === selectedUser.id) || { company_name: "Profile Missing" }
+        : liveShopDetails.find((s) => s.id === selectedUser.id) || { 
+            shop_name: "⚠️ Incomplete Registration", 
+            full_name: "Data Missing",
+            phone: "N/A"
+          } // ✨ FIX: Added fallback object to prevent the Dossier from turning invisible
     : null;
 
   const handleSelectAll = (e) => {
